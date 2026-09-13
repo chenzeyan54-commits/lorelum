@@ -5,6 +5,7 @@
   "author": {
     "name": "Lorelum"
   },
+  "homepage": "https://lorelum.com",
   "license": "Apache-2.0",
   "repository": "https://github.com/lorelum/lorelum",
   "keywords": ["lorelum", "codex", "practices", "engineering-guidance"],
@@ -16,6 +17,10 @@
     "developerName": "Lorelum",
     "category": "Productivity",
     "capabilities": ["Read"],
+    "websiteURL": "https://lorelum.com",
+    "brandColor": "#35B88F",
+    "composerIcon": "./assets/lorelum-icon.svg",
+    "logo": "./assets/lorelum-icon.svg",
     "defaultPrompt": [
       "Show relevant Lorelum Practices for this task",
       "Check this plan against installed Practices",

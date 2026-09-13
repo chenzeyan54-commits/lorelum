@@ -4,6 +4,14 @@ import { join } from "node:path";
 
 interface PluginManifest {
   readonly name: string;
+  readonly homepage: string;
+  readonly interface: {
+    readonly displayName: string;
+    readonly websiteURL: string;
+    readonly brandColor: string;
+    readonly composerIcon: string;
+    readonly logo: string;
+  };
 }
 
 interface MarketplaceEntry {
@@ -35,6 +43,21 @@ test("public marketplace exposes the lorelum Plugin from its matching root", asy
   ]);
 
   expect(manifest.name).toBe("lorelum");
+  expect(manifest.homepage).toBe("https://lorelum.com");
+  expect(manifest.interface).toEqual(
+    expect.objectContaining({
+      displayName: "Lorelum for Codex",
+      websiteURL: "https://lorelum.com",
+      brandColor: "#35B88F",
+      composerIcon: "./assets/lorelum-icon.svg",
+      logo: "./assets/lorelum-icon.svg",
+    }),
+  );
+  await Promise.all(
+    [manifest.interface.composerIcon, manifest.interface.logo].map((assetPath) =>
+      readFile(join(import.meta.dir, "..", assetPath), "utf8"),
+    ),
+  );
   expect(marketplace.name).toBe("lorelum");
   expect(marketplace.plugins).toEqual([
     {
