@@ -6,7 +6,7 @@ This guide is for maintainers developing the **Lorelum** Codex Plugin from a che
 
 The Plugin source is [`plugins/lorelum`](../../plugins/lorelum). It is outside the Bun workspace and communicates with Lorelum only through the public `lore` CLI. The CLI owns the Codex Hook protocol adapter and Catalog rendering; the Plugin owns lifecycle matching and Skill guidance. Do not import Engine packages, read LocalStore files, or duplicate retrieval/ranking logic in the Plugin.
 
-The Hook defaults to `lore hook codex`; the Lorelum Skill invokes `lore query` and `lore get` when appropriate. A normal installed Plugin requires Lorelum CLI v0.1.0 or later and should use the stable `lore` command from a release, not a command built from a temporary worktree. The Hook wrapper degrades safely when an older CLI does not recognize the ABI. To validate current CLI source, use the source-entrypoint workflow in [Local CLI and multiple worktrees](./README.md#local-cli-and-multiple-worktrees).
+The Hook defaults to `lore hook codex`; the Lorelum Skill invokes `lore query` and `lore get` when appropriate. A normal installed Plugin requires Lorelum CLI v0.1.0-alpha.1 or later and should use the released `lore` command, not a command built from a temporary worktree. The Hook wrapper degrades safely when an older CLI does not recognize the ABI. To validate current CLI source, use the source-entrypoint workflow in [Local CLI and multiple worktrees](./README.md#local-cli-and-multiple-worktrees).
 
 ## Verify source changes
 

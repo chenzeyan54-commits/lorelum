@@ -7,7 +7,7 @@ This is the first Codex integration for Lorelum. It brings relevant engineering 
 3. Codex queries targeted Practice summaries when the task, decision, verification, or recovery moment could benefit from them.
 4. Before applying a Practice or claiming that work follows it, Codex reads the full Practice.
 
-The bundled runtime integration calls `lore hook codex`, the versioned Codex Hook ABI introduced in Lorelum CLI v0.1.0. It runs for supported `SessionStart` sources, including `compact`, so the Catalog is regenerated before Codex continues after compaction. The CLI reads the Hook payload from stdin and writes the Codex `hookSpecificOutput` envelope directly to stdout.
+The bundled runtime integration calls `lore hook codex`, the versioned Codex Hook ABI introduced in Lorelum CLI v0.1.0-alpha.1. It runs for supported `SessionStart` sources, including `compact`, so the Catalog is regenerated before Codex continues after compaction. The CLI reads the Hook payload from stdin and writes the Codex `hookSpecificOutput` envelope directly to stdout.
 
 The integration requests Pack metadata only. It does not install or update Packs, or proactively run `lore query` or `lore get`; opening the LocalStore still follows its normal lifecycle. If the CLI is unavailable or returns malformed data, the integration writes a diagnostic to stderr and lets the host continue without additional context.
 
@@ -17,7 +17,7 @@ The integration requests Pack metadata only. It does not install or update Packs
 
 ## Installation
 
-This Plugin is a Codex adapter. Ordinary users need Lorelum CLI v0.1.0 or later, available as `lore` on `PATH`; it does not embed, build, or update the CLI. Bun is only required for maintainers running the source and test workflows. See the [Codex installation guide](../../docs/plugins/codex.md) for the public marketplace commands and [the development guide](../../docs/development/plugins.md) for a checkout-backed development install.
+This Plugin is a Codex adapter. Ordinary users need Lorelum CLI v0.1.0-alpha.1 or later, available as `lore` on `PATH`; it does not embed, build, or update the CLI. Bun is only required for maintainers running the source and test workflows. See the [Codex installation guide](../../docs/plugins/codex.md) for the public marketplace commands and [the development guide](../../docs/development/plugins.md) for a checkout-backed development install.
 
 ### Windows notes
 

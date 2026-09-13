@@ -4,7 +4,7 @@ Lorelum's Codex integration makes installed Knowledge Packs discoverable in a co
 
 ## Prerequisites
 
-The Plugin requires Lorelum CLI v0.1.0 or later, available as `lore` on `PATH`. That release introduces the `lore hook codex` ABI used by the Plugin. Bun and Node are not ordinary-user prerequisites: the installed Plugin invokes the compiled `lore` executable directly.
+The Plugin requires Lorelum CLI v0.1.0-alpha.1 or later, available as `lore` on `PATH`. That public alpha introduces the `lore hook codex` ABI used by the Plugin. Bun and Node are not ordinary-user prerequisites: the installed Plugin invokes the compiled `lore` executable directly.
 
 If an older or unavailable CLI cannot run `lore hook codex`, the Hook wrapper writes `{ "continue": true }` instead of blocking Codex. No Pack Catalog is injected until the compatible CLI is installed. The Plugin does not download models, start the Backend, build semantic indexes, or modify Packs. Semantic query preparation is documented in [the query CLI guide](../cli/query.md).
 
@@ -34,7 +34,7 @@ The Lorelum Skill uses the catalog as a relevance hint. Missing or omitted Pack 
 
 ## Troubleshooting
 
-- If no catalog appears, first run `lore --version` in the environment that starts Codex and confirm it is v0.1.0 or later. The Hook degrades without blocking Codex when that CLI is unavailable, older, or returns invalid data.
+- If no catalog appears, first run `lore --version` in the environment that starts Codex and confirm it is v0.1.0-alpha.1 or later. The Hook degrades without blocking Codex when that CLI is unavailable, older, or returns invalid data.
 - If semantic query is unavailable, that does not mean no relevant Practice exists. Prepare the local Backend, model, and Store index explicitly, or use `--mode keyword` only when an offline lexical search is appropriate.
 - A catalog truncated by the context budget does not imply that omitted Packs are uninstalled. Run `lore pack list --details` when refreshing discovery would help.
 
