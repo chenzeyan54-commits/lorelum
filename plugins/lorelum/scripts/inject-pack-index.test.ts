@@ -39,24 +39,33 @@ describe("inject-pack-index", () => {
     ).toThrow();
   });
 
-  test("emits additional context for SessionStart and PostCompact", async () => {
+  test("emits additional context for SessionStart", async () => {
     const source: PackSummarySource = {
       async readInstalledPackSummaries() {
         return [{ name: "agentic-coding", version: "0.1.0", appliesTo: [] }];
       },
     };
 
-    for (const eventName of ["SessionStart", "PostCompact"] as const) {
-      // eslint-disable-next-line no-await-in-loop -- verify each lifecycle event independently
-      const response = await createHookResponse({ hook_event_name: eventName }, source);
-      expect(response.hookSpecificOutput?.hookEventName).toBe(eventName);
-      expect(response.hookSpecificOutput?.additionalContext).toContain("agentic-coding");
-      expect(response).toEqual(buildHookResponse(eventName, expect.any(String)));
-    }
+    const response = await createHookResponse({ hook_event_name: "SessionStart" }, source);
+    expect(response.hookSpecificOutput?.hookEventName).toBe("SessionStart");
+    expect(response.hookSpecificOutput?.additionalContext).toContain("agentic-coding");
+    expect(response).toEqual(buildHookResponse("SessionStart", expect.any(String)));
+  });
+
+  test("rejects an unsupported lifecycle event", async () => {
+    const source: PackSummarySource = {
+      async readInstalledPackSummaries() {
+        return [];
+      },
+    };
+
+    await expect(createHookResponse({ hook_event_name: "PostCompact" }, source)).rejects.toThrow(
+      "unsupported event",
+    );
   });
 
   test("times out a CLI process before the hook deadline", async () => {
-    const rootPath = await mkdtemp(join(tmpdir(), "lorelum-codex-timeout-"));
+    const rootPath = await mkdtemp(join(tmpdir(), "lorelum-plugin-timeout-"));
     const sleeperPath = join(rootPath, "sleep.ts");
     await writeFile(sleeperPath, "await Bun.sleep(10_000);", "utf8");
 
@@ -74,8 +83,8 @@ describe("inject-pack-index", () => {
     }
   });
 
-  test("runs the hook entrypoint for both Codex lifecycle events", async () => {
-    const rootPath = await mkdtemp(join(tmpdir(), "lorelum-codex-hook-"));
+  test("runs the hook entrypoint for SessionStart", async () => {
+    const rootPath = await mkdtemp(join(tmpdir(), "lorelum-plugin-hook-"));
     const fakeSourcePath = join(rootPath, "fake-lore.ts");
     const hookPath = join(import.meta.dir, "inject-pack-index.ts");
     await writeFile(
@@ -85,35 +94,32 @@ describe("inject-pack-index", () => {
     );
 
     try {
-      for (const eventName of ["SessionStart", "PostCompact"] as const) {
-        const child = Bun.spawn([process.execPath, hookPath], {
-          env: {
-            ...process.env,
-            LORELUM_CLI_COMMAND: process.execPath,
-            LORELUM_CLI_ARGS: JSON.stringify([fakeSourcePath]),
-          },
-          stdin: "pipe",
-          stdout: "pipe",
-          stderr: "pipe",
-        });
-        child.stdin.write(JSON.stringify({ hook_event_name: eventName }));
-        child.stdin.end();
-        // eslint-disable-next-line no-await-in-loop -- verify each lifecycle process independently
-        const [stdout, stderr, exitCode] = await Promise.all([
-          new Response(child.stdout).text(),
-          new Response(child.stderr).text(),
-          child.exited,
-        ]);
+      const child = Bun.spawn([process.execPath, hookPath], {
+        env: {
+          ...process.env,
+          LORELUM_CLI_COMMAND: process.execPath,
+          LORELUM_CLI_ARGS: JSON.stringify([fakeSourcePath]),
+        },
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      child.stdin.write(JSON.stringify({ hook_event_name: "SessionStart" }));
+      child.stdin.end();
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ]);
 
-        expect(exitCode).toBe(0);
-        expect(stderr).toBe("");
-        expect(JSON.parse(stdout)).toEqual({
-          hookSpecificOutput: {
-            hookEventName: eventName,
-            additionalContext: expect.stringContaining("react"),
-          },
-        });
-      }
+      expect(exitCode).toBe(0);
+      expect(stderr).toBe("");
+      expect(JSON.parse(stdout)).toEqual({
+        hookSpecificOutput: {
+          hookEventName: "SessionStart",
+          additionalContext: expect.stringContaining("react"),
+        },
+      });
     } finally {
       await rm(rootPath, { recursive: true, force: true });
     }

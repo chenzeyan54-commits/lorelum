@@ -30,7 +30,7 @@ function configuredCliArgs(): readonly string[] {
 }
 
 function isHookEvent(value: string | undefined): value is LorelumHookEvent {
-  return value === "SessionStart" || value === "PostCompact";
+  return value === "SessionStart";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -144,7 +144,7 @@ async function main(): Promise<void> {
     process.stdout.write(JSON.stringify(response) + "\n");
   } catch (error) {
     process.stderr.write(
-      `lorelum-codex hook degraded: ${error instanceof Error ? error.message : String(error)}\n`,
+      `lorelum hook degraded: ${error instanceof Error ? error.message : String(error)}\n`,
     );
     process.stdout.write(JSON.stringify({ continue: true }) + "\n");
   }

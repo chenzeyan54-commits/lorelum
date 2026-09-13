@@ -13,7 +13,7 @@ export interface PackSummarySource {
   readInstalledPackSummaries(): Promise<readonly InstalledPackSummary[]>;
 }
 
-export type LorelumHookEvent = "SessionStart" | "PostCompact";
+export type LorelumHookEvent = "SessionStart";
 
 export interface HookInput {
   readonly hook_event_name?: string;

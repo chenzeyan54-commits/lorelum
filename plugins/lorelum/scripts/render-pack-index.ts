@@ -4,6 +4,15 @@ import type { InstalledPackSummary } from "./types";
 // envelope fields never push the delivered context over the host budget.
 export const DEFAULT_MAX_CHARACTERS = 4_000;
 
+const CATALOG_HEADER = "Lorelum Installed Pack Catalog";
+const CATALOG_INTRO = "This compact catalog is a relevance hint, not complete guidance.";
+const CATALOG_FOOTER =
+  "For a matching task or decision, use the Lorelum Skill to retrieve detailed Practices. Do not infer that a Pack is irrelevant from missing description or stack scope.";
+const TRUNCATION_NOTE =
+  "Catalog entries truncated. Other Packs may still be installed; run `lore list packs` to refresh when needed.";
+const MINIMAL_TRUNCATION_CONTEXT =
+  "Lorelum catalog truncated. Run `lore list packs` to refresh when needed.";
+
 export interface RenderPackIndexOptions {
   readonly maxCharacters?: number;
 }
@@ -29,7 +38,7 @@ function comparePacks(left: InstalledPackSummary, right: InstalledPackSummary): 
 function renderPack(pack: InstalledPackSummary): string {
   const lines = [`- ${normalizeText(pack.name)} (${normalizeText(pack.version)})`];
   const appliesTo = pack.appliesTo.map(normalizeText).filter(Boolean);
-  if (appliesTo.length > 0) lines.push(`  Covers: ${appliesTo.join(", ")}`);
+  if (appliesTo.length > 0) lines.push(`  Stack scope: ${appliesTo.join(", ")}`);
   if (pack.description !== undefined) {
     const description = normalizeText(pack.description);
     if (description !== "") lines.push(`  Description: ${description}`);
@@ -37,11 +46,16 @@ function renderPack(pack: InstalledPackSummary): string {
   return lines.join("\n");
 }
 
-function truncate(text: string, maxCharacters: number): string {
+function truncate(text: string, maxCharacters: number, suffix: string): string {
   if (text.length <= maxCharacters) return text;
-  const suffix = "\n[Pack Index truncated]";
   const available = Math.max(0, maxCharacters - suffix.length);
   return text.slice(0, available).trimEnd() + suffix;
+}
+
+function renderContext(body: string, truncationNote?: string): string {
+  return [CATALOG_HEADER, CATALOG_INTRO, body, truncationNote, CATALOG_FOOTER]
+    .filter((section): section is string => section !== undefined && section !== "")
+    .join("\n\n");
 }
 
 export function renderPackIndex(
@@ -50,7 +64,7 @@ export function renderPackIndex(
 ): string {
   const maxCharacters = options.maxCharacters ?? DEFAULT_MAX_CHARACTERS;
   if (!Number.isSafeInteger(maxCharacters) || maxCharacters < 64) {
-    throw new RangeError("Pack Index character budget must be an integer of at least 64.");
+    throw new RangeError("Pack Catalog character budget must be an integer of at least 64.");
   }
 
   // The manifest guarantees unique active Pack names; keep the first entry in
@@ -73,14 +87,15 @@ export function renderPackIndex(
     sortedPacks.length === 0
       ? "No installed Knowledge Packs are currently available."
       : sortedPacks.map(renderPack).join("\n");
-  return truncate(
-    [
-      "Lorelum Pack Index",
-      "",
-      body,
-      "",
-      "Use this index only to decide whether Lorelum may be relevant. Query Practices only for a matching task and work moment; do not query before every action.",
-    ].join("\n"),
-    maxCharacters,
-  );
+  const complete = renderContext(body);
+  if (complete.length <= maxCharacters) return complete;
+
+  const preservedContext = renderContext("", TRUNCATION_NOTE);
+  if (preservedContext.length > maxCharacters) {
+    return truncate(MINIMAL_TRUNCATION_CONTEXT, maxCharacters, "\n[Catalog truncated]");
+  }
+
+  const bodyBudget = Math.max(0, maxCharacters - preservedContext.length - 2);
+  const shortenedBody = body.slice(0, bodyBudget).trimEnd();
+  return renderContext(shortenedBody, TRUNCATION_NOTE);
 }

@@ -11,6 +11,7 @@ This is the index for day-to-day development topics that do not belong in the pr
 - [Tests and CI](../../CONTRIBUTING.md#testing--ci)
 - [Issues, branches, and PRs](../../CONTRIBUTING.md#development-workflow)
 - [Local CLI and worktrees](#local-cli-and-multiple-worktrees)
+- [Codex Plugin development](./plugins.md)
 - [Embedding native runtime](#embedding-native-runtime)
 - [Discover installed Packs with `lore pack list`](../cli/list.md)
 - [Read an installed Practice with `lore get`](../cli/get.md)

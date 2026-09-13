@@ -1,0 +1,19 @@
+{
+  "description": "Restore the compact Lorelum Installed Pack Catalog at supported Codex session boundaries.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "^(startup|resume|clear|compact)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$PLUGIN_ROOT/scripts/inject-pack-index.ts\"",
+            "timeout": 10,
+            "additionalContextLimit": 5000,
+            "commandWindows": "bun \"$env:PLUGIN_ROOT\\scripts\\inject-pack-index.ts\""
+          }
+        ]
+      }
+    ]
+  }
+}
