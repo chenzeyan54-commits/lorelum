@@ -24,7 +24,7 @@ usage() {
   cat <<'EOF'
 Usage: install.sh [--version <version>]
 
-Install the latest stable Lorelum CLI release for macOS on Apple Silicon.
+Install the latest stable Lorelum CLI release for macOS arm64 and Linux x64.
 Pass --version to install one specific release instead.
 The script downloads a release archive and SHA256SUMS, verifies both before
 extracting, then atomically creates ~/.local/bin/lore.
@@ -55,6 +55,7 @@ done
 
 case "$(uname -s):$(uname -m)" in
   Darwin:arm64) target='darwin-arm64' ;;
+  Linux:x86_64) target='linux-x64' ;;
   *) fail "unsupported platform: $(uname -s) $(uname -m)" ;;
 esac
 command -v tar >/dev/null 2>&1 || fail 'tar is required to extract the release archive'

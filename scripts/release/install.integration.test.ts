@@ -43,21 +43,22 @@ test.skipIf(!posixOnly)(
   },
 );
 
-test.skipIf(!posixOnly)("installer rejects Linux x64 before it attempts a download", async () => {
+test.skipIf(!posixOnly)("installer installs the linux-x64 package on Linux x86_64", async () => {
   const root = await mkdtemp(join(tmpdir(), "lore-install-linux-"));
+  const server = await createReleaseServer(root, { platform: "linux-x64" });
   try {
-    const result = await runInstaller(
-      root,
-      "http://127.0.0.1:9",
-      ["--version", version],
-      "linux-x64",
-    );
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("unsupported platform: Linux x86_64");
-    await expect(Bun.file(join(root, "share", "versions", version, "lore")).exists()).resolves.toBe(
-      false,
-    );
+    const result = await runInstaller(root, server.url.origin, ["--version", version], "linux-x64");
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.stdout).toContain(`Installed lore ${version}`);
+    expect(
+      await readFile(
+        join(root, "share", "versions", version, "native", "linux-x64", "manifest.json"),
+        "utf8",
+      ),
+    ).toBe("{}\n");
   } finally {
+    server.stop(true);
     await rm(root, { recursive: true, force: true });
   }
 });
