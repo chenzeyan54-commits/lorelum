@@ -1,7 +1,7 @@
 # Semantic Query v1 设计
 
-- 状态：Semantic Query v1 已在当前工作树实现；semantic index 来自 #116，semantic query 已通过真实本地流程验收，待按仓库流程提交
-- 日期：2026-09-10；最后更新：2026-09-12
+- 状态：Semantic Query v1 已由 #122 合入 `main`。固定本地 Profile、增量 semantic index、默认 semantic query 与显式 keyword 路径均已交付；当前用户合同以 CLI 文档为准。
+- 日期：2026-09-10；最后更新：2026-09-13
 - 范围：为已安装的 Practice 增加本地优先的 semantic query；不实现 Hybrid 或后续检索优化。
 - 关联 Issue：[Semantic Query v1 设计 #92](https://github.com/lorelum/lorelum/issues/92)、[后续模型评测 #85](https://github.com/lorelum/lorelum/issues/85)。
 - 前置文档：[Query 功能路线](./query-implementation-design.md)、[持久关键词 index ADR](../adr/0012-persistent-keyword-index.md)、[Query CLI 合同](../cli/query.md)。
@@ -35,7 +35,7 @@ Semantic Query v1 使用固定本地 default Profile，用户显式构建 index 
 - 没有 `--mode` 或指定 `--mode semantic` 时执行语义检索；配置无效或没有可用 index 时明确报错，不能退回 keyword query 假装成功。共享 config 可以使用当前默认值，不存在手写 config 文件本身不必然是错误。
 - 默认 semantic query 使用固定的本地 default Profile。没有有效本地配置、没有 active index、index/Profile 不兼容，或无法证明旧向量与当前 Store 的安全关系时明确报错；index 正在追赶一个较新的 Store 时可返回明确标记为 partial 的 semantic 结果。远程 provider 不属于 v1。
 - 每个 semantic index 必须同时绑定 Store snapshot 与 EmbeddingProfile。不同模型、模型 revision、输入投影、向量维度或归一化方式不得混用数据。
-- 用户必须先显式执行 `lore index build`。这条命令才允许编码完整 Practice 集；普通 query 不得隐式发送内容、花费远程额度或长时间占用本地资源。
+- `lore pack install` 会在 canonical Pack commit 后同步提交普通 `index build`；已有 Store 或安装后的 `indexSync.failed` 仍可显式执行 `lore index build`。普通 query 先验证 index 可用性，随后可以按配置自动开始或加入固定公共模型的本地下载；它不得发送 Practice 或 query 到远端，也不得自行构建 index。
 - 本阶段以正确性、可恢复性和可观察的错误为目标，不设高性能目标。
 
 ### Deferred
@@ -43,7 +43,7 @@ Semantic Query v1 使用固定本地 default Profile，用户显式构建 index 
 - Hybrid：同时融合 keyword 和 semantic 候选。
 - reranking、ANN、多向量/chunk、query rewrite 和受控翻译。
 - 持久任务队列、外部向量数据库，以及 Pack mutation 的可靠后台追赶；分别见 [Issue #115](https://github.com/lorelum/lorelum/issues/115) 和后续独立设计。
-- Pack 更新后的自动 embedding。v1 仍由用户显式执行 `index build`，不会自动占用模型或资源；显式 build 的增量同步规则见 [semantic index 增量 build 设计](./semantic-index-incremental-build-design.md)。
+- 持久任务队列、CLI 退出后的自动补偿、upgrade/uninstall 同步。当前 install 只同步等待一次普通增量 build；更广泛的自动同步仍需独立设计。
 - MCP 适配。长驻进程的 config 刷新、连接复用和请求隔离是单独设计问题。
 
 ## 固定 default Profile 与本地服务
@@ -132,13 +132,13 @@ Semantic query 的成功 JSON 保持现有 `results` 摘要形状，并返回：
 
 早期错误分类在当前实现阶段收敛如下，详细映射见文末：
 
-| 情况                               | 可见错误                                       |
-| ---------------------------------- | ---------------------------------------------- |
-| config 损坏或版本不支持            | 复用现有 `config.*` / `backend.config-invalid` |
-| semantic index 不存在或无法安全复用 | `semantic.index-not-ready`                    |
-| index 与 Profile/Store 不兼容      | `semantic.index-incompatible`                  |
-| 模型不可用、返回非法向量           | 现有 `embedding.*` / `semantic.embedding-failed` |
-| Store 无法获得稳定 snapshot        | 复用 `store.busy` 或 `store.recovery-required` |
+| 情况                                | 可见错误                                         |
+| ----------------------------------- | ------------------------------------------------ |
+| config 损坏或版本不支持             | 复用现有 `config.*` / `backend.config-invalid`   |
+| semantic index 不存在或无法安全复用 | `semantic.index-not-ready`                       |
+| index 与 Profile/Store 不兼容       | `semantic.index-incompatible`                    |
+| 模型不可用、返回非法向量            | 现有 `embedding.*` / `semantic.embedding-failed` |
+| Store 无法获得稳定 snapshot         | 复用 `store.busy` 或 `store.recovery-required`   |
 
 所有失败保持现有单行 JSON envelope 和退出码约定。semantic query 不静默回退 keyword query。
 

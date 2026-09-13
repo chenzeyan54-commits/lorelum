@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./coordination": "./src/coordination/index.ts",
     "./client": "./src/client/index.ts",
     "./protocol": "./src/protocol/index.ts",
     "./server": "./src/app.ts",

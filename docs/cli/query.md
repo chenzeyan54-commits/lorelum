@@ -3,7 +3,7 @@
 `lore query <text>` searches the installed Practices in the selected LocalStore and returns a small summary for each match. It defaults to local semantic retrieval; `--mode keyword` retains the offline FTS5 path.
 
 ```sh
-# Semantic is the default. Start the Backend, load the model, and build this Store's index first.
+# Semantic is the default. A normal query starts the Backend and automatically prepares the fixed local model when needed.
 lore query "React 登录页接入现有认证接口"
 lore query "database migration rollback" --top-k 10
 
@@ -18,14 +18,16 @@ The positional text is trimmed before validation. It must contain at least one n
 
 ## Semantic mode
 
-Semantic mode uses the fixed local Profile and the selected Store's previously built semantic index. It does not start the Backend, download or load the model, or build an index. Prepare those resources explicitly:
+Semantic mode uses the fixed local Profile and the selected Store's previously built semantic index. When the Backend is stopped, a query starts it. When the index is usable but the model is absent or unloaded, Backend starts or joins the fixed model's configured download and preparation. A query observes that work for a short bounded interval; it never builds an index itself.
+
+For a new machine, install a Pack normally. If model preparation is still running, query returns a machine-readable preparing result rather than waiting for the whole transfer:
 
 ```sh
-lore backend start
-lore model load
-lore --store-root /path/to/store index build
+lore --store-root /path/to/store pack install agentic-coding
 lore --store-root /path/to/store query "how should I verify this release?"
 ```
+
+Existing Stores created before automatic install synchronization can use `lore index build` once. After that, ordinary semantic queries need neither `backend start` nor `model load`. If the first query returns preparing, inspect `lore model status` and retry after it becomes ready. Explicit `lore model load` remains useful when a prior download failed and the user wants to wait for its retry.
 
 The successful result includes the Profile identity and how completely the active index covers the Store snapshot:
 
@@ -48,15 +50,25 @@ The successful result includes the Profile identity and how completely the activ
 
 Both modes return one JSON protocol envelope on stdout. `results` may be empty and contains at most `top-k` entries. Results are Practice summaries, not source files. They omit the full body and internal scores; use `lore get <practice-id>` to retrieve the complete canonical Practice. Results are deterministic for the same Store snapshot and query implementation. A query does not pin a revision for a later `get` invocation.
 
+When automatic preparation has been accepted but is not ready within the observation interval, semantic query returns `ok: true`, exit code `1`, and no results:
+
+```json
+{
+  "state": "preparing",
+  "preparationId": "<uuid>",
+  "message": "The local model is preparing in the background. Check lore model status, then retry this query."
+}
+```
+
 ## Errors and exit codes
 
-Success exits `0`. Failures use `ok: false` with `error: { code, message }` and exit `2`. Both paths write exactly one JSON line to stdout. Callers should branch on `code`, not parse the message.
+Ready query results exit `0`. A successful preparing result exits `1`. Failures use `ok: false` with `error: { code, message }` and exit `2`. All paths write exactly one JSON line to stdout. Callers should branch on `data.state` or `error.code`, not parse the message.
 
 | Code | Meaning |
 | --- | --- |
 | `usage.invalid` | Missing or invalid text, `--top-k`, or `--mode`. Validation happens before a semantic query connects to the Backend. |
-| `backend.*` | The local Backend is absent, incompatible, busy, or exceeded its request deadline. Start or inspect it with `lore backend ...`. |
-| `embedding.*` | The local model is not loaded, is busy, timed out, or failed. Check `lore model status` and explicitly load it when needed. |
+| `backend.*` | The automatic Backend start could not safely complete because of incompatibility, a port conflict, busy state, or a deadline. Inspect it with `lore backend ...`. |
+| `embedding.*` | Automatic preparation was disabled, failed, or cannot safely continue. Check `lore model status`; fix configuration/resources, then use `lore model load` to retry and wait. |
 | `semantic.index-not-ready` | No usable index exists, or Store history cannot safely bridge its age. Run `lore index build`. |
 | `semantic.index-incompatible` | The index does not match the fixed Profile or selected Store. Run `lore index rebuild`. |
 | `semantic.index-failed` / `semantic.embedding-failed` | The stored index or query embedding violates its contract. Rebuild the index; inspect model status for embedding failures. |

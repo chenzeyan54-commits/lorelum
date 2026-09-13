@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 import { createLocalStore, decodePackDirectory } from "@lorelum/engine";
 import { RegistrySchema, type RegistryRelease } from "@lorelum/format";
+import type { IndexOperation } from "@lorelum/backend/protocol";
 
 import { run } from "../main.js";
 import { validateJsonSchema } from "../output/protocol-schema.test-helper.js";
@@ -71,15 +72,22 @@ function createServices(
   packDirectory: string,
   storageRoot: string,
   registryVersion = "0.1.0",
+  indexBuild?: (rootPath: string) => Promise<IndexOperation>,
 ): {
   services: InstallCommandServices;
   store: ReturnType<typeof createLocalStore>;
-  observed: { cleaned: number; locator: string | undefined; repository: string | undefined };
-} {
-  const observed = { cleaned: 0, locator: undefined, repository: undefined } as {
+  observed: {
     cleaned: number;
     locator: string | undefined;
     repository: string | undefined;
+    syncedRoots: string[];
+  };
+} {
+  const observed = { cleaned: 0, locator: undefined, repository: undefined, syncedRoots: [] } as {
+    cleaned: number;
+    locator: string | undefined;
+    repository: string | undefined;
+    syncedRoots: string[];
   };
   const store = createLocalStore();
   return {
@@ -105,6 +113,23 @@ function createServices(
         };
       },
       decodePackDirectory,
+      async createIndexRuntimeClient() {
+        return {
+          async build(root) {
+            observed.syncedRoots.push(root.rootPath);
+            if (indexBuild) return indexBuild(root.rootPath);
+            return {
+              operationId: crypto.randomUUID(),
+              state: "ready" as const,
+              index: { state: "ready" as const, profileId: "a".repeat(64), vectorCount: 1 },
+            };
+          },
+          async rebuild() {
+            throw new Error("install must use incremental build");
+          },
+        };
+      },
+      progressWriter: { write: () => undefined },
       store,
       storageRoot: { rootPath: storageRoot },
     },
@@ -136,11 +161,13 @@ test("installs from an explicit Registry repository and is idempotent", async ()
         generation: 1,
         effectiveRevision: 1,
         delta: { added: ["agentic-coding.installation.placeholder"] },
+        indexSync: { state: "ready", index: { state: "ready", vectorCount: 1 } },
       },
     });
     expect(first.data.artifactDigest).toMatch(/^[0-9a-f]{64}$/);
     expect(fixture.observed.locator).toBe("acme/team-packs");
     expect(fixture.observed.repository).toBe("https://github.com/acme/team-packs.git");
+    expect(fixture.observed.syncedRoots).toEqual([storageRoot]);
     const installDefinition = definitions.find((definition) => definition.name === "pack.install")!;
     expect(validateJsonSchema(first.data, installDefinition.resultSchema)).toEqual([]);
 
@@ -158,8 +185,10 @@ test("installs from an explicit Registry repository and is idempotent", async ()
         effectiveRevision: 1,
         artifactDigest: first.data.artifactDigest,
         delta: { added: [], changed: [], invalidated: [] },
+        indexSync: { state: "ready" },
       },
     });
+    expect(fixture.observed.syncedRoots).toEqual([storageRoot, storageRoot]);
     expect(fixture.observed.cleaned).toBe(2);
     expect(await fixture.store.readEffectivePractices({ rootPath: storageRoot })).toHaveLength(1);
   } finally {
@@ -195,6 +224,7 @@ test("uses an explicit global Store root without touching the default Store", as
     ).toBe(0);
     expect(JSON.parse(secondOutput.value)).toMatchObject({ data: { idempotent: true } });
     expect(existsSync(defaultRoot)).toBe(false);
+    expect(fixture.observed.syncedRoots).toEqual([isolatedRoot, isolatedRoot]);
   } finally {
     await rm(directory, { force: true, recursive: true });
   }
@@ -301,6 +331,7 @@ This placeholder proves the Pack can be upgraded.
     });
     expect(validateJsonSchema(response.data, definitions[0]!.resultSchema)).toEqual([]);
     expect(upgraded.observed.cleaned).toBe(1);
+    expect(upgraded.observed.syncedRoots).toEqual([]);
     expect(
       (await upgraded.store.readEffectivePractices({ rootPath: storageRoot }))[0]?.practice.body,
     ).toContain("can be upgraded");
@@ -345,6 +376,74 @@ test("rejects a release whose Pack identity does not match the Registry", async 
       error: { code: "pack.invalid" },
     });
     expect(fixture.observed.cleaned).toBe(1);
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test("reports a failed index sync without rolling back the committed Pack", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "lorelum-install-command-"));
+  try {
+    const storageRoot = join(directory, "store");
+    const fixture = createServices(await createPack(directory), storageRoot, "0.1.0", async () => ({
+      operationId: "0f8fad5b-d9cb-469f-a165-70867728950e",
+      state: "failed",
+      error: "embedding.download-failed",
+    }));
+    const definitions = snapshotCommandDefinitions([createInstallCommand(fixture.services)]);
+    const stdout = new MemoryWriter();
+    expect(
+      await run(["pack", "install", "agentic-coding"], { registry: definitions, stdout }),
+    ).toBe(0);
+    expect(JSON.parse(stdout.value)).toMatchObject({
+      ok: true,
+      data: {
+        idempotent: false,
+        indexSync: {
+          state: "failed",
+          error: {
+            code: "embedding.download-failed",
+            message: expect.stringContaining("Pack installed, but semantic index sync failed."),
+          },
+        },
+      },
+    });
+    expect(fixture.observed.syncedRoots).toEqual([storageRoot]);
+    expect(await fixture.store.readEffectivePractices({ rootPath: storageRoot })).toHaveLength(1);
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test.each([
+  {
+    operationId: "0f8fad5b-d9cb-469f-a165-70867728950e",
+    state: "building" as const,
+  },
+  {
+    operationId: "0f8fad5b-d9cb-469f-a165-70867728950e",
+    state: "preparing" as const,
+    preparationId: "1f8fad5b-d9cb-469f-a165-70867728950e",
+  },
+])("reports accepted index work as pending without changing Pack success", async (operation) => {
+  const directory = await mkdtemp(join(tmpdir(), "lorelum-install-command-"));
+  try {
+    const storageRoot = join(directory, "store");
+    const fixture = createServices(
+      await createPack(directory),
+      storageRoot,
+      "0.1.0",
+      async () => operation,
+    );
+    const definitions = snapshotCommandDefinitions([createInstallCommand(fixture.services)]);
+    const stdout = new MemoryWriter();
+    expect(
+      await run(["pack", "install", "agentic-coding"], { registry: definitions, stdout }),
+    ).toBe(0);
+    expect(JSON.parse(stdout.value)).toMatchObject({
+      ok: true,
+      data: { indexSync: { state: "pending", operationId: operation.operationId } },
+    });
   } finally {
     await rm(directory, { force: true, recursive: true });
   }

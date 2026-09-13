@@ -51,13 +51,19 @@ export function createBackendSupervisor(options: BackendSupervisorOptions): Back
   const settings = resolveBackendSettings(options.config?.settings);
   const embedding = resolveEmbeddingConfig(options.config?.embedding);
   const timeoutMs = options.timeoutMs ?? settings.startupTimeoutMs;
-  const client = (record: RuntimeRecord) =>
+  const client = (record: RuntimeRecord, deadline?: number) =>
     createBackendClient({
       identity: record,
       secret: record.secret,
       buildIdentity: options.buildIdentity,
       baseUrl,
-      timeoutMs: settings.requestTimeoutMs,
+      timeoutMs: Math.max(
+        1,
+        Math.min(
+          settings.requestTimeoutMs,
+          deadline === undefined ? settings.requestTimeoutMs : deadline - Date.now(),
+        ),
+      ),
     });
 
   async function status(): Promise<BackendStatus> {
@@ -71,16 +77,19 @@ export function createBackendSupervisor(options: BackendSupervisorOptions): Back
   return {
     status,
     async start() {
+      const deadline = Date.now() + timeoutMs;
       return withStartupLock(directory, timeoutMs, async () => {
         const previous = await readRecord(directory);
         if (previous !== undefined && (await isSameProcess(previous))) {
-          const current = await client(previous).status();
+          if (Date.now() >= deadline) throw new BackendError("backend.deadline-exceeded");
+          const current = await client(previous, deadline).status();
           if (current.state !== "ready") throw new BackendError("backend.busy");
           return current;
         }
         if (await isListening(address)) throw new BackendError("backend.port-conflict");
         if (previous !== undefined) await removeRecord(directory, previous.instanceId);
-        return launch();
+        if (Date.now() >= deadline) throw new BackendError("backend.deadline-exceeded");
+        return launch(deadline);
       });
     },
     async stop() {
@@ -111,7 +120,7 @@ export function createBackendSupervisor(options: BackendSupervisorOptions): Back
     },
   };
 
-  async function launch(): Promise<BackendStatus> {
+  async function launch(deadline: number): Promise<BackendStatus> {
     const executable = options.command[0];
     if (!executable) throw new BackendError("backend.invalid-request");
     const instanceId = randomUUID();
@@ -148,14 +157,13 @@ export function createBackendSupervisor(options: BackendSupervisorOptions): Back
       await writeRecord(directory, record);
       // Child cannot bind until its durable ownership record is published.
       child.stdin?.end(instanceId);
-      const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline) {
         if (child.exitCode !== null || child.signalCode !== null) {
           if (await isListening(address)) throw new BackendError("backend.port-conflict");
           throw new BackendError("backend.failed");
         }
         try {
-          const result = await client(record).status();
+          const result = await client(record, deadline).status();
           if (result.state === "ready") {
             child.unref();
             return result;

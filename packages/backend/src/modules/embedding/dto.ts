@@ -21,6 +21,12 @@ export const modelStatusSchema = z.strictObject({
   progress: modelProgressSchema.optional(),
 });
 export type ModelStatus = z.infer<typeof modelStatusSchema>;
+export const modelPreparationParamsSchema = z.strictObject({ preparationId: z.string().uuid() });
+export const modelPreparationSchema = z.strictObject({
+  preparationId: z.string().uuid(),
+  status: modelStatusSchema,
+});
+export type ModelPreparation = z.infer<typeof modelPreparationSchema>;
 export const embeddingRequestSchema = z.strictObject({
   kind: z.enum(["query", "document"]),
   inputs: z

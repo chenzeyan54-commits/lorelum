@@ -50,6 +50,27 @@
 
 HTTP 客户端断开、CLI 停止等待不会取消共享加载任务；显式调用 unload 才是取消入口。backend stop 复用同一卸载路径和 shutdown deadline。
 
+## Automatic preparation
+
+`POST /internal/v1/model/prepare`，body `{}`，供按需 semantic query、index build/rebuild 和 install-driven index 使用。它立即开始或加入一次 daemon 持有的 configured preparation：缓存缺失时可以下载或续传 `.part`，完整文件会先校验再启动 native runtime。HTTP handler 不等待传输完成。
+
+接受或加入同一准备时返回 `202`：
+
+```json
+{
+  "preparationId": "<uuid>",
+  "status": {
+    "state": "loading",
+    "encodingId": "…",
+    "device": "cpu",
+    "dimensions": 384,
+    "threads": 4
+  }
+}
+```
+
+`GET /internal/v1/model/preparations/:preparationId` 只轮询该次准备。成功时返回 `200` 与 `ready` status；下载、校验或 native 启动失败时 status 为 `failed` 并附稳定 error code。自动请求和显式 `model load` 共享同一 preparation；显式 load 只是持续等待并呈现进度。unload 或 daemon 重启使旧 `preparationId` 失效，返回 `embedding.preparation-expired`。
+
 ## Embeddings
 
 `POST /internal/v1/embeddings`，body：

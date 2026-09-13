@@ -35,6 +35,9 @@ import {
   embeddingResultSchema,
   modelStatusSchema,
   type ModelStatus,
+  modelPreparationSchema,
+  modelPreparationParamsSchema,
+  type ModelPreparation,
 } from "../modules/embedding/dto";
 import {
   indexMutationSchema,
@@ -50,6 +53,10 @@ import { DEFAULT_BACKEND_SETTINGS } from "../config/model";
 import type { QueryRequest, StorageRoot } from "@lorelum/engine";
 
 export type BackendQueryRequest = QueryRequest & { readonly mode?: QueryMode };
+export interface BackendRequestOptions {
+  readonly signal?: AbortSignal | undefined;
+  readonly deadline?: number | undefined;
+}
 
 export interface CreateBackendClientOptions {
   readonly identity: InstanceIdentity;
@@ -59,23 +66,34 @@ export interface CreateBackendClientOptions {
   readonly buildIdentity: string;
   /** Timeout for ordinary control and embedding requests. */
   readonly timeoutMs?: number;
+  /** Timeout budget for local file verification and native model startup. */
+  readonly startupTimeoutMs?: number;
   /** Timeout budget for unloading the embedding model. */
   readonly shutdownTimeoutMs?: number;
 }
 
 export interface BackendClient {
-  identity(): Promise<BackendIdentity>;
+  identity(options?: BackendRequestOptions): Promise<BackendIdentity>;
   status(): Promise<BackendStatus>;
   stop(): Promise<BackendStatus>;
   loadModel(options?: { onProgress?: (status: ModelStatus) => void }): Promise<ModelStatus>;
   statusModel(): Promise<ModelStatus>;
+  beginModelPreparation(options?: BackendRequestOptions): Promise<ModelPreparation>;
+  modelPreparation(
+    preparationId: string,
+    options?: BackendRequestOptions,
+  ): Promise<ModelPreparation>;
   unloadModel(): Promise<ModelStatus>;
   embed(kind: "query" | "document", inputs: readonly string[]): Promise<EmbeddingResult>;
-  query(root: StorageRoot, request: BackendQueryRequest): Promise<BackendQueryResult>;
-  indexStatus(root: StorageRoot): Promise<IndexStatus>;
-  buildIndex(root: StorageRoot): Promise<IndexOperation>;
-  rebuildIndex(root: StorageRoot): Promise<IndexOperation>;
-  indexOperation(operationId: string): Promise<IndexOperation>;
+  query(
+    root: StorageRoot,
+    request: BackendQueryRequest,
+    options?: BackendRequestOptions,
+  ): Promise<BackendQueryResult>;
+  indexStatus(root: StorageRoot, options?: BackendRequestOptions): Promise<IndexStatus>;
+  buildIndex(root: StorageRoot, options?: BackendRequestOptions): Promise<IndexOperation>;
+  rebuildIndex(root: StorageRoot, options?: BackendRequestOptions): Promise<IndexOperation>;
+  indexOperation(operationId: string, options?: BackendRequestOptions): Promise<IndexOperation>;
 }
 
 function validatedLoopbackUrl(value: string): URL {
@@ -120,8 +138,9 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
   if (options.secret.length === 0) throw new TypeError("Backend secret must not be empty");
   if (options.buildIdentity.length === 0) throw new TypeError("Build identity must not be empty");
   const timeoutMs = options.timeoutMs ?? DEFAULT_BACKEND_SETTINGS.requestTimeoutMs;
+  const startupTimeoutMs = options.startupTimeoutMs ?? DEFAULT_BACKEND_SETTINGS.startupTimeoutMs;
   const shutdownTimeoutMs = options.shutdownTimeoutMs ?? DEFAULT_BACKEND_SETTINGS.shutdownTimeoutMs;
-  for (const timeout of [timeoutMs, shutdownTimeoutMs]) {
+  for (const timeout of [timeoutMs, startupTimeoutMs, shutdownTimeoutMs]) {
     if (!Number.isInteger(timeout) || timeout < 1)
       throw new TypeError("Timeout must be a positive integer");
   }
@@ -134,7 +153,8 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
     requestTimeoutMs = timeoutMs,
   ): Promise<unknown> => {
     const url = new URL(path, baseUrl);
-    const signal = AbortSignal.timeout(requestTimeoutMs);
+    const timeoutSignal = AbortSignal.timeout(requestTimeoutMs);
+    const signal = init.signal ? AbortSignal.any([timeoutSignal, init.signal]) : timeoutSignal;
     const response = await fetch(url, {
       ...init,
       redirect: "error",
@@ -142,23 +162,32 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
       signal,
       headers: { host: baseUrl.host, ...init.headers },
     }).catch((error: unknown) => {
+      if (init.signal?.aborted) throw init.signal.reason;
       if (isTimeout(error)) {
         throw new BackendError("backend.deadline-exceeded", { cause: error });
       }
       throw new BackendError("backend.unavailable", { cause: error });
     });
     const body = await readBoundedJson(response, MAX_RESPONSE_BYTES).catch((error: unknown) => {
-      throw new BackendError(signal.aborted ? "backend.deadline-exceeded" : "backend.failed", {
-        cause: error,
-      });
+      if (init.signal?.aborted) throw init.signal.reason;
+      throw new BackendError(
+        timeoutSignal.aborted ? "backend.deadline-exceeded" : "backend.failed",
+        {
+          cause: error,
+        },
+      );
     });
     if (!response.ok) throw remoteError(body) ?? new BackendError("backend.failed");
     return body;
   };
 
-  const identify = async (): Promise<BackendIdentity> => {
+  const identify = async (requestOptions: BackendRequestOptions = {}): Promise<BackendIdentity> => {
     const nonce = randomBytes(32).toString("hex");
-    const body = await send(`${BACKEND_ROUTES.identity}?nonce=${nonce}`);
+    const body = await send(
+      `${BACKEND_ROUTES.identity}?nonce=${nonce}`,
+      { signal: requestOptions.signal ?? null },
+      remaining(requestOptions),
+    );
     const parsed = identitySchema.safeParse(body);
     if (!parsed.success) throw new BackendError("backend.port-conflict");
     const { proof, ...identity } = parsed.data;
@@ -184,25 +213,36 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
       payload,
       method = "GET",
       timeout = timeoutMs,
+      signal,
+      deadline,
     }: {
       payload?: unknown;
       method?: "GET" | "POST";
       timeout?: number;
+      signal?: AbortSignal | undefined;
+      deadline?: number | undefined;
     } = {},
   ): Promise<T> => {
-    await identify();
+    const budget = { signal, deadline: deadline ?? Date.now() + timeout };
+    await identify(budget);
     const headers: Record<string, string> = { authorization: `Bearer ${options.secret}` };
-    const init: RequestInit = { method, headers };
+    const init: RequestInit = { method, headers, signal: signal ?? null };
     if (payload !== undefined) {
       init.method = "POST";
       headers["content-type"] = "application/json";
       init.body = JSON.stringify(payload);
     }
-    const body = await send(path, init, timeout);
+    const body = await send(path, init, remaining(budget, timeout));
     const parsed = schema.safeParse(body);
     if (!parsed.success) throw new BackendError("backend.failed");
     return parsed.data;
   };
+  function remaining(requestOptions: BackendRequestOptions, upper = timeoutMs) {
+    requestOptions.signal?.throwIfAborted();
+    const value = Math.min(upper, (requestOptions.deadline ?? Date.now() + upper) - Date.now());
+    if (value < 1) throw new BackendError("backend.deadline-exceeded");
+    return Math.max(1, Math.ceil(value));
+  }
 
   const control = async (path: string, method: "GET" | "POST" = "GET"): Promise<BackendStatus> => {
     const result = await request(path, statusSchema, {
@@ -225,6 +265,15 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
     expectedEncodingId = result.encodingId;
     return result;
   }
+  async function preparationRequest(
+    path: string,
+    requestOptions: BackendRequestOptions & { payload?: unknown } = {},
+  ) {
+    const result = await request(path, modelPreparationSchema, requestOptions);
+    if (result.status.encodingId !== ENCODING_ID) throw new BackendError("backend.incompatible");
+    expectedEncodingId = result.status.encodingId;
+    return result;
+  }
 
   return Object.freeze({
     identity: identify,
@@ -232,17 +281,42 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
     stop: () => control(BACKEND_ROUTES.stop, "POST"),
     async loadModel({ onProgress } = {}) {
       let result = await modelRequest(BACKEND_ROUTES.modelLoad, { payload: {} });
+      // Explicit load admits retries; automatic admission only joins/starts a nonfailed task.
+      const preparation =
+        result.state === "loading"
+          ? await preparationRequest(BACKEND_ROUTES.modelPrepare, { payload: {} })
+          : undefined;
+      if (preparation) result = preparation.status;
       // Loading may include hours of useful transfer. Only each HTTP call has a deadline.
       while (result.state === "loading") {
         onProgress?.(result);
         await Bun.sleep(250);
-        result = await modelRequest(BACKEND_ROUTES.modelStatus);
+        if (!preparation) throw new BackendError("backend.failed");
+        const observed = await preparationRequest(
+          BACKEND_ROUTES.modelPreparation.replace(":preparationId", preparation.preparationId),
+        );
+        if (observed.preparationId !== preparation.preparationId)
+          throw new EmbeddingError("embedding.preparation-expired");
+        result = observed.status;
       }
       if (result.state === "failed") throw new EmbeddingError(result.error ?? "embedding.failed");
       if (result.state !== "ready") throw new EmbeddingError("embedding.not-loaded");
       return result;
     },
     statusModel: () => modelRequest(BACKEND_ROUTES.modelStatus),
+    beginModelPreparation: (requestOptions) =>
+      preparationRequest(BACKEND_ROUTES.modelPrepare, { payload: {}, ...requestOptions }),
+    async modelPreparation(preparationId, requestOptions) {
+      if (!modelPreparationParamsSchema.safeParse({ preparationId }).success)
+        throw new BackendError("backend.invalid-request");
+      const result = await preparationRequest(
+        BACKEND_ROUTES.modelPreparation.replace(":preparationId", preparationId),
+        requestOptions,
+      );
+      if (result.preparationId !== preparationId)
+        throw new EmbeddingError("embedding.preparation-expired");
+      return result;
+    },
     unloadModel: () =>
       modelRequest(BACKEND_ROUTES.modelUnload, { payload: {}, timeout: shutdownTimeoutMs }),
     async embed(kind, inputs) {
@@ -255,40 +329,48 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
         throw new BackendError("backend.failed");
       return result;
     },
-    async query(root, query) {
+    async query(root, query, requestOptions) {
       const payload = { storageRoot: root.rootPath, query };
       if (!queryRequestSchema.safeParse(payload).success)
         throw new BackendRemoteError("usage.invalid");
-      return request(BACKEND_ROUTES.query, queryResultSchema, { payload });
+      return request(BACKEND_ROUTES.query, queryResultSchema, { payload, ...requestOptions });
     },
-    async indexStatus(root) {
+    async indexStatus(root, requestOptions) {
       const payload = { storageRoot: root.rootPath };
       if (!indexMutationSchema.safeParse(payload).success)
         throw new BackendError("backend.invalid-request");
       return request(
         `${BACKEND_ROUTES.indexStatus}?storageRoot=${encodeURIComponent(root.rootPath)}`,
         indexStatusSchema,
+        requestOptions,
       );
     },
-    async buildIndex(root) {
+    async buildIndex(root, requestOptions) {
       const payload = { storageRoot: root.rootPath };
       if (!indexMutationSchema.safeParse(payload).success)
         throw new BackendError("backend.invalid-request");
-      return request(BACKEND_ROUTES.indexBuild, indexOperationSchema, { payload });
+      return request(BACKEND_ROUTES.indexBuild, indexOperationSchema, {
+        payload,
+        ...requestOptions,
+      });
     },
-    async rebuildIndex(root) {
+    async rebuildIndex(root, requestOptions) {
       const payload = { storageRoot: root.rootPath };
       if (!indexMutationSchema.safeParse(payload).success)
         throw new BackendError("backend.invalid-request");
-      return request(BACKEND_ROUTES.indexRebuild, indexOperationSchema, { payload });
+      return request(BACKEND_ROUTES.indexRebuild, indexOperationSchema, {
+        payload,
+        ...requestOptions,
+      });
     },
-    indexOperation(operationId) {
+    indexOperation(operationId, requestOptions) {
       if (!indexOperationParamsSchema.safeParse({ operationId }).success) {
         return Promise.reject(new BackendError("backend.invalid-request"));
       }
       return request(
         BACKEND_ROUTES.indexOperation.replace(":operationId", operationId),
         indexOperationSchema,
+        requestOptions,
       );
     },
   } satisfies BackendClient);

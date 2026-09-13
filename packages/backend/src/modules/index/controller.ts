@@ -67,12 +67,12 @@ export function indexController(service: IndexOperationService, available: () =>
       ({ params }) => {
         const operation = service.operation(params.operationId);
         return operation === undefined
-          ? status(400, backendErrorBody("backend.invalid-request"))
+          ? status(410, backendErrorBody("backend.operation-expired"))
           : operation;
       },
       {
         params: indexOperationParamsSchema,
-        response: { 200: indexOperationSchema, 400: errorSchema },
+        response: { 200: indexOperationSchema, 400: errorSchema, 410: errorSchema },
       },
     );
 }

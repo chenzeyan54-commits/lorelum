@@ -25,7 +25,7 @@ This is the index for day-to-day development topics that do not belong in the pr
 
 ## Design records and remaining plans
 
-- [Query phased implementation roadmap (Chinese)](../plans/query-roadmap.md) - historical phased planning for keyword retrieval, configuration, embedding profiles, and derived indexes. Use the CLI documents for the shipped semantic query contract.
+- [Query roadmap (Chinese)](../plans/query-roadmap.md) - delivered capabilities, the current runtime-coordination stage, and evidence-gated later work. Use the CLI documents for the shipped semantic query contract.
 - [Local resident backend design (Chinese)](../plans/local-backend-service-design.md) - the historical first-stage lifecycle and Store-isolation design. For current commands and model behavior, use the CLI documents above.
 
 ## Local CLI and multiple worktrees
@@ -36,7 +36,7 @@ The CLI's discoverable global option is:
 --store-root <path>
 ```
 
-When omitted, the Store remains `~/.lorelum`. A relative path is resolved from the calling process's current working directory. `install`, `list`, `get`, `query`, and `index` use LocalStore; backend and model lifecycle commands do not. Do not infer support for other commands from this guide.
+When omitted, the Store remains `~/.lorelum`. A relative path is resolved from the calling process's current working directory. `pack install`, `pack update`, `pack remove`, `list`, `get`, `query`, and `index` use LocalStore; backend and model lifecycle commands do not. Do not infer support for other commands from this guide.
 
 ### Normal development workflow
 
@@ -48,7 +48,7 @@ Use an isolated Store by default when validating a worktree. This applies even t
 | --- | --- | --- |
 | TypeScript CLI or keyword behavior | `bun packages/cli/src/main.ts ...`; a human may use `lore-dev ...` instead | Global `lore` or an executable produced by another worktree. |
 | Backend lifecycle only | `bun packages/cli/src/main.ts backend start/status/stop` | `build:native`; no model runtime is needed just to control the Backend. |
-| Source-level model, embedding, or semantic index behavior | `bun run build:native`, then `bun packages/cli/src/main.ts backend start`, `bun packages/cli/src/main.ts model load`, and `bun packages/cli/src/main.ts --store-root <isolated-root> index build` | `build:cli`; it has no native embedding runtime. Backend and model startup are explicit in the current product. |
+| Source-level model, embedding, or semantic index behavior | `bun run build:native`; then stop Backend and run `pack install`, `index build/rebuild`, or query against an isolated Store. A missing fixed model is automatically prepared in the daemon; inspect `preparing`/`pending` and use explicit `model load` only to wait for or retry a failed transfer. | `build:cli`; it has no native embedding runtime. A semantic command may start Backend and background model preparation, so do not assert completion merely because the command returned an accepted operation. |
 | Compiled non-embedding behavior | `bun run build:cli` followed by `./dist/lore ...` | That binary for a model, embedding, or semantic-index check. |
 | Runnable compiled embedding candidate | `bun run build:release-staging` followed by `./dist/release/darwin-arm64/lore ...` | `build:release` unless archive validation is the purpose. |
 | Final archive/package | `bun run build:release` | Treating the archive command as the normal development build. |
@@ -57,10 +57,9 @@ For example, a source-level semantic-index check against a worktree-local Store 
 
 ```zsh
 bun run build:native
-bun packages/cli/src/main.ts backend start
-bun packages/cli/src/main.ts model load
-bun packages/cli/src/main.ts --store-root "$(git rev-parse --path-format=absolute --git-path lorelum/dev-store)" index build
-bun packages/cli/src/main.ts --store-root "$(git rev-parse --path-format=absolute --git-path lorelum/dev-store)" index status
+bun packages/cli/src/main.ts backend stop
+bun packages/cli/src/main.ts --store-root "$(git rev-parse --path-format=absolute --git-path lorelum/dev-store)" pack install agentic-coding
+bun packages/cli/src/main.ts --store-root "$(git rev-parse --path-format=absolute --git-path lorelum/dev-store)" query "responsibility boundary"
 ```
 
 The Backend and model are user-level resources; the explicit Store root selects only Pack data and its derived index. Stop a test Backend with `bun packages/cli/src/main.ts backend stop` when the check is complete.

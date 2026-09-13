@@ -89,7 +89,7 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
     profile,
     embedding: createQueryEmbeddingAdapter(embedding),
   });
-  const indexOperations = createIndexOperationService(semanticIndex);
+  const indexOperations = createIndexOperationService(semanticIndex, embedding);
   const app = createBackendApp({
     backend,
     embedding,

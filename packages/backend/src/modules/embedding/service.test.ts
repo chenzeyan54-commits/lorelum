@@ -59,6 +59,87 @@ test("passes input to the runtime unchanged and preserves order", async () => {
   await f.service.unload();
 });
 
+test("automatic and explicit configured preparation share a stable daemon-owned task", async () => {
+  const pending = deferred<string>();
+  const f = fixture();
+  let prepares = 0;
+  let starts = 0;
+  const service = createEmbeddingService({
+    settings: DEFAULT_BACKEND_SETTINGS,
+    prepareModel: async (_signal, progress) => {
+      prepares++;
+      progress({ phase: "downloading", downloadedBytes: 1 });
+      return pending.promise;
+    },
+    createRuntime: () => ({
+      start: async () => {
+        starts++;
+      },
+      encode: async () => [],
+      stop: async () => {},
+      exited: f.end.promise,
+    }),
+  });
+  const first = service.beginModelPreparation();
+  expect(first.status.state).toBe("loading");
+  expect(service.beginModelPreparation().preparationId).toBe(first.preparationId);
+  service.beginLoad();
+  const explicit = service.load();
+  const continuation = service.waitModelPreparation(first.preparationId);
+  await Promise.resolve();
+  expect(service.modelPreparation(first.preparationId).status.progress?.phase).toBe("downloading");
+  await expect(service.embedQuery(["query"])).rejects.toMatchObject({
+    code: "embedding.not-loaded",
+  });
+  pending.resolve("fixture");
+  await explicit;
+  expect((await continuation).state).toBe("ready");
+  expect(service.beginModelPreparation().preparationId).toBe(first.preparationId);
+  expect(prepares).toBe(1);
+  expect(starts).toBe(1);
+  await service.unload();
+  expect(() => service.modelPreparation(first.preparationId)).toThrow(
+    expect.objectContaining({ code: "embedding.preparation-expired" }),
+  );
+});
+
+test("automatic failed preparation is observable and requires explicit load to retry", async () => {
+  let prepares = 0;
+  const f = fixture();
+  const service = createEmbeddingService({
+    settings: DEFAULT_BACKEND_SETTINGS,
+    prepareModel: async () => {
+      if (++prepares === 1) throw new EmbeddingError("embedding.download-failed");
+      return "fixture";
+    },
+    createRuntime: () => ({
+      start: async () => {},
+      stop: async () => {},
+      encode: async () => [],
+      exited: f.end.promise,
+    }),
+  });
+  const first = service.beginModelPreparation();
+  await expect(service.waitModelPreparation(first.preparationId)).rejects.toMatchObject({
+    code: "embedding.download-failed",
+  });
+  expect(service.modelPreparation(first.preparationId).status).toMatchObject({
+    state: "failed",
+    error: "embedding.download-failed",
+  });
+  expect(() => service.beginModelPreparation()).toThrow(
+    expect.objectContaining({ code: "embedding.download-failed" }),
+  );
+  expect(prepares).toBe(1);
+  await service.load();
+  const retry = service.beginModelPreparation();
+  expect(retry.preparationId).not.toBe(first.preparationId);
+  expect(() => service.modelPreparation(first.preparationId)).toThrow(
+    expect.objectContaining({ code: "embedding.preparation-expired" }),
+  );
+  await service.unload();
+});
+
 test("one inflight request, responsive status, excess admission rejected", async () => {
   const pending = deferred<number[]>();
   const f = fixture({ encode: () => pending.promise });

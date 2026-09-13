@@ -14,6 +14,6 @@ export function createEmbeddingAdapter(service: EmbeddingService): EmbeddingPort
 export function createQueryEmbeddingAdapter(service: EmbeddingService): EmbeddingPort {
   return Object.freeze({
     maxBatchSize: 1,
-    embed: (inputs: readonly string[]) => service.embed("query", inputs),
+    embed: (inputs: readonly string[]) => service.embedQuery(inputs),
   });
 }

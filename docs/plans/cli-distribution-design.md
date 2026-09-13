@@ -67,7 +67,7 @@ lore model load
 lore model status
 ```
 
-安装不自动启动常驻后端或下载模型。运行时模型下载继续使用 CLI 内的 got，不需要 curl；安装前的 shell 下载阶段则尚无可用 CLI，因此允许使用系统下载工具，这两个依赖边界不同。
+这里的“安装”指安装 Lorelum 的发行包，不是 `lore pack install <pack>`：发行包安装不自动启动常驻后端或下载模型。安装完成后，首次实际需要 embedding 的 CLI 命令可以按当前 runtime 合同自动准备固定模型；运行时下载继续使用 CLI 内的 got，不需要 curl。安装前的 shell 下载阶段则尚无可用 CLI，因此允许使用系统下载工具，这两个依赖边界不同。
 
 必须增加从符号链接启动的真实验证，并将资源定位明确为 `dirname(await realpath(process.execPath))` 后的相邻目录。不能假定每个运行平台都会把 `process.execPath` 解析为同一种路径形式。
 
@@ -139,7 +139,7 @@ release-metadata.json
 | 1. 绑定构建产物 | 干净构建目录产出 CLI 与 native；CLI 编入的 manifest 与包内一致。替换 native 或 manifest 后加载明确失败；native 的实际动态依赖只在审查过的 macOS 系统库允许范围内；CI 工具链变化能产生自洽的新产物 |
 | 2. 产出平台包 | 无 Bun、npm、CMake 和源码的受支持 macOS arm64 环境中，解压即可启动后端、下载模型并达到 ready；动态依赖只来自声明的系统范围，包内许可证齐全 |
 | 3. 提供安装入口 | 空安装目录、重复安装、路径含空格、PATH 未设置、已有同名入口、下载中断、摘要错误、解压失败均有明确结果；失败不留下半安装入口；通过符号链接仍能加载 native；调用目录的 `.env` 与 `bunfig.toml` 不能改变 Lorelum 配置 |
-| 4. 验证生命周期和分发体验 | 安装后的 CLI 可正常 start/status/stop；模型下载续传、摘要检查和 native 父进程退出回归通过；安装不自动启动 daemon 或下载模型；浏览器下载的包在真实 macOS 安全策略下完成安装 |
+| 4. 验证生命周期和分发体验 | 安装后的 CLI 可正常 start/status/stop；模型下载续传、摘要检查和 native 父进程退出回归通过；发行包安装本身不自动启动 daemon 或下载模型；浏览器下载的包在真实 macOS 安全策略下完成安装 |
 | 5. 建立手动发布流程 | 经单独授权后新增手动触发的 CI：固定源码和版本生成 draft Release，记录包大小、SHA、工具链、测试结果及支持范围。验收从 draft 下载并复核资产与 target commit；Owner 审查后在 GitHub 页面公开同一批已验证资产 |
 
 当前交付完成 macOS arm64 的本地构建、归档和安装验收。Windows 后续沿用同一平台包责任划分，提供 ZIP 与 PowerShell 下载入口，但必须先完成 native 构建、进程身份与退出管理、文件校验及干净 Windows 环境验收；Linux 和 Intel Mac 也按同样证据要求决定是否发布，不因 Bun 能交叉编译而直接列入支持矩阵。

@@ -62,6 +62,7 @@ export async function createProcessBackendClient(): Promise<BackendClient> {
     buildIdentity: await currentBuildIdentity(Bun.main),
     baseUrl: BACKEND_URL,
     timeoutMs: settings.requestTimeoutMs,
+    startupTimeoutMs: settings.startupTimeoutMs,
     shutdownTimeoutMs: settings.shutdownTimeoutMs,
   });
 }

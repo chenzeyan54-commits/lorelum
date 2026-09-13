@@ -65,6 +65,7 @@ test("returns machine-readable root capability discovery", async () => {
         { name: "index.status" },
         { name: "index.build" },
         { name: "index.rebuild" },
+        { name: "index.operation" },
         { name: "format" },
         { name: "i18n.sync" },
         { name: "validate" },

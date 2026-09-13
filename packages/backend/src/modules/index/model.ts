@@ -21,7 +21,7 @@ export type IndexStatus = z.infer<typeof indexStatusSchema>;
 
 export const indexStatusQuerySchema = z.strictObject({ storageRoot: storageRootSchema });
 export const indexMutationSchema = z.strictObject({ storageRoot: storageRootSchema });
-export const indexOperationStateSchema = z.enum(["building", "ready", "failed"]);
+export const indexOperationStateSchema = z.enum(["building", "preparing", "ready", "failed"]);
 export const indexOperationStoreErrorCodes = ["store.busy", "store.recovery-required"] as const;
 export const indexOperationErrorCodes = [
   "backend.failed",
@@ -29,11 +29,27 @@ export const indexOperationErrorCodes = [
   ...indexOperationStoreErrorCodes,
 ] as const;
 export type IndexOperationErrorCode = (typeof indexOperationErrorCodes)[number];
-export const indexOperationSchema = z.strictObject({
-  operationId: z.string().uuid(),
-  state: indexOperationStateSchema,
-  index: indexStatusSchema.optional(),
-  error: z.enum(indexOperationErrorCodes).optional(),
-});
+const indexOperationIdSchema = z.string().uuid();
+export const indexOperationSchema = z.discriminatedUnion("state", [
+  z.strictObject({
+    operationId: indexOperationIdSchema,
+    state: z.literal("building"),
+  }),
+  z.strictObject({
+    operationId: indexOperationIdSchema,
+    state: z.literal("preparing"),
+    preparationId: z.string().uuid(),
+  }),
+  z.strictObject({
+    operationId: indexOperationIdSchema,
+    state: z.literal("ready"),
+    index: indexStatusSchema,
+  }),
+  z.strictObject({
+    operationId: indexOperationIdSchema,
+    state: z.literal("failed"),
+    error: z.enum(indexOperationErrorCodes),
+  }),
+]);
 export type IndexOperation = z.infer<typeof indexOperationSchema>;
 export const indexOperationParamsSchema = z.strictObject({ operationId: z.string().uuid() });

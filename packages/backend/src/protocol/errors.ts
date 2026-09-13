@@ -6,6 +6,7 @@ export const backendErrorCodes = [
   "backend.incompatible",
   "backend.unauthorized",
   "backend.invalid-request",
+  "backend.operation-expired",
   "backend.busy",
   "backend.deadline-exceeded",
   "backend.state-invalid",
@@ -20,6 +21,8 @@ const messages: Record<BackendErrorCode, string> = {
   "backend.incompatible": "The backend does not match this client build or protocol.",
   "backend.unauthorized": "The local backend could not authenticate this request.",
   "backend.invalid-request": "The backend request is invalid.",
+  "backend.operation-expired":
+    "The semantic index operation is no longer available in this backend instance.",
   "backend.busy": "The local backend is busy or stopping.",
   "backend.deadline-exceeded": "The backend operation did not finish before its deadline.",
   "backend.state-invalid": "The backend runtime state cannot be safely used or recovered.",

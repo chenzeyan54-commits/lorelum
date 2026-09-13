@@ -6,7 +6,6 @@ import {
   embeddingErrorCodes,
   EmbeddingError,
 } from "@lorelum/backend/protocol";
-import type { BackendClient } from "@lorelum/backend/client";
 import {
   InvalidQueryRequestError,
   KeywordIndexError,
@@ -31,10 +30,11 @@ import {
 } from "../runtime/errors.js";
 import { resolveInvocationStorageRoot } from "../store/storage-root.js";
 import { queryResultSchema } from "./result-schema.js";
+import type { QueryPreparingResult, SemanticRuntimeClient } from "./runtime-client.js";
 
 export interface QueryCommandServices {
   readonly queryService: QueryService;
-  readonly createClient: () => Promise<Pick<BackendClient, "query">>;
+  readonly createClient: () => Promise<SemanticRuntimeClient>;
   readonly storageRoot: StorageRoot;
 }
 
@@ -63,13 +63,23 @@ function parseTopK(value: unknown): number | undefined {
   return Number(value);
 }
 
-function toQueryResult(result: QueryResult | SemanticQueryResult): JsonValue {
+function toQueryResult(
+  result: QueryResult | SemanticQueryResult | QueryPreparingResult,
+): JsonValue {
+  if ("state" in result && result.state === "preparing") {
+    return {
+      state: result.state,
+      preparationId: result.preparationId,
+      message: result.message,
+    };
+  }
+  const queryResult = result as QueryResult | SemanticQueryResult;
   return {
-    mode: result.mode,
-    ...(result.mode === "semantic"
-      ? { profileId: result.profileId, coverage: result.coverage }
+    mode: queryResult.mode,
+    ...(queryResult.mode === "semantic"
+      ? { profileId: queryResult.profileId, coverage: queryResult.coverage }
       : {}),
-    results: result.results.map((hit: QueryHit) => ({
+    results: queryResult.results.map((hit: QueryHit) => ({
       practiceId: hit.practiceId,
       title: hit.title,
       stage: hit.stage,
@@ -154,7 +164,7 @@ export function createQueryCommand(services: QueryCommandServices): CommandDefin
     ],
     resultSchema: queryResultSchema,
     errorCodes: queryErrorCodes,
-    exitCodes: [0, 2],
+    exitCodes: [0, 1, 2],
     async handler(invocation) {
       try {
         const text = invocation.positionals[0];
@@ -172,10 +182,15 @@ export function createQueryCommand(services: QueryCommandServices): CommandDefin
           mode === "keyword"
             ? await services.queryService.query(root, request)
             : await (await services.createClient()).query(root, { ...request, mode });
-        return { data: toQueryResult(result) };
+        const data = toQueryResult(result);
+        return { data, ...(dataIsPreparing(data) ? { exitCode: 1 as const } : {}) };
       } catch (error) {
         throwVisibleQueryError(error);
       }
     },
   };
+}
+
+function dataIsPreparing(data: JsonValue): boolean {
+  return typeof data === "object" && data !== null && "state" in data && data.state === "preparing";
 }

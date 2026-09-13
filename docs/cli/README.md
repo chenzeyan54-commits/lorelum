@@ -18,7 +18,7 @@ Lorelum CLI 的机器接口是单行 JSON envelope。成功输出包含 `command
 
 ## Protocol versions
 
-CLI envelope 和 backend 内部协议当前均为 version 1。内部协议对所有请求使用一致的实例身份和 build 校验。
+CLI envelope 当前为 version 1；backend 内部协议当前为 version 3。内部协议对所有请求使用一致的实例身份和 build 校验。
 
 ## Output contract
 

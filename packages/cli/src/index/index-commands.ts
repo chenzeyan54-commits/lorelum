@@ -1,4 +1,5 @@
 import type { BackendClient } from "@lorelum/backend/client";
+import type { IndexRuntimeClient } from "@lorelum/backend/coordination";
 import {
   BackendError,
   backendErrorCodes,
@@ -17,7 +18,10 @@ import { CliError, frameworkErrorCodes } from "../runtime/errors";
 import { resolveInvocationStorageRoot } from "../store/storage-root";
 
 export interface IndexCommandServices {
+  /** Read-only status keeps its existing non-starting Backend path. */
   readonly createClient: () => Promise<BackendClient>;
+  /** Build/rebuild observe Backend-owned execution without waiting for model downloads. */
+  readonly createRuntimeClient: () => Promise<IndexRuntimeClient>;
   readonly storageRoot: StorageRoot;
 }
 
@@ -32,15 +36,35 @@ const indexStatusResultSchema: JsonSchema = {
   },
 };
 
-const indexBuildResultSchema: JsonSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["operationId", "state"],
-  properties: {
-    operationId: { type: "string" },
-    state: { enum: ["ready"] },
-    index: indexStatusResultSchema,
-  },
+const indexOperationResultSchema: JsonSchema = {
+  oneOf: [
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["operationId", "state", "preparationId"],
+      properties: {
+        operationId: { type: "string" },
+        state: { const: "preparing" },
+        preparationId: { type: "string" },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["operationId", "state"],
+      properties: { operationId: { type: "string" }, state: { const: "building" } },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["operationId", "state", "index"],
+      properties: {
+        operationId: { type: "string" },
+        state: { const: "ready" },
+        index: indexStatusResultSchema,
+      },
+    },
+  ],
 };
 
 function toStatus(value: IndexStatus): JsonValue {
@@ -52,15 +76,19 @@ function toStatus(value: IndexStatus): JsonValue {
 }
 
 function toOperation(value: IndexOperation): JsonValue {
+  if (value.state === "preparing") {
+    return {
+      operationId: value.operationId,
+      state: value.state,
+      preparationId: value.preparationId,
+    };
+  }
+  if (value.state === "building") return { operationId: value.operationId, state: value.state };
   if (value.state === "failed") {
-    if (
-      value.error &&
-      embeddingErrorCodes.includes(value.error as (typeof embeddingErrorCodes)[number])
-    ) {
+    if (embeddingErrorCodes.includes(value.error as (typeof embeddingErrorCodes)[number])) {
       throw new EmbeddingError(value.error as (typeof embeddingErrorCodes)[number]);
     }
     if (
-      value.error &&
       indexOperationStoreErrorCodes.includes(
         value.error as (typeof indexOperationStoreErrorCodes)[number],
       )
@@ -69,37 +97,23 @@ function toOperation(value: IndexOperation): JsonValue {
     }
     throw new BackendError("backend.failed");
   }
-  if (value.state !== "ready" || value.index === undefined)
-    throw new BackendError("backend.failed");
+  if (value.index === undefined) throw new BackendError("backend.failed");
   return { operationId: value.operationId, state: value.state, index: toStatus(value.index) };
 }
 
-async function waitForOperation(
-  client: BackendClient,
-  initial: IndexOperation,
-): Promise<IndexOperation> {
-  let current = initial;
-  while (current.state === "building") {
-    // eslint-disable-next-line no-await-in-loop -- operation polling must observe one terminal state in order.
-    await Bun.sleep(100);
-    // eslint-disable-next-line no-await-in-loop -- each poll depends on the previous operation state.
-    current = await client.indexOperation(current.operationId);
-  }
-  return current;
-}
-
 function command(
-  name: "status" | "build" | "rebuild",
+  name: "status" | "build" | "rebuild" | "operation",
   summary: string,
   services: IndexCommandServices,
 ): CommandDefinition {
   const isStatus = name === "status";
+  const isOperation = name === "operation";
   return {
     name: `index.${name}`,
     summary,
-    positionals: [],
+    positionals: isOperation ? [{ name: "operation-id", required: true }] : [],
     options: [],
-    resultSchema: isStatus ? indexStatusResultSchema : indexBuildResultSchema,
+    resultSchema: isStatus ? indexStatusResultSchema : indexOperationResultSchema,
     errorCodes: [
       ...frameworkErrorCodes,
       ...backendErrorCodes,
@@ -113,11 +127,19 @@ function command(
           invocation.options.storeRoot,
           services.storageRoot,
         );
-        const client = await services.createClient();
-        if (isStatus) return { data: toStatus(await client.indexStatus(root)) };
-        const started =
-          name === "build" ? await client.buildIndex(root) : await client.rebuildIndex(root);
-        return { data: toOperation(await waitForOperation(client, started)) };
+        if (isStatus || isOperation) {
+          const client = await services.createClient();
+          if (isStatus) return { data: toStatus(await client.indexStatus(root)) };
+          const operationId = invocation.positionals[0];
+          if (operationId === undefined) throw new BackendError("backend.invalid-request");
+          return { data: toOperation(await client.indexOperation(operationId)) };
+        }
+        const client = await services.createRuntimeClient();
+        return {
+          data: toOperation(
+            name === "build" ? await client.build(root) : await client.rebuild(root),
+          ),
+        };
       } catch (error) {
         if (error instanceof BackendError || error instanceof EmbeddingError)
           throw new CliError(error.code, error.message);
@@ -149,5 +171,6 @@ export function createIndexCommands(services: IndexCommandServices): readonly Co
     command("status", "Report the selected Store's semantic index status.", services),
     command("build", "Build a semantic index for the selected Store.", services),
     command("rebuild", "Replace the selected Store's semantic index.", services),
+    command("operation", "Report a semantic index operation.", services),
   ]);
 }

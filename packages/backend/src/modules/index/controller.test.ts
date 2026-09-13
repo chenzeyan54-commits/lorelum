@@ -103,6 +103,37 @@ test("build returns an accepted operation and operation reads are bounded", asyn
   expect((await instance.handle(request("/internal/v1/index/operations/not-a-uuid"))).status).toBe(
     400,
   );
+
+  const expired = await instance.handle(
+    request("/internal/v1/index/operations/1f8fad5b-d9cb-469f-a165-70867728950e"),
+  );
+  expect(expired.status).toBe(410);
+  expect(await expired.json()).toEqual({
+    error: {
+      code: "backend.operation-expired",
+      message: "The semantic index operation is no longer available in this backend instance.",
+    },
+  });
+});
+
+test("operation reads expose an accepted model-preparing continuation", async () => {
+  const preparationId = "0f8fad5b-d9cb-469f-a165-70867728950e";
+  const instance = app({
+    status: async () => ({ state: "missing", profileId }),
+    build: () => ({ operationId, state: "building" }),
+    rebuild: () => ({ operationId, state: "building" }),
+    operation: (id) =>
+      id === operationId ? { operationId, state: "preparing", preparationId } : undefined,
+    waitForIdle: async () => undefined,
+  });
+
+  const response = await instance.handle(request(`/internal/v1/index/operations/${operationId}`));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    operationId,
+    state: "preparing",
+    preparationId,
+  });
 });
 
 test("build preserves an explicit model-readiness failure", async () => {

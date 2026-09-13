@@ -13,8 +13,10 @@ import {
   type StorageRoot,
 } from "@lorelum/engine";
 import type { RegistryRelease } from "@lorelum/format";
+import type { IndexRuntimeClient } from "@lorelum/backend/coordination";
 
 import type { JsonSchema, JsonValue } from "../output/protocol.js";
+import type { OutputWriter } from "../output/protocol.js";
 import type { CommandDefinition } from "../registry.js";
 import { CliError, cliErrorCodes, frameworkErrorCodes } from "../runtime/errors.js";
 import { resolveInvocationStorageRoot } from "../store/storage-root.js";
@@ -28,11 +30,19 @@ import { loadRegistry, type LoadedRegistry } from "./load-registry.js";
 import { materializeRegistryRelease, type MaterializedPackSource } from "./materialize-source.js";
 import { parsePackSpecifier } from "./pack-specifier.js";
 import { resolveRegistryRelease } from "./resolve-release.js";
+import {
+  failedInstallIndexSync,
+  type InstallIndexSync,
+  syncSemanticIndexAfterInstall,
+} from "./sync-semantic-index.js";
 
 export interface InstallCommandServices {
   /** Core storage dependencies are supplied by the CLI composition root. */
   readonly store: Pick<LocalStore, "install" | "upgrade">;
   readonly storageRoot: StorageRoot;
+  /** Install submits derived-index synchronization after its canonical commit. */
+  readonly createIndexRuntimeClient: () => Promise<IndexRuntimeClient>;
+  readonly progressWriter?: OutputWriter;
   /** Ancillary dependencies default to the production implementations. */
   readonly loadRegistry?: (locator?: string) => Promise<LoadedRegistry>;
   readonly materializeRelease?: (
@@ -43,6 +53,53 @@ export interface InstallCommandServices {
 }
 
 type ResolvedInstallCommandServices = Required<InstallCommandServices>;
+
+const indexSyncSchema: JsonSchema = {
+  oneOf: [
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["state", "operationId", "phase"],
+      properties: {
+        state: { const: "pending" },
+        operationId: stringSchema,
+        phase: { enum: ["preparing", "building"] },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["state", "index"],
+      properties: {
+        state: { const: "ready" },
+        index: {
+          type: "object",
+          additionalProperties: false,
+          required: ["state", "profileId"],
+          properties: {
+            state: { enum: ["ready"] },
+            profileId: stringSchema,
+            vectorCount: { type: "integer" },
+          },
+        },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["state", "error"],
+      properties: {
+        state: { const: "failed" },
+        error: {
+          type: "object",
+          additionalProperties: false,
+          required: ["code", "message"],
+          properties: { code: stringSchema, message: stringSchema },
+        },
+      },
+    },
+  ],
+};
 
 const registryMutationResultSchema: JsonSchema = {
   type: "object",
@@ -77,6 +134,44 @@ const registryMutationResultSchema: JsonSchema = {
     ...mutationResultProperties,
     idempotent: { type: "boolean" },
     artifactDigest: stringSchema,
+  },
+};
+
+const installResultSchema: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "pack",
+    "registry",
+    "source",
+    ...mutationResultRequired,
+    "idempotent",
+    "artifactDigest",
+    "indexSync",
+  ],
+  properties: {
+    pack: {
+      type: "object",
+      additionalProperties: false,
+      required: ["name", "version"],
+      properties: { name: stringSchema, version: stringSchema },
+    },
+    registry: {
+      type: "object",
+      additionalProperties: false,
+      required: ["name", "repository"],
+      properties: { name: stringSchema, repository: stringSchema },
+    },
+    source: {
+      type: "object",
+      additionalProperties: false,
+      required: ["type", "ref", "commit"],
+      properties: { type: { const: "git" }, ref: stringSchema, commit: stringSchema },
+    },
+    ...mutationResultProperties,
+    idempotent: { type: "boolean" },
+    artifactDigest: stringSchema,
+    indexSync: indexSyncSchema,
   },
 };
 
@@ -180,7 +275,7 @@ async function mutateRegistryPack(
       decoded.candidate,
       decoded.diagnostics,
     );
-    return {
+    const data = {
       pack: { name: decoded.candidate.pack.name, version: decoded.candidate.pack.version },
       registry: { name: loaded.registry.name, repository: loaded.repository.slug },
       source: {
@@ -193,8 +288,29 @@ async function mutateRegistryPack(
       cleanupPending: result.cleanupPending,
       artifactDigest: result.artifactDigest,
     };
+    if (operation !== "install") return data;
+    const indexSync = await synchronizeIndex(services, storageRoot);
+    if (indexSync.state === "failed") {
+      try {
+        services.progressWriter.write("index: sync failed; run lore index build for this Store\n");
+      } catch {
+        /* Closed stderr must not change the canonical install result. */
+      }
+    }
+    return { ...data, indexSync };
   } finally {
     await materialized.cleanup().catch(() => undefined);
+  }
+}
+
+async function synchronizeIndex(
+  services: ResolvedInstallCommandServices,
+  root: StorageRoot,
+): Promise<InstallIndexSync> {
+  try {
+    return await syncSemanticIndexAfterInstall(root, await services.createIndexRuntimeClient());
+  } catch (error) {
+    return failedInstallIndexSync(error);
   }
 }
 
@@ -206,6 +322,8 @@ function createRegistryMutationCommand(
     loadRegistry: services.loadRegistry ?? loadRegistry,
     materializeRelease: services.materializeRelease ?? materializeRegistryRelease,
     decodePackDirectory: services.decodePackDirectory ?? decodePackDirectory,
+    createIndexRuntimeClient: services.createIndexRuntimeClient,
+    progressWriter: services.progressWriter ?? process.stderr,
     store: services.store,
     storageRoot: services.storageRoot,
   };
@@ -224,7 +342,7 @@ function createRegistryMutationCommand(
         optionRequired: false,
       },
     ],
-    resultSchema: registryMutationResultSchema,
+    resultSchema: operation === "install" ? installResultSchema : registryMutationResultSchema,
     errorCodes: operation === "install" ? installErrorCodes : updateErrorCodes,
     exitCodes: [0, 2],
     async handler(invocation) {

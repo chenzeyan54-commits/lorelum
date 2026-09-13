@@ -1,6 +1,6 @@
 # 默认模型交付、加载进度与接口文档
 
-状态：本阶段设计，2026-09-11。用户已授权本地规划与实施；提交、发布和资源托管仍按仓库流程处理。本文承接 [第二阶段 backend 设计](local-backend-stage-2-design.md)，只调整默认模型交付、CPU 配置、加载合同和文档组织。
+状态：模型交付与完整性设计已交付；其中“只由显式 `model load` 发起下载”的旧运行时约定已被 2026-09-13 的[自动模型准备设计](./automatic-local-model-provisioning-design.md)取代。当前 CLI 行为以[模型命令](../cli/model.md)、[index 命令](../cli/index.md)和[query 命令](../cli/query.md)为准。
 
 本阶段让 `lore model load` 在缺少默认模型时取得文件，持续显示进度，网络中断后保留已下载内容。控制 API 接受加载后立即返回，CLI 等待最终结果；下载时间不消耗 native 启动预算。384 维、CLS pooling、L2 normalization 和固定 Q4_0 身份保持不变。GPU、semantic index/query 接入、Windows 支持和模型自动更新不在本阶段。
 
@@ -42,7 +42,7 @@ interface ModelLoading {
 
 下载使用 `got` npm 包，适配集中在 `download/file.ts`，不依赖系统 curl、shell 或下载子进程。got 负责 HTTP、重定向和分阶段连接超时；Lorelum 在写入前验证状态、Content-Range 和固定大小，按 `.part` 实际落盘长度续传。每次尝试在 pipeline 完全关闭后才能重试或结束取消，默认仅允许 HTTPS 及 HTTPS 重定向，禁用解压以保持模型字节身份。连接阶段默认 30 秒，连续 60 秒没有收到文件字节触发停滞；有进展的下载没有总时限。
 
-未显式指定 `modelPath` 时，在独立于 Store 和运行目录的 `cacheDirectory`（默认 `~/.lorelum/models`）中按摘要定位资源。已有完整文件验证通过便复用；显式 `modelPath` 继续表示用户管理的固定模型，只校验，不覆盖或自动下载到该路径。`model status`、`model unload` 和 backend 启动都不触发下载；网络操作只由显式 model load 开始。
+未显式指定 `modelPath` 时，在独立于 Store 和运行目录的 `cacheDirectory`（默认 `~/.lorelum/models`）中按摘要定位资源。已有完整文件验证通过便复用；显式 `modelPath` 继续表示用户管理的固定模型，只校验，不覆盖或自动下载到该路径。`model status`、`model unload` 和 backend 启动都不触发下载；网络操作由显式 `model load` 或首次实际需要 embedding 的 semantic query、index build/rebuild、install-driven index 发起。后者只短暂观察共享准备任务，不等待完整传输。
 
 下载写入最终文件旁的 `.part`，失败和取消保留可继续使用的数据。完成后先验证大小与 SHA-256，再原子改名；未验证文件不能进入 native。来源变更、远端不支持 Range、偏移不匹配、完整性失败应给出明确错误，禁止自动丢弃已有部分文件并从零重试。损坏部分文件与普通断网不同，文档说明需要显式清理后重新下载。
 

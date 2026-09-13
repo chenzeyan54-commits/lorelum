@@ -25,11 +25,12 @@ async function bundledInputs(entrypoints: string[]): Promise<string[]> {
 const engine = (path: string) => path.includes("packages/engine/src/");
 const elysia = (path: string) => path.includes("node_modules/elysia/");
 
-test("client/control exports exclude server dependencies; server build is the positive control", async () => {
+test("client/control/coordination exports exclude server dependencies; server build is the positive control", async () => {
   // No external exclusions: follow the actual complete resolved dependency graph.
   const client = await bundledInputs([
     join(import.meta.dir, "index.ts"),
     join(import.meta.dir, "../runtime/index.ts"),
+    join(import.meta.dir, "../coordination/index.ts"),
   ]);
   expect(client.some((path) => path.endsWith("client/client.ts"))).toBe(true);
   expect(client.some(engine)).toBe(false);

@@ -148,6 +148,26 @@ test("uses semantic Backend query by default and preserves semantic metadata", a
   expect(validateJsonSchema(result.response.data, result.definition.resultSchema)).toEqual([]);
 });
 
+test("returns preparing as a successful exit-1 result", async () => {
+  const preparation = {
+    state: "preparing" as const,
+    preparationId: "1f8fad5b-d9cb-469f-a165-70867728950e",
+    message: "The local model is preparing in the background.",
+  };
+  const result = await invoke(
+    ["query", "How do I verify a release?"],
+    {
+      async query() {
+        throw new Error("keyword path should not run");
+      },
+    },
+    async () => ({ query: async () => preparation }),
+  );
+  expect(result.exitCode).toBe(1);
+  expect(result.response).toMatchObject({ ok: true, data: preparation });
+  expect(validateJsonSchema(result.response.data, result.definition.resultSchema)).toEqual([]);
+});
+
 test("rejects an invalid mode before creating the Backend client", async () => {
   let created = false;
   const result = await invoke(
@@ -281,7 +301,7 @@ test("publishes query arguments, schema, error allowlist, and exit codes through
     usage: "query <text>",
     positionals: [{ name: "text", required: true }],
     errorCodes: definition.errorCodes,
-    exitCodes: [0, 2],
+    exitCodes: [0, 1, 2],
     resultSchema: definition.resultSchema,
   });
   expect(

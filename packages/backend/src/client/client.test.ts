@@ -73,6 +73,86 @@ function runningApp(
 }
 
 describe("createBackendClient", () => {
+  test("configured preparation returns before transfer completion and explicit load joins it", async () => {
+    let finish!: (value: string) => void;
+    const transfer = new Promise<string>((resolve) => {
+      finish = resolve;
+    });
+    let prepares = 0;
+    const service = createEmbeddingService({
+      settings: DEFAULT_BACKEND_SETTINGS,
+      prepareModel: async (_signal, progress) => {
+        prepares++;
+        progress({ phase: "downloading" });
+        return transfer;
+      },
+      createRuntime: () => ({
+        start: async () => {},
+        stop: async () => {},
+        encode: async () => [],
+        exited: new Promise<void>(() => {}),
+      }),
+    });
+    const { url } = runningApp(undefined, identity, service);
+    const client = createBackendClient({
+      identity,
+      secret,
+      buildIdentity: identity.buildIdentity,
+      baseUrl: url,
+    });
+    const accepted = await client.beginModelPreparation();
+    expect(accepted.status.state).toBe("loading");
+    expect((await client.beginModelPreparation()).preparationId).toBe(accepted.preparationId);
+    const explicit = client.loadModel();
+    expect((await client.modelPreparation(accepted.preparationId)).status.state).toBe("loading");
+    finish("fixture");
+    expect((await explicit).state).toBe("ready");
+    expect((await client.modelPreparation(accepted.preparationId)).status.state).toBe("ready");
+    expect(prepares).toBe(1);
+    await client.unloadModel();
+    await expect(client.modelPreparation(accepted.preparationId)).rejects.toMatchObject({
+      code: "embedding.preparation-expired",
+    });
+    await expect(client.modelPreparation("invalid")).rejects.toMatchObject({
+      code: "backend.invalid-request",
+    });
+  });
+
+  test("rejects a changed preparation handle instead of following another load", async () => {
+    const expectedId = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const replacementId = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
+    const loading = {
+      state: "loading" as const,
+      encodingId: ENCODING_ID,
+      device: "cpu" as const,
+      dimensions: EMBEDDING_MODEL.dimensions,
+      threads: 4,
+    };
+    const ready = { ...loading, state: "ready" as const };
+    const { url } = runningApp(undefined, identity, {
+      beginModelPreparation: () => ({ preparationId: expectedId, status: loading }),
+      modelPreparation: (preparationId) => {
+        expect(preparationId).toBe(expectedId);
+        return { preparationId: replacementId, status: ready };
+      },
+      waitModelPreparation: async () => ready,
+      status: () => loading,
+      beginLoad: () => loading,
+      load: async () => loading,
+      unload: async () => ({ ...ready, state: "unloaded" }),
+      embed: async () => ({ encodingId: ENCODING_ID, vectors: [[1, ...Array(383).fill(0)]] }),
+      embedQuery: async () => ({ encodingId: ENCODING_ID, vectors: [[1, ...Array(383).fill(0)]] }),
+    });
+    const client = createBackendClient({
+      identity,
+      secret,
+      buildIdentity: identity.buildIdentity,
+      baseUrl: url,
+    });
+    await expect(client.modelPreparation(expectedId)).rejects.toMatchObject({
+      code: "embedding.preparation-expired",
+    });
+  });
   test("authenticates the service before making a strict-build query", async () => {
     const calls: unknown[] = [];
     const { url } = runningApp({
@@ -153,6 +233,15 @@ describe("createBackendClient", () => {
   test("loads, reports, unloads, and embeds through the authenticated model contract", async () => {
     const calls: string[] = [];
     const { url } = runningApp(undefined, identity, {
+      beginModelPreparation() {
+        return { preparationId: crypto.randomUUID(), status: this.status() };
+      },
+      modelPreparation(preparationId) {
+        return { preparationId, status: this.status() };
+      },
+      async waitModelPreparation() {
+        return this.status();
+      },
       status: () => ({
         state: "ready",
         encodingId: ENCODING_ID,
@@ -163,6 +252,9 @@ describe("createBackendClient", () => {
       beginLoad() {
         calls.push("load");
         return this.status();
+      },
+      embedQuery(inputs) {
+        return this.embed("query", inputs);
       },
       async load() {
         return this.status();
@@ -224,6 +316,15 @@ describe("createBackendClient", () => {
 
   test("uses shutdown timeout for model unload", async () => {
     const { url } = runningApp(undefined, identity, {
+      beginModelPreparation() {
+        return { preparationId: crypto.randomUUID(), status: this.status() };
+      },
+      modelPreparation(preparationId) {
+        return { preparationId, status: this.status() };
+      },
+      async waitModelPreparation() {
+        return this.status();
+      },
       status: () => ({
         state: "ready",
         encodingId: ENCODING_ID,
@@ -233,6 +334,9 @@ describe("createBackendClient", () => {
       }),
       beginLoad() {
         return this.status();
+      },
+      embedQuery(inputs) {
+        return this.embed("query", inputs);
       },
       async load() {
         return this.status();
@@ -258,6 +362,15 @@ describe("createBackendClient", () => {
 
   test("rejects an embedding response whose vector count differs from the input count", async () => {
     const { url } = runningApp(undefined, identity, {
+      beginModelPreparation() {
+        return { preparationId: crypto.randomUUID(), status: this.status() };
+      },
+      modelPreparation(preparationId) {
+        return { preparationId, status: this.status() };
+      },
+      async waitModelPreparation() {
+        return this.status();
+      },
       status: () => ({
         state: "ready",
         encodingId: ENCODING_ID,
@@ -267,6 +380,9 @@ describe("createBackendClient", () => {
       }),
       beginLoad() {
         return this.status();
+      },
+      embedQuery(inputs) {
+        return this.embed("query", inputs);
       },
       load: async () => ({
         state: "ready",
@@ -330,6 +446,28 @@ describe("createBackendClient", () => {
       index: { vectorCount: 1 },
     });
   });
+
+  test("reports an index operation lost after a daemon restart as expired", async () => {
+    const operationId = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const indexOperations: IndexOperationService = {
+      status: async () => ({ state: "missing", profileId: "a".repeat(64) }),
+      build: () => ({ operationId, state: "building" }),
+      rebuild: () => ({ operationId, state: "building" }),
+      operation: () => undefined,
+      waitForIdle: async () => undefined,
+    };
+    const { url } = runningApp(undefined, identity, undefined, indexOperations);
+    const client = createBackendClient({
+      identity,
+      secret,
+      buildIdentity: identity.buildIdentity,
+      baseUrl: url,
+    });
+
+    await expect(client.indexOperation(operationId)).rejects.toMatchObject({
+      code: "backend.operation-expired",
+    });
+  });
 });
 
 test("rejects a mismatched protocol before sending control or model requests", async () => {
@@ -344,6 +482,9 @@ test("rejects a mismatched protocol before sending control or model requests", a
   await expect(client.status()).rejects.toMatchObject({ code: "backend.incompatible" });
   await expect(client.stop()).rejects.toMatchObject({ code: "backend.incompatible" });
   await expect(client.loadModel()).rejects.toMatchObject({ code: "backend.incompatible" });
+  await expect(client.beginModelPreparation()).rejects.toMatchObject({
+    code: "backend.incompatible",
+  });
 });
 
 test("round-trips semantic query metadata", async () => {

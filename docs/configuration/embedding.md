@@ -1,6 +1,6 @@
 # Embedding 配置
 
-`embedding` section 可省略。显式 `model load` 时，若没有指定本地模型且缓存为空，会从 Lorelum 的 Hugging Face 仓库下载固定 Q4_0 文件。`backend start` 和只读命令不会下载模型；`download.enabled: false` 可禁用下载，缺少缓存时返回 `embedding.not-configured`。
+`embedding` section 可省略。首次确实需要 embedding 的 semantic query、index build/rebuild 或 install-driven index 在缓存为空时，会从 Lorelum 的 Hugging Face 仓库自动开始下载固定 Q4_0 文件；前台命令只短暂观察，不等待完整传输。`backend start`、status 和 keyword query 不会下载模型。`download.enabled: false` 可禁用下载，缺少缓存时返回 `embedding.not-configured`。
 
 ```yaml
 embedding:

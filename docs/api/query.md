@@ -1,6 +1,6 @@
 # Query API
 
-`POST /internal/v1/query` uses the Backend's local authentication boundary. It neither starts the model nor accesses the model downloader. Omitting `mode` selects semantic retrieval; callers that need the offline keyword path must send `mode: "keyword"` explicitly.
+`POST /internal/v1/query` uses the Backend's local authentication boundary. The controller itself does not start a download; the CLI runtime starts or joins model preparation only after an otherwise-valid semantic query reaches `embedding.not-loaded`. Omitting `mode` selects semantic retrieval; callers that need the offline keyword path must send `mode: "keyword"` explicitly.
 
 请求 body：
 
@@ -45,7 +45,7 @@ Responses expose only public Practice summary fields, never a body, vector, SQLi
 ## 错误映射
 
 | HTTP | code | Meaning |
-| ---- | ---- | ------- |
+| --- | --- | --- |
 | 400 | `backend.invalid-request` | JSON, fields, or request body violates the wire contract. |
 | 400 | `usage.invalid` | Query text or limit violates the Engine query contract. |
 | 503 | `embedding.*` | The local model is not loaded, busy, timed out, or failed. |

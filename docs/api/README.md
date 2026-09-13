@@ -1,8 +1,8 @@
 # Local backend API
 
-本目录描述本地 backend HTTP 合同。接口只绑定 `127.0.0.1`，统一使用 `/internal/v1` 路由前缀；它是本机控制面，不是公开网络 API。默认模型的稳定下载来源仍待配置；接口与下载恢复能力已实现。
+本目录描述本地 backend HTTP 合同。接口只绑定 `127.0.0.1`，统一使用 `/internal/v1` 路由前缀；它是本机控制面，不是公开网络 API。默认模型的下载来源由 embedding 配置管理；首次实际需要 embedding 的请求可以自动开始或加入一次后台准备，显式 load 用于等待、重试和观察它。
 
-当前合同使用 control protocol version 3 和 business protocol version 3。客户端必须先通过 unauthenticated identity challenge 验证实例，再对受保护接口发送 `Authorization: Bearer <runtime-secret>`。HTTP 请求不能带 `Origin`，`Host` 必须匹配实际 loopback authority。
+当前内部协议版本为 3。客户端必须先通过 unauthenticated identity challenge 验证实例，再对受保护接口发送 `Authorization: Bearer <runtime-secret>`。HTTP 请求不能带 `Origin`，`Host` 必须匹配实际 loopback authority。
 
 所有 JSON body 都必须使用 `application/json`。错误 body 统一为：
 
@@ -20,8 +20,8 @@
 接口按领域拆分：
 
 - [Backend 控制](backend.md)：identity、status、stop 和通用状态。
-- [Embedding 模型](embedding.md)：模型准备、加载进度、取消和编码。
-- [Keyword Query](query.md)：现有 Store-backed 关键词查询接口。
+- [Embedding 模型](embedding.md)：自动或显式模型准备、进度、取消和编码。
+- [Query](query.md)：默认 semantic 与显式 keyword 查询接口。
 
 `model load` 的 HTTP 请求只负责接受共享加载任务；HTTP 202 不表示模型已经 ready。SDK/client 可以轮询 status，CLI 会等待最终状态并把进度写到 stderr。
 

@@ -1,5 +1,7 @@
 import type { BackendClient } from "@lorelum/backend/client";
+import type { IndexRuntimeClient } from "@lorelum/backend/coordination";
 import {
+  BackendError,
   BackendRemoteError,
   EMBEDDING_MODEL,
   ENCODING_ID,
@@ -25,18 +27,17 @@ class MemoryWriter implements OutputWriter {
 
 const profileId = "a".repeat(64);
 
-function client(
-  callbacks: {
-    readonly status?: (rootPath: string) => Promise<IndexStatus>;
-    readonly build?: (rootPath: string) => Promise<IndexOperation>;
-    readonly operation?: (operationId: string) => Promise<IndexOperation>;
-  } = {},
+function backend(
+  status: (rootPath: string) => Promise<IndexStatus> = async () => ({
+    state: "missing",
+    profileId,
+  }),
 ): BackendClient {
   return {
     identity: async () => ({
       instanceId: "instance",
       buildIdentity: "build",
-      protocolVersion: 1,
+      protocolVersion: 2,
       proof: "a".repeat(64),
     }),
     status: async () => ({ state: "ready", model: "unloaded" }),
@@ -55,6 +56,12 @@ function client(
       dimensions: EMBEDDING_MODEL.dimensions,
       threads: 4,
     }),
+    beginModelPreparation: async () => {
+      throw new Error("index command must not prepare model");
+    },
+    modelPreparation: async () => {
+      throw new Error("index command must not prepare model");
+    },
     unloadModel: async () => ({
       state: "unloaded",
       encodingId: ENCODING_ID,
@@ -64,34 +71,42 @@ function client(
     }),
     embed: async () => ({ encodingId: ENCODING_ID, vectors: [] }),
     query: async () => ({ mode: "keyword", results: [] }),
-    indexStatus: async (root) =>
-      callbacks.status?.(root.rootPath) ?? { state: "missing", profileId },
-    buildIndex: async (root) =>
-      callbacks.build?.(root.rootPath) ?? {
-        operationId: crypto.randomUUID(),
-        state: "ready",
-        index: { state: "ready", profileId },
-      },
-    rebuildIndex: async () => ({
-      operationId: crypto.randomUUID(),
-      state: "ready",
-      index: { state: "ready", profileId },
-    }),
-    indexOperation:
-      callbacks.operation ??
-      (async (operationId) => ({
-        operationId,
-        state: "ready",
-        index: { state: "ready", profileId },
-      })),
+    indexStatus: async (root) => status(root.rootPath),
+    buildIndex: async () => {
+      throw new Error("build command must use the runtime client");
+    },
+    rebuildIndex: async () => {
+      throw new Error("rebuild command must use the runtime client");
+    },
+    indexOperation: async () => {
+      throw new Error("build command must use the runtime client");
+    },
   };
 }
 
-async function invoke(arguments_: string[], backend: BackendClient) {
+function runtime(
+  build: (rootPath: string) => Promise<IndexOperation>,
+  rebuild: (rootPath: string) => Promise<IndexOperation> = build,
+): IndexRuntimeClient {
+  return {
+    build: (root) => build(root.rootPath),
+    rebuild: (root) => rebuild(root.rootPath),
+  };
+}
+
+async function invoke(
+  arguments_: string[],
+  services: { readonly backend?: BackendClient; readonly runtime?: IndexRuntimeClient } = {},
+) {
   const stdout = new MemoryWriter();
   const definitions = snapshotCommandDefinitions(
     createIndexCommands({
-      createClient: async () => backend,
+      createClient: async () => services.backend ?? backend(),
+      createRuntimeClient: async () =>
+        services.runtime ??
+        runtime(async () => {
+          throw new Error("unexpected runtime client");
+        }),
       storageRoot: { rootPath: "/default" },
     }),
   );
@@ -101,17 +116,17 @@ async function invoke(arguments_: string[], backend: BackendClient) {
   return { exitCode, response };
 }
 
-test("index status forwards the selected Store root to the Backend client", async () => {
-  const result = await invoke(
-    ["--store-root", "/isolated", "index", "status"],
-    client({
-      status: async (rootPath) => {
-        // The CLI forwards the normalized root; Windows resolves "/isolated" against the drive.
-        expect(rootPath).toBe(resolve("/isolated"));
-        return { state: "stale", profileId, vectorCount: 4 };
-      },
+test("index status forwards the selected Store root without creating a runtime client", async () => {
+  const result = await invoke(["--store-root", "/isolated", "index", "status"], {
+    backend: backend(async (rootPath) => {
+      // The CLI forwards the normalized root; Windows resolves "/isolated" against the drive.
+      expect(rootPath).toBe(resolve("/isolated"));
+      return { state: "stale", profileId, vectorCount: 4 };
     }),
-  );
+    runtime: runtime(async () => {
+      throw new Error("status must not start runtime");
+    }),
+  });
   expect(result.exitCode).toBe(0);
   expect(result.response).toMatchObject({
     command: "index.status",
@@ -119,25 +134,18 @@ test("index status forwards the selected Store root to the Backend client", asyn
   });
 });
 
-test("index build polls a Backend operation until its ready index result", async () => {
+test("index build forwards the selected Store root to the runtime client", async () => {
   const operationId = "0f8fad5b-d9cb-469f-a165-70867728950e";
-  let polls = 0;
-  const result = await invoke(
-    ["index", "build"],
-    client({
-      build: async () => ({ operationId, state: "building" }),
-      operation: async (id) => {
-        polls++;
-        expect(id).toBe(operationId);
-        return {
-          operationId,
-          state: "ready",
-          index: { state: "ready", profileId, vectorCount: 1 },
-        };
-      },
+  const result = await invoke(["--store-root", "/isolated", "index", "build"], {
+    runtime: runtime(async (rootPath) => {
+      expect(rootPath).toBe("/isolated");
+      return {
+        operationId,
+        state: "ready",
+        index: { state: "ready", profileId, vectorCount: 1 },
+      };
     }),
-  );
-  expect(polls).toBe(1);
+  });
   expect(result.exitCode).toBe(0);
   expect(result.response.data).toEqual({
     operationId,
@@ -146,24 +154,72 @@ test("index build polls a Backend operation until its ready index result", async
   });
 });
 
-test("index build polls a terminal embedding failure from the accepted operation", async () => {
-  const operationId = "0f8fad5b-d9cb-469f-a165-70867728950e";
-  let polls = 0;
-  const result = await invoke(
-    ["index", "build"],
-    client({
-      build: async () => ({
-        operationId,
-        state: "building",
-      }),
-      operation: async (id) => {
-        polls++;
-        expect(id).toBe(operationId);
-        return { operationId, state: "failed", error: "embedding.not-loaded" };
+test.each([
+  [{ operationId: "0f8fad5b-d9cb-469f-a165-70867728950e", state: "building" as const }],
+  [
+    {
+      operationId: "0f8fad5b-d9cb-469f-a165-70867728950e",
+      state: "preparing" as const,
+      preparationId: "1f8fad5b-d9cb-469f-a165-70867728950e",
+    },
+  ],
+])("index build returns an accepted non-terminal operation: %j", async (operation) => {
+  const result = await invoke(["index", "build"], {
+    runtime: runtime(async () => operation),
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.response.data).toEqual(operation);
+});
+
+test("index operation reads an operation without creating the runtime client", async () => {
+  const operation = {
+    operationId: "0f8fad5b-d9cb-469f-a165-70867728950e",
+    state: "building" as const,
+  };
+  const result = await invoke(["index", "operation", operation.operationId], {
+    backend: {
+      ...backend(),
+      indexOperation: async (operationId) => {
+        expect(operationId).toBe(operation.operationId);
+        return operation;
       },
+    },
+    runtime: runtime(async () => {
+      throw new Error("operation must not create runtime client");
     }),
-  );
-  expect(polls).toBe(1);
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.response.data).toEqual(operation);
+});
+
+test("index operation reports an expired daemon-owned operation", async () => {
+  const operationId = "0f8fad5b-d9cb-469f-a165-70867728950e";
+  const result = await invoke(["index", "operation", operationId], {
+    backend: {
+      ...backend(),
+      indexOperation: async () => {
+        throw new BackendError("backend.operation-expired");
+      },
+    },
+  });
+
+  expect(result.exitCode).toBe(2);
+  expect(result.response).toMatchObject({
+    command: "index.operation",
+    ok: false,
+    error: { code: "backend.operation-expired" },
+  });
+});
+
+test("index build preserves terminal embedding failures from the runtime client", async () => {
+  const operationId = "0f8fad5b-d9cb-469f-a165-70867728950e";
+  const result = await invoke(["index", "build"], {
+    runtime: runtime(async () => ({
+      operationId,
+      state: "failed",
+      error: "embedding.not-loaded",
+    })),
+  });
   expect(result.exitCode).toBe(2);
   expect(result.response.error).toEqual({
     code: "embedding.not-loaded",
@@ -171,15 +227,11 @@ test("index build polls a terminal embedding failure from the accepted operation
   });
 });
 
-test("index build preserves Store availability failures from its accepted operation", async () => {
+test("index build preserves Store availability failures from the runtime client", async () => {
   const operationId = "0f8fad5b-d9cb-469f-a165-70867728950e";
-  const result = await invoke(
-    ["index", "build"],
-    client({
-      build: async () => ({ operationId, state: "building" }),
-      operation: async () => ({ operationId, state: "failed", error: "store.busy" }),
-    }),
-  );
+  const result = await invoke(["index", "build"], {
+    runtime: runtime(async () => ({ operationId, state: "failed", error: "store.busy" })),
+  });
   expect(result.exitCode).toBe(2);
   expect(result.response.error).toEqual({
     code: "store.busy",
@@ -188,14 +240,11 @@ test("index build preserves Store availability failures from its accepted operat
 });
 
 test("index status preserves Store availability failures from the Backend boundary", async () => {
-  const result = await invoke(
-    ["index", "status"],
-    client({
-      status: async () => {
-        throw new BackendRemoteError("store.busy");
-      },
+  const result = await invoke(["index", "status"], {
+    backend: backend(async () => {
+      throw new BackendRemoteError("store.busy");
     }),
-  );
+  });
   expect(result.exitCode).toBe(2);
   expect(result.response.error).toEqual({
     code: "store.busy",

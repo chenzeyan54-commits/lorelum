@@ -7,6 +7,8 @@ import {
   embeddingResultSchema,
   emptyModelRequestSchema,
   modelStatusSchema,
+  modelPreparationSchema,
+  modelPreparationParamsSchema,
 } from "./dto";
 import { EmbeddingError } from "./errors";
 import type { EmbeddingService } from "./service";
@@ -38,6 +40,31 @@ export function embeddingController(service: EmbeddingService, available: () => 
       modelMutation,
     )
     .post(BACKEND_ROUTES.modelUnload, () => invoke(() => service.unload()), modelMutation)
+    .post(
+      BACKEND_ROUTES.modelPrepare,
+      () =>
+        invoke(async () => {
+          const result = service.beginModelPreparation();
+          return status(result.status.state === "ready" ? 200 : 202, result);
+        }),
+      {
+        body: emptyModelRequestSchema,
+        response: {
+          200: modelPreparationSchema,
+          202: modelPreparationSchema,
+          400: errorSchema,
+          503: errorSchema,
+        },
+      },
+    )
+    .get(
+      BACKEND_ROUTES.modelPreparation,
+      ({ params }) => invoke(async () => service.modelPreparation(params.preparationId)),
+      {
+        params: modelPreparationParamsSchema,
+        response: { 200: modelPreparationSchema, 400: errorSchema, 503: errorSchema },
+      },
+    )
     .post(
       BACKEND_ROUTES.embeddings,
       ({ body }) => invoke(() => service.embed(body.kind, body.inputs)),

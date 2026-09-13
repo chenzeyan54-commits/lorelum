@@ -45,6 +45,12 @@ function fakeClient(calls: string[]): BackendClient {
       calls.push("status");
       return ready;
     },
+    beginModelPreparation: async () => {
+      throw new Error("metadata command must not prepare model");
+    },
+    modelPreparation: async () => {
+      throw new Error("metadata command must not prepare model");
+    },
     unloadModel: async () => {
       calls.push("unload");
       return { ...ready, state: "unloaded" };

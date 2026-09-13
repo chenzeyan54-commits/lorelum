@@ -1,4 +1,5 @@
 export const embeddingErrorCodes = [
+  "embedding.preparation-expired",
   "embedding.not-configured",
   "embedding.download-unavailable",
   "embedding.download-failed",
@@ -13,6 +14,8 @@ export const embeddingErrorCodes = [
 ] as const;
 export type EmbeddingErrorCode = (typeof embeddingErrorCodes)[number];
 const messages: Record<EmbeddingErrorCode, string> = {
+  "embedding.preparation-expired":
+    "The local model preparation is no longer available; retry the query.",
   "embedding.download-unavailable":
     "No download source is configured for the fixed model. Configure embedding.download.url or modelPath.",
   "embedding.download-failed":
@@ -24,9 +27,10 @@ const messages: Record<EmbeddingErrorCode, string> = {
   "embedding.not-configured":
     "Configure embedding.modelPath and restart the backend before loading the model.",
   "embedding.resource-invalid":
-    "The fixed embedding model or native runtime is missing or does not match its manifest.",
+    "The fixed embedding model or native runtime is invalid. Check model configuration/resources and run `lore model load` explicitly.",
   "embedding.not-loaded": "Load the embedding model before encoding text.",
-  "embedding.busy": "The embedding model is busy.",
+  "embedding.busy":
+    "The embedding model is busy; wait for the current preparation, unload, or encoding operation to finish.",
   "embedding.input-invalid": "Provide one to eight nonblank texts.",
   "embedding.deadline-exceeded": "The embedding operation exceeded its deadline.",
   "embedding.failed": "The embedding runtime failed; explicitly load it again after cleanup.",

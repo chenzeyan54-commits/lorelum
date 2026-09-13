@@ -1,8 +1,14 @@
 /* eslint-disable no-await-in-loop -- Native single-slot encoding is intentionally sequential. */
 import { DEFAULT_EMBEDDING_SETTINGS } from "../../config/embedding";
+import { randomUUID } from "node:crypto";
 import { waitForSettlement } from "../../lifecycle/deadline";
 import type { BackendSettings } from "../../config/model";
-import { embeddingRequestSchema, type ModelProgress, type ModelStatus } from "./dto";
+import {
+  embeddingRequestSchema,
+  type ModelPreparation,
+  type ModelProgress,
+  type ModelStatus,
+} from "./dto";
 import { EmbeddingError, embeddingFailure, type EmbeddingErrorCode } from "./errors";
 import {
   ENCODING_ID,
@@ -31,6 +37,7 @@ export function createEmbeddingService(options: EmbeddingServiceOptions) {
   let failure: EmbeddingErrorCode | undefined;
   let runtime: EmbeddingRuntime | undefined;
   let loading: Promise<ModelStatus> | undefined;
+  let preparationId: string | undefined;
   let unloading: Promise<ModelStatus> | undefined;
   let inflight: Promise<EmbeddingResult> | undefined;
   let startup: AbortController | undefined;
@@ -69,6 +76,7 @@ export function createEmbeddingService(options: EmbeddingServiceOptions) {
     if (loading) return loading;
     if (state === "ready") return Promise.resolve(status());
     if (runtime || inflight) return Promise.reject(new EmbeddingError("embedding.busy"));
+    preparationId = randomUUID();
     state = "loading";
     progress = { phase: "resolving" };
     failure = undefined;
@@ -100,7 +108,12 @@ export function createEmbeddingService(options: EmbeddingServiceOptions) {
         });
         return status();
       } catch (error) {
-        return await recover(embeddingFailure(error), handle);
+        return await recover(
+          signal.aborted && state !== "unloading"
+            ? new EmbeddingError("embedding.deadline-exceeded")
+            : embeddingFailure(error),
+          handle,
+        );
       } finally {
         loading = undefined;
       }
@@ -112,6 +125,7 @@ export function createEmbeddingService(options: EmbeddingServiceOptions) {
   ): Promise<ModelStatus> {
     if (unloading) return unloading;
     state = "unloading";
+    preparationId = undefined;
     progress = undefined;
     unloadDeadline = deadline;
     startup?.abort();
@@ -176,6 +190,40 @@ export function createEmbeddingService(options: EmbeddingServiceOptions) {
     void load().catch(() => {});
     return status();
   }
-  return { status, beginLoad, load, unload, embed };
+  function modelPreparation(id: string) {
+    if (id !== preparationId) throw new EmbeddingError("embedding.preparation-expired");
+    return { preparationId: id, status: status() };
+  }
+  function beginModelPreparation(): ModelPreparation {
+    if (state === "failed") throw new EmbeddingError(failure ?? "embedding.failed");
+    if (state === "unloading" || (!loading && state !== "ready" && (runtime || inflight)))
+      throw new EmbeddingError("embedding.busy");
+    void load().catch(() => {});
+    preparationId ??= randomUUID();
+    return { preparationId, status: status() };
+  }
+  async function waitModelPreparation(id: string): Promise<ModelStatus> {
+    modelPreparation(id);
+    if (loading) await loading;
+    const current = modelPreparation(id).status;
+    if (current.state === "failed") throw new EmbeddingError(current.error ?? "embedding.failed");
+    if (current.state !== "ready") throw new EmbeddingError("embedding.not-loaded");
+    return current;
+  }
+  function embedQuery(inputs: readonly string[]) {
+    if (state === "loading") return Promise.reject(new EmbeddingError("embedding.not-loaded"));
+    return embed("query", inputs);
+  }
+  return {
+    status,
+    beginLoad,
+    load,
+    unload,
+    embed,
+    embedQuery,
+    beginModelPreparation,
+    modelPreparation,
+    waitModelPreparation,
+  };
 }
 export type EmbeddingService = ReturnType<typeof createEmbeddingService>;

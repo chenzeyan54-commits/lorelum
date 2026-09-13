@@ -5,6 +5,7 @@ import { DEFAULT_BACKEND_SETTINGS } from "../../config/model";
 import { createBackendService } from "../backend/service";
 import { createEmbeddingService } from "./service";
 import { EmbeddingError } from "./errors";
+import { embeddingController } from "./controller";
 
 function fixture() {
   const embedding = createEmbeddingService({
@@ -48,7 +49,7 @@ function fixture() {
       }),
     );
   }
-  return { request };
+  return { request, embedding };
 }
 
 test("embedding endpoints share authentication and private error mapping", async () => {
@@ -77,4 +78,33 @@ test("unknown load fields and blank embedding inputs are rejected", async () => 
   expect((await f.request("/embeddings", "POST", { kind: "query", inputs: ["  "] })).status).toBe(
     400,
   );
+});
+
+test("only configured preparation routes are exposed", async () => {
+  const f = fixture();
+  expect((await f.request("/model/prepare", "POST", {}, false)).status).toBe(401);
+  expect((await f.request("/model/prepare", "POST", { policy: "offline" })).status).toBe(400);
+  // The full application deliberately maps every unknown route to invalid-request.
+  expect((await f.request("/model/prepare-local", "POST", {})).status).toBe(400);
+  expect((await f.request(`/model/prepare-local/${crypto.randomUUID()}`)).status).toBe(400);
+  const controller = embeddingController(f.embedding, () => true);
+  expect(
+    (
+      await controller.handle(
+        new Request("http://localhost/internal/v1/model/prepare-local", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        }),
+      )
+    ).status,
+  ).toBe(404);
+  expect(
+    (
+      await controller.handle(
+        new Request(`http://localhost/internal/v1/model/prepare-local/${crypto.randomUUID()}`),
+      )
+    ).status,
+  ).toBe(404);
+  expect((await f.request("/model/status")).status).toBe(200);
 });

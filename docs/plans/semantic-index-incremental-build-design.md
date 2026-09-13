@@ -1,10 +1,10 @@
 # Semantic index 增量 build
 
-状态：已在当前工作树实现，随 [Issue #111](https://github.com/lorelum/lorelum/issues/111) 评审；尚未发布。日期：2026-09-12。
+状态：index-only 阶段已由 #116 交付，随后 #122 已交付默认 semantic query。本文保留 index 增量构建的设计和验收边界，不再描述当前 query 默认行为。最后更新：2026-09-13。
 
 ## 当前阶段
 
-本阶段只交付 semantic index 的可靠构建与增量同步，不交付 semantic query，也不改变 `lore query` 的默认 keyword 行为。
+本阶段只交付 semantic index 的可靠构建与增量同步。它完成时尚未交付 semantic query；当前 `lore query` 的默认 semantic 合同以 [Semantic Query v1 设计](./semantic-query-v1-design.md)和[Query CLI 文档](../cli/query.md)为准。
 
 已交付的行为：
 
@@ -15,7 +15,7 @@
 - 构建先写 staging SQLite，完成完整校验后，在短暂 Store snapshot fence 内原子替换 active index。
 - 构建期间不锁住 Store；发布失败保留旧 active 和 canonical Store。
 
-本阶段仍要求用户显式启动 Backend、加载模型并执行 `index build`。安装、升级、卸载不会自动启动 Backend、加载模型或构建 index。
+本文完成时仍要求用户显式启动 Backend、加载模型并执行 `index build`。当前行为已由 [#128](https://github.com/lorelum/lorelum/issues/128) 扩展：index build/rebuild 会按需启动 Backend；实际需要 embedding 而固定模型缺失时，Backend 自动开始或加入下载。`lore pack install` 在 canonical commit 后提交普通增量 build，并以 `indexSync.ready`、`pending` 或 `failed` 表达短暂观察结果。持久队列、pack update/remove 同步仍不属于当前合同。
 
 ## 现有调用链与边界
 
@@ -96,9 +96,9 @@ bun packages/cli/src/main.ts --store-root /path/to/store index build
 
 ## 明确延后
 
-- semantic query、默认 query 路由、partial coverage：下一阶段设计和实现。
+- semantic query、默认 query 路由与 partial coverage：已由后续 #122 交付；不属于本文的 index-only 验收范围。
 - Backend 按需启动与仅本地模型加载：见 [Issue #114](https://github.com/lorelum/lorelum/issues/114)。
-- Pack mutation 后的自动 index 同步、共享运行时协调和持久任务队列：见 [Issue #115](https://github.com/lorelum/lorelum/issues/115)。
+- 同步 install 之后的持久队列、CLI 退出后的自动补偿和前后台协调：见 [Issue #115](https://github.com/lorelum/lorelum/issues/115)。
 - embedding 质量 benchmark、模型比较和多 Profile：见 [Issue #85](https://github.com/lorelum/lorelum/issues/85)。
 
 这些事项不属于 #111 的验收，也不在本文预先定义实现合同。

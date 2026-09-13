@@ -35,6 +35,16 @@ export const queryResultSchema: JsonSchema = {
     {
       type: "object",
       additionalProperties: false,
+      required: ["state", "preparationId", "message"],
+      properties: {
+        state: { const: "preparing" },
+        preparationId: stringSchema,
+        message: stringSchema,
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
       required: ["mode", "results"],
       properties: {
         mode: { const: "keyword" },

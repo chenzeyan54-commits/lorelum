@@ -2,7 +2,7 @@
 
 状态：**Owner 已授权实施；macOS arm64 首批接入已实现，Windows 与最终跨平台交付尚未完成。** 用户确定使用 llama.cpp + Granite 97M R2 Q4_0 CPU，框架与量化调研结束；GPU 后续单独考虑。Mac 首批实施关联 #101，使用一个 PR，不拆成依赖 PR。
 
-后续调整：Owner 已授权[默认模型交付与 API 文档](./model-delivery-and-api-design.md)，新增可恢复下载、进度与 CPU 参数配置；以下固定参数和不下载约定保留为上一批实现的历史范围。
+后续调整：Owner 已授权[默认模型交付与 API 文档](./model-delivery-and-api-design.md)，新增可恢复下载、进度与 CPU 参数配置；2026-09-13 又由[自动模型准备设计](./automatic-local-model-provisioning-design.md)把普通 semantic 路径改为按需准备。以下“显式启动/加载”和不下载约定仅保留为上一批实现的历史范围，当前用户合同以 CLI 文档为准。
 
 ## 交付目标与边界
 

@@ -15,6 +15,7 @@ import { logLevels } from "./runtime/logger.js";
 import { createInstallCommand, createUpdateCommand } from "./install/install-command.js";
 import { createGetCommand } from "./get/get-command.js";
 import { createQueryCommand } from "./query/query-command.js";
+import { createProcessSemanticRuntimeClient } from "./query/runtime-client";
 import { createListCommand } from "./list/list-command.js";
 import { createRemoveCommand } from "./uninstall/uninstall-command.js";
 import {
@@ -23,6 +24,7 @@ import {
 } from "./backend/control-commands.js";
 import { createModelCommands, createProcessBackendClient } from "./model/commands";
 import { createIndexCommands } from "./index/index-commands";
+import { createProcessIndexRuntimeClient } from "./index/runtime-client";
 import { createLocalizationCommands } from "./localization/index.js";
 
 export interface CommandOption {
@@ -249,17 +251,22 @@ const sharedListService = createListService({
   store: sharedStore,
   storageRoot: sharedStorageRoot,
 });
+const sharedInstallServices = {
+  store: sharedStore,
+  storageRoot: sharedStorageRoot,
+  createIndexRuntimeClient: createProcessIndexRuntimeClient,
+};
 
 /** Immutable child-command registry used unless a complete replacement is supplied. */
 export const commandRegistry = snapshotCommandDefinitions([
   discoveryCommandDefinition,
-  createInstallCommand({ store: sharedStore, storageRoot: sharedStorageRoot }),
-  createUpdateCommand({ store: sharedStore, storageRoot: sharedStorageRoot }),
+  createInstallCommand(sharedInstallServices),
+  createUpdateCommand(sharedInstallServices),
   createRemoveCommand({ store: sharedStore, storageRoot: sharedStorageRoot }),
   createGetCommand({ store: sharedStore, storageRoot: sharedStorageRoot }),
   createQueryCommand({
     queryService: sharedQueryService,
-    createClient: createProcessBackendClient,
+    createClient: createProcessSemanticRuntimeClient,
     storageRoot: sharedStorageRoot,
   }),
   createListCommand({ list: sharedListService, storageRoot: sharedStorageRoot }),
@@ -267,6 +274,7 @@ export const commandRegistry = snapshotCommandDefinitions([
   ...createModelCommands({ createClient: createProcessBackendClient }),
   ...createIndexCommands({
     createClient: createProcessBackendClient,
+    createRuntimeClient: createProcessIndexRuntimeClient,
     storageRoot: sharedStorageRoot,
   }),
   ...createLocalizationCommands(),
