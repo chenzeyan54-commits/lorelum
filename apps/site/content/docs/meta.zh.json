@@ -1,0 +1,24 @@
+{
+  "pages": [
+    "index",
+    "---入门---",
+    "quickstart",
+    "installation",
+    "---使用指南---",
+    "retrieval",
+    "packs",
+    "create-pack",
+    "---Agent 集成---",
+    "agent-setup",
+    "codex",
+    "agents",
+    "---参考---",
+    "cli",
+    "reference",
+    "configuration",
+    "---资源---",
+    "troubleshooting",
+    "why-lorelum",
+    "alpha"
+  ]
+}

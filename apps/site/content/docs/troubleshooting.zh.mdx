@@ -1,0 +1,51 @@
+---
+title: 故障排查
+description: 排查安装、模型准备和检索问题。
+icon: Wrench
+---
+
+## Agent 找不到 `lore`
+
+在启动 Agent 的环境中运行 `lore --version`。如果终端中正常、Agent 中失败，检查 Agent 的 `PATH` 是否包含 `~/.local/bin`，然后重启应用。详见[安装](./installation)。
+
+## 查询返回 `preparing`
+
+这是退出码为 `1` 的成功响应：模型准备已接受，但在 CLI 的观察时间内尚未就绪。检查状态并等待加载完成：
+
+```sh
+lore model status
+lore model load
+```
+
+重新运行原来的 query。如果返回 index 缺失，再检查并构建 index：
+
+```sh
+lore index status
+lore index build
+```
+
+如果返回 `semantic.index-incompatible`，应运行 `lore index rebuild`。构建被接受后可能仍在后台执行，用 `lore index operation <operation-id>` 跟踪 operation ID；涉及 Store 的命令使用同一个 `--store-root`。恢复步骤见 [Index 命令](./reference/indexing)。
+
+## 查询没有结果
+
+运行 `lore pack list --details`，确认当前 Store 已安装目标 Pack。查询中写清任务和决策，避免只写宽泛主题；也可以用 `lore pack list <pack-name>` 浏览 Practice。
+
+空结果、`preparing` 和错误分别表示不同状态。Agent 应先检查 JSON 结果，再决定下一步；详见 [CLI 协议](./cli)。
+
+## 模型下载失败
+
+查看 `error.code`，检查剩余磁盘空间，以及能否访问配置中的模型来源。解决原因后，`lore model load` 会重试并等待加载。模型路径、缓存和下载设置见 [Embedding 配置](./configuration)。
+
+## 用 keyword 检索诊断
+
+需要离线查找，或想确认问题是否来自模型时，可以运行：
+
+```sh
+lore query "authentication token session" --mode keyword
+```
+
+keyword 按词语匹配。解决 semantic 检索的问题后，再运行原来的自然语言 query。
+
+## 报告问题
+
+提交 [GitHub issue](https://github.com/lorelum/lorelum/issues) 时，附上 `lore --version`、平台、执行的命令和返回的错误码。示例中请去掉私有 Pack 内容和凭据。安全问题请按 [SECURITY.md](https://github.com/lorelum/lorelum/blob/main/SECURITY.md) 报告。

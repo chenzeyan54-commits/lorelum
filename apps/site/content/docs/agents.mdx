@@ -1,0 +1,76 @@
+---
+title: Agent instructions
+description: Set up Lorelum, retrieve for the current decision, and handle command results.
+icon: Bot
+---
+
+These instructions are for an agent that can execute local commands. Use Lorelum to retrieve engineering Practices from installed Knowledge Packs when they can inform the user's task. The [Markdown version](./agents.md) can be supplied directly to the agent.
+
+## Set up the environment
+
+Check `lore --version` in your command environment. If unavailable, follow [Installation](./installation), keeping the complete release directory intact.
+
+Inspect the installed CLI and Packs:
+
+```sh
+lore describe
+lore pack list --details
+```
+
+Install the requested Pack if it is missing. To start with the official engineering Pack:
+
+```sh
+lore pack install agentic-coding@0.3.0
+```
+
+Follow [Agent integration](./agent-setup) for the current host. Codex uses the [official Plugin](./codex). Verify setup with a query about the current repository and a full Practice read.
+
+If using a custom `--store-root`, use it consistently for install, query, get, and index operations. It chooses Pack and index data, not a different model or Backend.
+
+## Retrieve when a judgment needs guidance
+
+Useful moments include defining scope, deciding implementation boundaries, choosing verification, recovering context, and preparing a completion claim.
+
+Describe the concrete task and moment:
+
+```sh
+lore query "I am implementing account settings. Focused component tests pass, and I am about to declare the whole feature complete."
+```
+
+Do not treat a Pack catalog as full guidance or a complete inventory of relevant knowledge. Query when it helps the decision; avoid mechanical retrieval before every command.
+
+## Read and apply
+
+Select results using their `title` and `appliesWhen`, then read the full body:
+
+```sh
+lore get <practice-id>
+```
+
+Use the exact `practiceId` from the query or Pack listing. Check applicability against the current code and user request. A Practice helps engineering judgment; it does not authorize new scope or replace evidence of completion.
+
+Retrieve again if new facts change the decision. Describe how the relevant guidance affects the work without claiming that unrelated Practices were applied.
+
+## Handle JSON and process status
+
+stdout contains one JSON response; stderr contains diagnostics and progress. Inspect `ok`, then the command-specific fields in `data`.
+
+| Result | Next action |
+| --- | --- |
+| Ready query with `data.results` | Select relevant results and read them with `get`. |
+| `ok: true`, `data.state: "preparing"`, exit `1` | Check model state, wait with `lore model load`, then retry the same query. |
+| Ready query with an empty `results` array | Check installed Packs and refine the task description if useful. |
+| Accepted index operation | Follow its operation ID until it is ready or failed. |
+| `ok: false`, exit `2` | Inspect `error.code` and follow [Troubleshooting](./troubleshooting). |
+
+Semantic query is the default. A failed semantic query does not mean that relevant guidance is absent. Use keyword mode only for an intentional offline lookup or to isolate a semantic-runtime problem, and identify that mode explicitly.
+
+## Discover the installed contract
+
+```sh
+lore describe query
+lore describe get
+lore describe index.build
+```
+
+Use these schemas for arguments, fields, errors, and exit codes rather than assuming another version's behavior. Start from the [CLI reference](./cli) or [documentation overview](./index.md) for further guidance.

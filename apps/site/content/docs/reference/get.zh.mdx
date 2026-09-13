@@ -1,0 +1,20 @@
+---
+title: get
+description: 按精确 ID 读取一个已安装的 Practice。
+---
+
+从选中的 LocalStore 读取完整 Practice。本命令只访问本地数据，不需要 Backend、模型或网络。
+
+```sh
+lore get <practice-id> [--store-root <path>]
+```
+
+使用 [`query`](./query) 或 `lore pack list <pack>` 返回的精确 `id`；不接受标题、前缀或文件名。
+
+```sh
+lore get example.practice-id
+```
+
+成功 data 包含 `practice`（全文及元数据）、`contentDigest` 和 `sources`（`packName`、`sourcePath`）。将 query 返回的 `practiceId` 原样作为精确 `practice-id`。无效 ID 返回 `usage.invalid`；选中 Store 中不存在时返回 `practice.not-found`。Store 忙或需要恢复时分别返回 `store.busy`、`store.recovery-required`。
+
+成功退出 `0`，声明的失败退出 `2`。精确结果 schema 见 `lore describe get`。

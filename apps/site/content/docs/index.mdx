@@ -1,71 +1,58 @@
 ---
-title: Introduction
-description: Lorelum retrieves the right engineering Practice for the right AI coding task and moment.
-icon: Rocket
+title: Overview
+description: The right engineering Practice for the right AI coding task and moment.
+icon: BookOpen
 ---
 
-Lorelum turns team engineering experience into discrete, retrievable, trigger-conditioned units called **Practices**, and injects them into AI context at the moment of need.
+Lorelum retrieves engineering guidance for AI coding agents. It turns reusable experience into **Practices**: discrete instructions with explicit applicability conditions. **Knowledge Packs**, or Packs, organize those Practices into versioned collections that you can install and share.
 
-<Callout type="info">
-This page exercises Fumadocs on TanStack Start: MDX components, Shiki highlighting, tables, and search must all work in one static-renderable app.
-</Callout>
+Describe what the agent is doing and the decision it is about to make. Lorelum searches installed Packs and returns relevant Practice summaries. The agent reads the full guidance before using it in the task.
 
-## How retrieval works
+Teams can bring their own standards. Vibe coders and small teams can start with shared Packs without first having to discover every engineering anti-pattern themselves.
 
-Two kinds of clues drive retrieval:
+## Start here
 
-- **Task** — what the agent is doing right now.
-- **Moment** — which part of the development lifecycle the agent is in.
+| You want to…                                    | Read                                |
+| ----------------------------------------------- | ----------------------------------- |
+| Install Lorelum and retrieve a Practice         | [Quickstart](./quickstart)          |
+| Choose an installation method or update the CLI | [Installation](./installation)      |
+| Use Lorelum from a coding agent                 | [Agent integration](./agent-setup)  |
+| Find and manage engineering knowledge           | [Install and manage Packs](./packs) |
+| Write your own guidance                         | [Create a Pack](./create-pack)      |
+| Look up arguments, response fields, or errors   | [CLI reference](./cli)              |
 
-<Tabs items={['Task', 'Moment', 'Combined']}>
-  <Tab value="Task">
-    Building an auth flow, changing a database schema, writing component tests.
-  </Tab>
-  <Tab value="Moment">
-    Starting to understand a complex requirement, recovering after compaction, deciding whether to change a failing test.
-  </Tab>
-  <Tab value="Combined">
-    The caller describes both; Lorelum ranks the relevant Practices.
-  </Tab>
-</Tabs>
+## Retrieve for the task and moment
 
-## Example query
+A useful query includes both the work and the judgment it requires:
 
-```text
-$ lore query "I'm building the RBAC admin panel and I'm about to claim the whole capability is done."
+```sh
+lore query "I am implementing a settings card from an existing design. I am about to define the scope, implementation plan, and validation."
 ```
 
-### TypeScript
+Use a returned `practiceId` to read the complete Practice:
 
-```ts
-import { retrieve } from '@lorelum/engine';
-
-const result = await retrieve({
-  task: 'building the RBAC admin panel',
-  moment: 'about to claim completion',
-});
+```sh
+lore get <practice-id>
 ```
 
-### Shell
+The same task may need different guidance during planning, implementation, recovery, and verification. Retrieve again when the decision changes; querying before every command is unnecessary. See [Retrieve and apply Practices](./retrieval).
 
-```bash
-lore query "building the RBAC admin panel"
-```
+## Core concepts
 
-## Steps to go live
+| Concept | Meaning |
+| --- | --- |
+| Practice | A self-contained unit of engineering guidance, including when it applies and which anti-patterns to avoid. |
+| Knowledge Pack | A versioned collection of Practices scoped to a domain, stack, or team standard. |
+| Store | The local installation of your Packs and the indexes derived from them. |
+| Skill | Instructions that help an agent decide when to retrieve and how to apply Practices. |
+| Plugin | A host integration that packages a Skill and any supported lifecycle Hooks. |
 
-<Steps>
-  <Step>Install Lorelum via Bun or npm.</Step>
-  <Step>Write a pack of Practices for your team.</Step>
-  <Step>Connect a Skill or Plugin/Hook to trigger retrieval.</Step>
-</Steps>
+Natural-language retrieval runs locally with an embedding model. Keyword retrieval is available explicitly for offline term matching. Both search the Packs in the selected Store; neither searches the web.
 
-## Feature matrix
+## What Lorelum is responsible for
 
-| Feature          | Status   |
-| ---------------- | -------- |
-| MDX components   | ✅ Works |
-| Shiki highlight  | ✅ Works |
-| Static search    | ✅ Works |
-| i18n (en + zh)   | 🚧 Spike   |
-| Cloudflare Pages | 🚧 Spike   |
+Lorelum retrieves and ranks Practices. The caller describes the task and moment, reads the guidance, and decides how it applies alongside the repository and the user's request.
+
+Lorelum Core does not manage the task, inspect the full conversation, or infer host lifecycle events. The [Codex Plugin](./codex) supplies a Pack catalog at supported session events; it does not prove that every relevant Practice has been followed. See [Why Lorelum](./why-lorelum) for the knowledge-and-judgment gap this addresses.
+
+> Lorelum is in public alpha. Read [Alpha compatibility](./alpha) before updating a shared setup.

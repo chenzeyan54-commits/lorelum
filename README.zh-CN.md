@@ -2,438 +2,215 @@
   <h1 align="center">Lorelum</h1>
   <p align="center">在正确的任务、正确的时刻，为 Agent 提供正确的工程 Practice。</p>
   <p align="center">
-    <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
-    <a href="https://github.com/lorelum/lorelum"><img alt="Status" src="https://img.shields.io/badge/status-早期开发中-orange"></a>
-    <a href="./CONTRIBUTING.md"><img alt="Contributing" src="https://img.shields.io/badge/欢迎贡献-brightgreen"></a>
+    <a href="./LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
+    <a href="https://github.com/lorelum/lorelum/releases"><img alt="状态：public alpha" src="https://img.shields.io/badge/status-public%20alpha-orange"></a>
+    <a href="./CONTRIBUTING.md"><img alt="欢迎贡献" src="https://img.shields.io/badge/contributions-welcome-brightgreen"></a>
   </p>
   <p align="center">
-    <a href="./README.md">English</a> ·
-    <a href="./README.zh-CN.md">简体中文</a>
+    <a href="https://lorelum.com/zh/docs">文档</a> ·
+    <a href="#快速开始">快速开始</a> ·
+    <a href="https://github.com/lorelum/lorelum-packs">Knowledge Packs</a> ·
+    <a href="./README.md">English</a>
   </p>
 </p>
 
 ---
 
-> ⚠️ **Lorelum 处于早期开发阶段。** CLI 尚未发布到 npm，我们在公开环境里搭建。欢迎 Star 关注，也欢迎到 [Discussions](https://github.com/lorelum/lorelum/discussions) 参与讨论。
+> **Public alpha · `0.1.0-alpha.1`。** 预编译发行包支持 macOS Apple Silicon，其他平台可[从源码构建](./docs/development/README.md)。CLI 合同、Pack 格式和索引可能随版本变化，暂不保证自动迁移。
 
-## 你遇到过这些问题吗？
+> **将下面提示交给 Agent。**
+>
+> ```text
+> 请根据 https://lorelum.com/zh/docs/agents.md 为当前项目配置 Lorelum v0.1.0-alpha.1。
+> 安装 CLI 和 agentic-coding Pack，为当前宿主接入 Lorelum Skill；开始实际工作前，
+> 完成一次自然语言检索和 Practice 全文读取来验证配置。
+> ```
 
-你可能已经在 `AGENTS.md`（或 `CLAUDE.md`、`.cursorrules`）里写满团队规范，也可能是一位依赖 Agent 完成产品、暂时还不知道该如何 review 所有工程选择的 vibe coder。无论哪一种，下面这些问题都会发生：
+Lorelum 是工程知识的本地检索层。它把可复用的工程经验组织成 **Practice**：独立完整、带适用条件的指导。**Knowledge Pack（知识包）** 将 Practice 组织成可安装、可分享的版本化集合。
 
-- **代码能运行，看起来就像实现正确。** Agent 可以写出一个能够渲染、也能通过简单浏览器检查的登录页，却在组件里直接调用 `axios`，并把 token 存进 `localStorage`。如果你还不了解相关架构或安全边界，可能既不知道缺了哪条规则，也不知道这里已经存在问题。
-- **规则被静默忽略。** 前沿模型对 500 条规则的合规率只有约 68%——_你每多写一条规则，其它规则被遵守的概率都在下降。_<sup>[\[1\]](#fn-1)</sup> 没有任何提示，Agent 就这么悄悄偏离了。
-- **简单任务被做成了复杂工程。** Agent 在规划一个范围明确的改动时，会自动加入用户没有要求的产品行为、抽象、fallback、测试、文档和门禁，因为这些内容更容易被评价为“完整”。每一项都像最佳实践，组合起来却是在优化看起来是否认真，而不是用户真正要的结果。
-- **压缩（compaction）不仅会遗忘，还可能失真。** 长会话触发上下文压缩 → 会话开头的 `AGENTS.md`、原始需求、验收条件和证据边界可能被挤出窗口；与此同时，已否决方案、已证伪假设、legacy code、临时 workaround、偶然问题和原始日志却可能被摘要提升为“当前事实”。压缩后的上下文更短了，但也可能更不准确。
-- **等发现时已经晚了。** Agent 是否已经偏离，你得不到任何信号——直到自己 review 代码时才发现违规。
+## 代码能运行，工程判断仍然需要有人负责
 
-这是 AI 编码的**知识与判断缺位**：正确的工程指引——无论来自你的团队，还是你需要从 Knowledge Pack 中获得——没有带着合适的适用边界，在 Agent **规划或行动的那一刻**可靠抵达它。
+你让 Agent 实现一个登录页。页面正常渲染，表单可以提交，简单的浏览器检查也通过了。但组件同时承担了 HTTP 请求和 token 持久化。仅凭可见结果，很难判断实现是否遵守了应用的架构与安全边界。
 
-## 为什么会这样
+如果你了解这些边界，可以在 review 时发现问题。如果你正是因为缺少相关经验，才借助 Agent 完成产品，你可能连应该追问什么都不知道。无论哪种情况，等到结果摆在面前时，工程选择已经做出了。
 
-今天，Agent 要么依赖通用 Coding 习惯，要么只在会话开始时接收一次你的 `AGENTS.md`：
+困境也发生在更小的判断中。一个设置卡片被加入额外交互和抽象，因为这些看起来像认真完成工作；一个长任务在组件测试通过后就被宣布完成，却还没有检查持久化或鉴权。写出代码、判断哪些工作属于需求、确认什么证据足以证明完成，是不同的工程判断。
 
-```
-  ┌─────────────────────────────────────────────────────────────┐
-  │   通用 Coding 习惯 + 可选的一次性 AGENTS.md                   │
-  └─────────────────────────────────────────────────────────────┘
-        │
-        ├─▶ “能运行”看起来就正确  劣质工程实现也可能通过
-        │                          简单的 UI 或浏览器检查
-        │
-        ├─▶ 规则多数不被遵守      500 条规则下合规率约 68%
-        │                          （写得越多，每条越没用）
-        │
-        ├─▶ 代理指标压过真实目标  任务、测试和门禁越多，
-        │                          看起来越完整，即使并不需要
-        │
-        ├─▶ 压缩丢失关键内容      持久需求、规则和证据
-        │                          可能被挤出窗口
-        │
-        ├─▶ 探索噪声变成“事实”    已否决方案或旧代码
-        │                          可能被摘要保留下来
-        │
-        └─▶ 偏离静默发生          没有任何信号，直到你 review
-                                    代码才发现违规
-```
+这就是**知识与判断缺位**：能够改善决策的指导，可能尚未具备、没有被注意到，或被用在了不适合的条件下。
 
-常见做法（"把规则全量塞进上下文"）对抗的是物理限制：长会话中的注意力衰减、上下文窗口容量，以及"**规则越多，每条合规率越低**"这个事实。<sup>[\[2\]](#fn-2)</sup> 即便 1M token 的窗口，压缩之后早期指令的召回率也不可靠。它也无法告诉 Agent：哪些熟悉的最佳实践对这次局部修改其实没有必要；如果团队里暂时没有专业的规则库，一开始甚至没有足够有用的内容可以塞进去。**规则越多 ≠ 控制力越强。** 靠堆上下文解决不了根本问题。
+## 为什么继续增加指令还不够
 
-## Lorelum 怎么解决
+`AGENTS.md`、`CLAUDE.md` 和 Skill 能为 Agent 提供有价值的指令。团队可以在其中记录约定，但随着内容增长，Agent 仍需判断哪条建议与眼前的工作有关。部署规则、UI 模式和数据库迁移清单都可能正确，却未必都适用于这次改动。
 
-Lorelum 把可复用的工程经验切成**离散、可检索、带触发条件的 *Practice***——在 AI **需要的时候**才精准注入，而不是一开始全量灌。
+指导出现的时机也很重要。范围指导应在计划膨胀前发挥作用，验证指导应在宣布成功前进入判断。如果 compaction 后的摘要保留了通过的测试，却丢失了它对应的验收条件，继续加入通用规则并不能恢复那些事实。Agent 需要识别当前判断，再回到相关依据。
 
-专业团队可以把自己的标准打包；vibe coder 和小团队也可以从社区 Knowledge Pack 开始，不必先独自发现所有架构、安全和测试反模式。
+更何况，编写更大的规则库，前提是你已经知道应该写什么。小团队或 vibe coder 可能需要尚未积累的工程经验；有经验的团队则希望那些付出代价换来的教训，不只停留在撰写者的记忆里。
 
-检索可以同时使用两类线索：
+## 让相关 Practice 在决策时进入上下文
 
-- **Agent 正在做什么：** 规划一个局部 UI 修改、实现认证流程、修改数据库 schema、编写组件测试。
-- **Agent 正处于什么时刻：** 确定范围和验证计划、考虑增加需求之外的工作、compaction 后恢复任务、准备修改失败测试，或准备宣布完成。
+Lorelum 让工程经验可以在有帮助时被检索。Practice 写清具体做法、适用的任务或时刻，以及需要避免的反模式；Knowledge Pack 将这些指导组织成可以评审、版本化管理、跨 Agent 复用的集合。
 
-调用方说明当前任务和时刻，Lorelum 负责检索并排序相关 Practice。任务描述可以包含目标、范围和风险：删除一行多余文案，与修改鉴权边界，不应该触发同等规模的工程动作。Practice 不只可以说明应该做什么，还可以说明适用条件和需要避免的反模式。
+选择登录页的实现方式前，Agent 可以描述认证改动，以及正在判断的责任边界；规划设置卡片前，可以寻找范围控制和适度验证的指导。Lorelum 根据描述检索已安装 Pack，Agent 从相关摘要中选择候选、读取完整 Practice，再结合仓库和用户要求判断如何应用。
 
-Skill 可以引导 Agent 在形成计划或做出其他语义判断前主动发起检索。对于简单任务，这可能只是一次很短的范围判断，而不是额外增加一份长计划文档或 workflow 仪式。Plugin/Hook 则可以观察受支持宿主暴露的 lifecycle event。围绕 compaction，前后两个时刻需要的指引并不相同：
+专业团队可以把自己的标准整理成 Pack；vibe coder 和小团队也可以从共享 Pack 开始，不必先独自发现所有工程反模式。目标是在需要判断的时刻，让有用的知识和它的适用条件一起出现。Agent 仍需对决策负责，并用实际证据验证工作结果。
 
-- **压缩前：** 检索 Context Hygiene 类 Practice，帮助区分需要长期保留的事实和探索过程中产生的噪声。
-- **压缩后：** 检索恢复类 Practice，提醒 Agent 重新对齐事实，并恢复证据、假设与结论之间的边界。
+## 看看它如何使用
 
-Lorelum Core 本身不管理任务、不读取完整 transcript，也不自行推断 lifecycle event。压缩前的指引能否真正进入宿主的 compaction instruction，取决于宿主集成能力，目前仍是 Research 问题。
+确定实现计划前，先描述当前任务和时刻：
 
-```
-   ┌─────────────┐   查询     ┌────────────────────┐   精准    ┌──────────────┐
-   │   AI 工具   │ ────────▶ │      Lorelum       │ ────────▶ │  3 条相关的  │
-   │ (Cursor /   │           │    检索引擎         │           │   Practice   │
-   │  Claude /   │ ◀──────── │ （语义+元数据+图谱）│ ◀─────────│  + 反模式    │
-   │  Codex)     │   注入    └────────────────────┘           └──────────────┘
-   └─────────────┘
+```sh
+lore query "我正在按现有设计实现设置卡片，准备确定改动范围、实现计划和验证方式。"
 ```
 
-**Lorelum 不要求每位用户一开始就知道所有规则。** 它既能让已有的团队规范保持鲜活，也能让 Knowledge Pack 中的工程经验按需进入 Agent 上下文。当 Agent 开始实现认证模块时，Lorelum 只给它 auth 相关的 Practice，而不是把路由、测试、部署的规范也一起塞进来。当它准备规划修改时，Lorelum 可以在多余工作进入计划前，提供范围和验证纪律。当它即将做出其他高风险判断时，Lorelum 也可以重新提醒当下最容易被忘记的执行纪律，但它不会因此变成 workflow engine。
+根据结果中的 `title` 和 `appliesWhen` 选择候选，再通过 `practiceId` 读取全文：
 
-### Practice 长什么样
+```sh
+lore get <practice-id>
+```
+
+同一任务在不同阶段，可能需要不同的指导：
+
+| 时刻             | Agent 可以寻找的指导                   |
+| ---------------- | -------------------------------------- |
+| 确定范围         | 哪些改动属于需求，哪些会引入额外工作？ |
+| 选择实现         | 哪些既有合同和工程边界需要遵守？       |
+| 上下文丢失后恢复 | 哪些需求、决策和证据需要重新核实？     |
+| 准备宣布完成     | 验证是否覆盖了用户要求的完整结果？     |
+
+Agent 判断何时查询、哪些 Practice 适用。Lorelum 提供检索到的知识，Agent 继续对工作负责。
+
+## 当前可以使用什么
+
+- **本地 semantic retrieval。** 用 `lore query` 围绕任务和时刻检索已安装 Practice，本地 Backend 在请求之间复用 embedding 模型。
+- **Practice 全文读取。** 用 `lore get` 阅读完整指导和适用条件，再决定如何应用。
+- **版本化 Knowledge Pack。** 安装、查看、更新和移除 Pack，通过 `--store-root` 管理独立知识集合。
+- **Agent 集成。** 在能执行命令的 Agent 中使用 Lorelum Skill；Codex 可使用包含已安装 Pack 目录的官方 Plugin。
+- **明确的离线路径。** 用 `lore query --mode keyword` 按关键词匹配，无需模型或 Backend。
+- **Pack 编写工具。** 通过 CLI 验证源文件、格式化 Practice，并维护本地化状态。
+
+自然语言查询使用固定的本地 embedding 模型和所选 Store 的索引。首次安装 Pack 和准备模型需要下载；准备完成后，检索在本地运行。Lorelum 检索已安装知识，不搜索互联网。
+
+## 快速开始
+
+### 1. 安装 CLI
+
+直接安装首个 public alpha：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/lorelum/lorelum/main/install.sh | sh -s -- --version 0.1.0-alpha.1
+```
+
+安装器校验发行包，并创建 `~/.local/bin/lore`。请保留完整发行目录，semantic retrieval 需要随可执行文件分发的原生库和运行时资源。
+
+确认 `~/.local/bin` 已加入 `PATH`，然后检查：
+
+```sh
+lore --version
+```
+
+手动安装、源码构建和更新说明见[安装指南](https://lorelum.com/zh/docs/installation)。
+
+### 2. 安装 Pack
+
+```sh
+lore pack install agentic-coding@0.3.0
+```
+
+安装保存 Pack，并启动所需的 semantic index 工作。响应中的 `data.indexSync` 表示索引已就绪、尚未完成或失败。索引失败不会撤销 Pack 安装。
+
+### 3. 检索并阅读
+
+```sh
+lore query "我正在修改登录流程，准备确定编码前需要检查的既有 API 和安全边界。"
+lore get <practice-id>
+```
+
+将 `<practice-id>` 替换为 `data.results` 中的 `practiceId`。读完正文，再检查它是否适用于当前任务。
+
+首次使用时，模型下载或加载可能让 query 返回 `data.state: "preparing"`。运行 `lore model load` 等待，再重试。如果 query 报告索引缺失，运行 `lore index build`；若返回 operation ID，用 `lore index operation <operation-id>` 检查直到完成。恢复步骤见[故障排查](https://lorelum.com/zh/docs/troubleshooting)。
+
+## 接入 Agent
+
+Skill 指导 Agent 判断何时检索、如何描述任务和时刻，以及为什么应用前需要读取完整 Practice。
+
+| 宿主                   | 接入方式                                  |
+| ---------------------- | ----------------------------------------- |
+| Codex                  | 官方 Plugin，包含 Skill 和 Pack 目录 Hook |
+| Claude Code            | 项目级或个人级 Lorelum Skill              |
+| Cursor                 | 项目级 Lorelum Skill                      |
+| 其他能执行命令的 Agent | 宿主支持的 Skill 或项目指令               |
+
+Codex 用户安装 CLI 和 Pack 后运行：
+
+```sh
+codex plugin marketplace add lorelum/lorelum
+codex plugin add lorelum@lorelum
+```
+
+按提示审阅 Hook，再启动新任务。Hook 通过 `lore pack list --details` 读取已安装 Pack 的元数据，Skill 判断何时查询并读取 Practice。Plugin 不内置 CLI。
+
+安装与验证步骤见[接入 Agent](https://lorelum.com/zh/docs/agent-setup)和 [Codex 配置](https://lorelum.com/zh/docs/codex)。
+
+## 选择或创建 Knowledge Pack
+
+| 官方 Pack        | 版本    | 重点                                     |
+| ---------------- | ------- | ---------------------------------------- |
+| `agentic-coding` | `0.3.0` | 规划、实现、验证、恢复和交付中的工程判断 |
+| `pack-creator`   | `0.1.0` | Practice 与 Pack 的编写、评审和发布      |
+
+浏览已经安装的内容：
+
+```sh
+lore pack list --details
+lore pack list agentic-coding
+```
+
+Practice 是带结构化元数据的 Markdown 文档，例如：
 
 ```markdown
 ---
-id: react.api.layered-design
-stage: api-layer
-tech_stack: [react, typescript]
-applies_when: 在 React SPA 中构建 API 层
+id: delivery.verify-user-flow
+title: 验证完整用户流程
+stage: verification
+tech_stack: [web]
+applies_when: 准备报告用户可见改动已完成时。
+severity: warn
 ---
 
-# 分层 API 设计
+1. 选择验证方式前，阅读已确认的验收条件。
+2. 检查用户操作、可观察结果和相关失败路径。
+3. 分别报告已验证的条件与尚未完成的部分。
 
-[具体指引：http client、base API、modules、DTO 边界。]
-
-## 要避免的反模式
-
-- api.direct-axios-in-component （在组件里直接调 axios）
-- api.local-storage-in-api-class （在 API 类里持久化 token）
-- api.dto-used-as-ui-model （DTO 直接当 UI 模型用）
+验证规模应与实际改动和风险相称。仅修改文案时，无需重新验证无关的 API 或存储行为。
 ```
 
-一个 **Knowledge Pack（知识包）** 把多条 Practice + 模板 + 反模式打包，绑定到某个技术栈或团队标准。
+每条 Practice 都应能独立理解：Agent 可能只检索到其中一条，并没有阅读整个 Pack。[创建 Pack](https://lorelum.com/zh/docs/create-pack)提供完整、可验证的示例，也可以浏览[官方 Pack 仓库](https://github.com/lorelum/lorelum-packs)。
 
-### 对 vibe coder：能运行，不代表工程实现正确
+## 职责与边界
 
-一位 vibe coder 让 Agent 实现 React 登录页。第一版能够正常渲染，简单交互检查也可能通过：
+| 组成部分       | 职责                                                 |
+| -------------- | ---------------------------------------------------- |
+| Agent 与 Skill | 描述任务和时刻、请求指导、阅读全文，并判断适用性。   |
+| Lorelum 检索   | 搜索已安装 Pack、排序候选，返回摘要或完整 Practice。 |
+| 本地 Backend   | 承载模型运行时和持续执行的 semantic index 工作。     |
+| Store          | 保存所选 root 下的已安装 Pack 和派生索引。           |
 
-```tsx
-function LoginPage() {
-  const [email, setEmail] = useState("");
-  async function handleLogin() {
-    const res = await axios.post("/api/login", { email }); // HTTP 请求写进组件
-    localStorage.setItem("token", res.data.token); // UI 代码负责持久化 token
-  }
-}
-```
+Lorelum Core 不管理任务、不读取完整 transcript，也不判断实现是否通过验收。检索到的 Practice 是指导，不能代替验证证据。
 
-页面看起来可以工作，但组件同时承担了 HTTP 行为和 token 持久化。不了解相关 React 架构或安全经验的用户，很可能没有理由怀疑这里存在问题。
+当前 Codex Hook 在受支持的会话事件中提供 Pack 目录。更完整的 compaction 前后指导取决于宿主能力，仍属于[研究方向](https://github.com/lorelum/lorelum/issues/32)。当前用户通过 CLI 和 Skill 接入。
 
-在实现功能的那一刻检索 `react.api.layered-design`，可以把缺失的专业边界提供给 Agent：
+## 文档与贡献
 
-```tsx
-const { login } = useAuthApi(); // 走分层 API client
-await login({ email }); // token 由 API 层处理
-```
-
-vibe coder 不需要先独自发现并写出每一条规则，Agent 也不需要同时接收无关的路由、部署和测试 Practice。
-
-## 端到端案例：在写代码前，让简单任务保持简单
-
-> **Research 方向：** [Issue #35](https://github.com/lorelum/lorelum/issues/35) 研究 Agent Coding 中的 Reward Hacking 与行为过拟合。这个案例展示的是期望的使用体验和责任边界，不代表该能力已经在所有 AI 工具中完成验证。
-
-### 场景
-
-Agent 被要求按照已有设计实现一个设置卡片。用户要的是标题、显示名称与时区字段，以及保存操作。设计没有增加新的产品文案、交互、通用抽象或工程门禁。
-
-### 没有 Lorelum——范围在计划里开始膨胀
-
-Agent 为了让结果看起来更完整，制订了这样的计划：
-
-```text
-1. 实现设置卡片和表单
-2. 增加描述性文案和帮助信息，让功能更容易理解
-3. 增加额外的成功状态和空状态
-4. 抽象通用 SettingsSection，方便未来复用
-5. 为新增内容补充快照和组件测试
-6. 更新文档并增加回归保护
-```
-
-每一项单独看都可以解释，组合起来却把一个范围明确的 UI 任务变成了产品设计、抽象设计和长期维护工程。如果没有人及时发现，测试可以全部通过，Agent 也可以宣布完成——但它完成的是自己膨胀后的计划，不是用户最初提出的任务。
-
-### 有 Lorelum——写代码前先对齐计划
-
-在确定计划前，Agent 使用普通自然语言 query：
-
-```bash
-lore query "我要按照现有设计实现一个设置卡片，现在准备确定范围、实施步骤和验证方式。"
-```
-
-Lorelum 可以返回少量与这个时刻相关的 Practice，例如：
-
-```text
-planning.ground-plan-in-user-goal
-planning.separate-required-optional-and-out-of-scope
-planning.scale-work-to-risk
-planning.plan-evidence-for-requirements
-```
-
-Agent 随后形成一份与任务相称的计划：
-
-```text
-目标：按照已有设计完成设置卡片
-
-范围内：
-- 标题
-- 显示名称和时区字段
-- 保存行为
-
-范围外：
-- 新增产品文案和交互
-- 没有当前复用场景的通用抽象
-- 没有风险依据的长期门禁
-
-验证：
-- 字段正确显示
-- 保存行为工作
-- 现有相关测试继续通过
-```
-
-### 结果
-
-Agent 实现用户要求的设置卡片，复用现有布局和相关测试，然后停止。规划没有变成新的仪式：对于一个局部修改，同样的判断可能只是一次很短的范围检查，而不是需要提交到仓库的计划、Spec 或 ADR。
-
-如果 Agent 已经偏离，用户要求删除擅自增加的文案，纠正仍然是一次有价值的检索时刻。但删除越界内容通常只是在恢复原始基线，并不自动形成“这段文本永远不得出现”的长期需求。负向测试或门禁需要稳定的产品契约或可证明的风险，而不能只记录 Agent 自己犯过的错误。
-
-## 长任务案例：压缩前减少污染，压缩后重新对齐
-
-> **Research 方向：** [Issue #32](https://github.com/lorelum/lorelum/issues/32) 研究压缩前的内容选择与污染控制；[Issue #28](https://github.com/lorelum/lorelum/issues/28) 研究压缩后的恢复，以及关键时刻的 Practice 注入。这个案例展示的是期望的使用体验和责任边界，不代表所有 AI 工具已经交付该能力。
-
-### 场景
-
-Agent 正在实现一个常见的账户设置功能。验收条件覆盖完整的用户能力：
-
-- 页面可以修改显示名称和时区；
-- API 会校验输入并检查权限；
-- 修改能够持久化，重新加载后仍然可见；
-- 允许修改和拒绝修改两条完整流程都符合预期。
-
-压缩前，工作上下文里混合着性质完全不同的内容：
-
-- 权威 Spec、当前目标和验收条件；
-- 当前表单实现和定向组件测试结果；
-- 一个只在客户端保存设置、绕过服务端权限校验的已否决捷径；
-- 一个“现有接口已经能持久化时区”的已证伪假设；
-- 一份绕过当前 API 链路的 legacy `LegacySettingsPanel`；
-- 很长的测试日志、浏览器输出和临时调试笔记。
-
-这些内容不应该以相同方式进入压缩结果：
-
-| 内容                          | 压缩时应该如何处理                 |
-| ----------------------------- | ---------------------------------- |
-| 当前目标、权威 Spec、验收条件 | 必须保留                           |
-| 已接受决策                    | 保留决策，以及理解它所需的必要理由 |
-| 已否决方案、已证伪假设        | 保留结论，不保留完整探索过程       |
-| 长日志、工具输出              | 只保留关键错误和证据               |
-| 偶然问题、无关任务            | 不应继续影响主线                   |
-
-经过一段很长的会话后，context 发生了 compaction。一个糟糕的摘要可能保留最近的表单重构和通过的定向测试，却丢掉完整验收范围；更糟的是，它还可能保留已否决的客户端捷径、已证伪的持久化假设或 legacy panel 的片段，却没有保留“这些内容已经不再权威”这个结论。
-
-### 没有按关键时刻检索——局部证据变成整体结论
-
-Agent 看到定向测试全部通过，于是报告：
-
-```text
-✅ 账户设置功能已经完成。测试全部通过，界面也已验证。
-```
-
-但这些证据只覆盖了表单组件，无法说明 API 权限、重新加载后的持久化结果、拒绝修改的路径，也无法说明完整用户流程。测试本身没有错，错在**完成声明超出了证据能够支持的范围**。
-
-### 有 Lorelum——先减少污染，再恢复事实
-
-在期望的链路中，受支持的 Plugin/Hook 先观察到 compaction 即将开始，再向 Lorelum 查询 Context Hygiene 类 Practice。如果宿主允许外部指引影响压缩，这些 Practice 可以告诉宿主的 compactor：哪些内容必须保留，哪些内容只需要保留“已否决”这一结论，哪些噪声可以舍弃。Lorelum 本身不会读取或重写 transcript；无法把这些指引传给 compactor 的集成，也只需继续执行正常压缩。
-
-压缩完成后，集成再向 Lorelum 查询恢复类 Practice。注入的指引会提醒 Agent：摘要不是事实来源，继续之前必须重新阅读持久化的 Spec、验收条件、计划和证据。
-
-Agent 重新建立对任务的理解后，发现目前只测试了 UI 切片。在报告完成之前，它使用普通的自然语言 query：
-
-```bash
-lore query "我正在实现账户设置。定向组件测试已通过，现在准备宣布整个功能完成。"
-```
-
-Lorelum 可以返回少量与当前时刻精准相关的 Practice，例如：
-
-```text
-recovery.re-ground-after-context-loss
-verification.match-claims-to-evidence
-delivery.separate-slice-from-capability
-```
-
-Agent 不再让事实迎合自己想要的结论，而是修正报告：
-
-```text
-已完成：账户设置表单及其组件测试。
-尚未验证：API 权限、重新加载后的持久化结果、拒绝修改的路径，
-以及端到端验收流程。目前还不能宣布整个功能已经完成。
-```
-
-### Lorelum 做了什么，没有做什么
-
-Lorelum 没有保存 Spec、检查代码仓库、运行测试，也没有判断功能是否通过验收。集成层识别出了相关事件；Lorelum 检索出了这个时刻需要的执行纪律；Agent 再回到项目的真实事实来源进行核对。
-
-这个模式也不只用于 compaction。当 Agent 准备修改失败测试、根据未确认假设继续实现、把任务移交给另一个 Agent，或准备把局部实现宣布为完整能力时，Skill 都可以提醒它发起查询。
-
-### 压缩前后的完整链路
-
-Compaction 后，如果立即根据可能不完整或已被污染的摘要猜测任务领域 Practice，反而可能让错误方案继续深入。期望的链路是：
-
-```
-宿主报告 compaction 即将开始
-        │
-        ▼
-Plugin / Hook 查询压缩前指引
-        │
-        ▼
-如果宿主支持，compactor 使用这些指引；
-否则安全地继续正常压缩
-        │
-        ▼
-宿主生成压缩摘要
-        │
-        ▼
-压缩后的 Hook 查询恢复类 Practice
-        │
-        ▼
-Agent 重新阅读持久化的 Spec、验收条件、假设和证据
-        │
-        ▼
-Agent 带着重新建立的任务与时刻，执行普通 lore query
-```
-
-Plugin/Hook 只知道宿主暴露了哪个 lifecycle event，却不判断工作是否正确或已经完成。Lorelum 检索当前任务与时刻所需的指引，却不保存 Spec、不管理任务状态、不读取完整 transcript，也不实现 compactor。如果宿主不能接收压缩前指引，这一步会安全降级，不阻塞正常压缩；压缩后的恢复链路仍然可以使用。Agent 先重建对事实的正确理解，再请求与任务相关的指引。
-
-这只是一个具体示例。更完整的方向是支持 Agentic Coding 全流程中的关键时刻——需求理解、规划、实现、测试、验证、交付、恢复和纠偏，而不是为 compaction 单独打一个补丁。
-
-## 5 分钟了解
-
-_（CLI 处于 pre-alpha，以下命令展示的是设计中的交互形态。）_
-
-```bash
-# 从社区 Knowledge Pack 开始，即使你还不知道所有规则
-lore pack install react-fullstack
-
-# 问：我当前的任务该遵循哪些 Practice？
-lore query "带权限控制、表单、测试的设置页"
-
-# 在形成计划前，检索范围和验证相关指引
-lore query "我要按照现有设计实现功能，现在准备确定范围、实施步骤和验证方式。"
-
-# 同一个自然语言 query 也可以说明当前的关键时刻
-lore query "定向测试已经通过，我准备宣布整个设置页能力已完成"
-
-# 检查代码是否违反了某条 Practice
-lore check src/features/auth/LoginPage.tsx
-
-# 把一次成功的修复沉淀成团队可复用的 Practice
-lore learn "HTTP client 里的 single-flight refresh token"
-```
-
-或者通过 MCP 接入你的 AI 工具——Lorelum 提供 MCP Server，任何兼容 MCP 的工具（Cursor、Claude Code、Codex、Windsurf……）都能调用。
-
-## 和现有方案有什么不同
-
-|  | `AGENTS.md` / `.cursorrules` | Skills / 斜杠命令 | **Lorelum** |
-| --- | --- | --- | --- |
-| **供给方式** | 静态、全量灌入 | 手动触发 | **按需检索** |
-| **长会话衰减** | 会 | 不会（一次性） | 不会（每次查询都新鲜） |
-| **压缩前后支持** | 手动：重新粘贴全部规则 | 手动 | Research：受支持的集成可在压缩前提供内容选择指引、压缩后触发恢复；其他工具通过 Skill / CLI / MCP 调用 |
-| **需要先知道该写哪些规则** | 是 | 通常需要 | 否：可以从社区 Pack 开始，再叠加团队 Practice |
-| **按范围和风险校准工程投入** | 否 | 取决于具体流程 | Research：根据当前任务和时刻检索规划 Practice 与 anti-pattern |
-| **支持上百条规则** | ❌ | 繁琐 | ✅ 为此而生 |
-| **工具中立** | 绑定单一工具 | 绑定单一工具 | ✅ MCP / CLI / Skill |
-| **反模式检查** | 否 | 否 | ✅ `lore check` |
-
-Lorelum 不是"更好的 .cursorrules"，而是位于你所用 AI 工具背后的 **Practice 检索层**。
-
-## 架构（简述）
-
-```
-┌──────────────────────────────────────────────────────────┐
-│        AI 工具层（Cursor / Claude Code / Codex / Windsurf）│
-└─────────────────────────────┬────────────────────────────┘
-                             │
-                             ▼
-┌───────────────────────────────────────────────────────────┐
-│ 集成层：Skill / Plugin / Hook / CLI / MCP               │
-│ 发现或描述任务与时刻 · 调用 · 注入                     │
-└───────────────────────────────────────────────────────────┘
-                             │ 查询
-                             ▼
-┌──────────────────────────────────────────────────────────┐
-│                    Lorelum 引擎                          │
-│        检索与排序（语义 + 元数据 + 图谱）                  │
-└────────────┬─────────────────────────────────────────────┘
-             │
-   ┌─────────┴─────────┐
-   ▼                   ▼
-本地知识包          端点（团队 / SaaS / 自托管）
-（离线可用）        （实时、多用户）
-```
-
-集成层负责**何时调用**以及**如何注入**。Lifecycle event 来自 Skill、Plugin 或 Hook；Lorelum Core 只负责检索与调用方所描述的任务和时刻相关的 Practice，它不控制宿主的 compactor。`PreCompact` 返回的文本能否真正成为压缩指令，属于仍需验证的集成能力。这样可以把各个宿主工具特有的生命周期处理留在检索引擎之外。
-
-两种模式共用同一套命令：
-
-- **本地模式（默认）：** `lore pack install` 一个公开包，离线查询，零运维。像 npm 一样简单。
-- **端点模式：** 把 CLI 指向团队 / SaaS / 自托管端点，享受实时同步与多人协作。
-
-当前本地基础能力包含按 ID 精确读取的 `lore get` 和离线关键词检索的 `lore query`；语义与混合检索仍在路线图中。
-
-## 路线图
-
-我们以里程碑方式公开推进：
-
-- **P0–P2** — 核心引擎：Practice 格式、检索（语义 + 元数据）、`lore query` / `get` / `check`。仅本地模式。
-- **P3–P4** — 第一个公开包（`react-fullstack`）、MCP Server、`lore pack install` / `search`、公开 Registry MVP。
-- **P5** — 端点服务内核（AGPL，可自托管）、团队知识包。
-- **P6** — 企业治理（SSO、审计、敏感信息扫描）。
-
-当前进展见 [Discussions](https://github.com/lorelum/lorelum/discussions)。
-
-## 项目状态
-
-🟡 **早期开发中。** 没有稳定版，CLI 尚未发布，设计正在收尾。现在正是参与塑造方向的好时机——欢迎到 [Discussions](https://github.com/lorelum/lorelum/discussions) 来。
-
-## 参与贡献
-
-我们欢迎贡献者。Lorelum 是 **open-core** 项目（见 [License 架构](#license)）——核心引擎、格式规范、社区知识包永远开源。
-
-- 📖 开发流程见 [**CONTRIBUTING.md**](./CONTRIBUTING.md)（规格驱动 + issue 驱动）
-- 🤖 用 AI 编码工具参与？也请读一下 [**AGENTS.md**](./AGENTS.md)
-- 💬 想法或建议，到 [Discussions](https://github.com/lorelum/lorelum/discussions) 聊聊
-- 🐛 发现 bug？[提个 issue](https://github.com/lorelum/lorelum/issues/new/choose)
+- [用户文档](https://lorelum.com/zh/docs)：使用指南、配置和故障排查。
+- [CLI 参考](https://lorelum.com/zh/docs/cli)：命令、JSON 响应、错误与退出码。运行 `lore describe query` 可查看已安装版本的 schema。
+- [开发指南](./docs/development/README.md)：源码构建、本地 CLI 和独立 Store。
+- [贡献指南](./CONTRIBUTING.md)：Issue、设计对齐、测试和 Pull Request。
+- [本仓库的 Agent 指令](./AGENTS.md)：AI 辅助贡献的工作约定。
+- [Discussions](https://github.com/lorelum/lorelum/discussions) 与 [Issues](https://github.com/lorelum/lorelum/issues)：问题、建议和缺陷报告。
+- [安全政策](./SECURITY.md)：私下报告安全漏洞。
 
 ## License
 
-Lorelum 采用 **open-core** 模式：
+本仓库采用 [Apache 2.0](./LICENSE)。[官方 Knowledge Pack](https://github.com/lorelum/lorelum-packs) 使用 CC-BY-4.0；其他 Pack 遵循各自的许可证。
 
-| 组件                                     | License                           |
-| ---------------------------------------- | --------------------------------- |
-| 核心引擎（CLI、本地检索、MCP、格式规范） | **Apache 2.0**                    |
-| 社区知识包内容                           | **CC-BY-4.0**                     |
-| 端点服务内核（可自托管）                 | **AGPL-3.0** _（独立仓库，后期）_ |
-| SaaS 平台与企业治理                      | **专有** _（独立仓库，后期）_     |
-
-边界一句话：**能让开发者离线跑通完整流程的部分，永远开源。** 付费买的是托管运维、团队协作、企业合规，不是被阉割的功能。
-
-本仓库适用 Apache 2.0，全文见 [LICENSE](./LICENSE)。
-
-## 注释
-
-<ol>
-<li id="fn-1">约 68% 的合规率来自 <em>IFScale</em> 基准测试（<a href="https://arxiv.org/abs/2507.11538">Jaroslawicz et al., 2025</a>，NeurIPS 2025）：即便最好的前沿模型，在 500 条同时下发的关键词类指令中也只遵循了约 68%，且准确率随指令密度增加而持续下降。<a href="https://paddo.dev/blog/your-agents-md-is-a-liability/">《Your AGENTS.md is a Liability》</a>一文专门讨论了这对大型规则文件意味着什么。</li>
-<li id="fn-2">召回率与位置相关，见 <em>Lost in the Middle</em>（<a href="https://arxiv.org/abs/2307.03172">Liu et al., TACL 2024</a>）：模型对长上下文开头和结尾的信息召回更好，中间位置明显变差——呈 U 型曲线，且在标称上下文窗口内依然成立。</li>
-</ol>
-
-## 致谢
-
-Lorelum 站在 AI 编码与开发者工具社区众多先行者的肩膀上。名字取自 **Lore**（通过实践代代相传的非正式知识）+ **Lum**（源自 lumen，光）——把团队的工程经验，化作 AI 可以依循的光。
+Lorelum 的名字来自 **Lore**（通过实践传承的知识）和 **Lum**（光）：让工程经验成为 AI Agent 可以依循的指引。

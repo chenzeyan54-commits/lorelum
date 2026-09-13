@@ -1,0 +1,20 @@
+---
+title: Pack 编写命令
+description: 校验、格式化并同步 Pack 源文件。
+---
+
+这些命令直接操作本地 Pack 目录，不负责安装或发布。
+
+```sh
+lore validate <pack-root>
+lore format <pack-root>
+lore i18n sync <pack-root> --locale <locale> [--source-locale <locale>] [--practice <id> | --all]
+```
+
+`validate` 检查 Pack 结构，返回 canonical 诊断与 localization 状态。退出 `0` 表示校验完成且没有 Pack 或 localization 问题；退出 `1` 表示校验完成但存在 Pack 校验失败或 localization 问题（JSON 结果仍可读取）；退出 `2` 表示参数或源文件无法处理。
+
+`format` 规范化 Practice Markdown，并在存在时规范化 `i18n/manifest.yaml`。返回 `formattedFiles` 与 `manifestFormatted`；成功退出 `0`，输入无效退出 `2`。
+
+`i18n sync` 会把选定 localized Practice 对应的 canonical source digest 写入 `i18n/manifest.yaml`；不会翻译或覆盖 localized Markdown。`--locale` 必填；`--practice <id>` 与 `--all` 二选一。`--all` 只选择该 locale 中已经存在的 localized Practice。创建新 manifest 时需要 `--source-locale`。结果包含每个同步路径及其 `sourceDigest`，以及 manifest 路径。成功退出 `0`，失败退出 `2`。
+
+完整 schema 与错误码见 `lore describe validate`、`lore describe format` 和 `lore describe i18n.sync`。

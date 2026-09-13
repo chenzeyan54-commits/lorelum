@@ -1,0 +1,51 @@
+---
+title: Troubleshooting
+description: Resolve installation, model preparation, and retrieval problems.
+icon: Wrench
+---
+
+## The agent cannot find `lore`
+
+Run `lore --version` in the environment that starts the agent. If it works in your terminal but fails in the agent, check that the agent inherits `~/.local/bin` on `PATH`, then restart the application. See [Installation](./installation).
+
+## A query returns `preparing`
+
+This is a successful response with exit code `1`: model preparation was accepted but is not ready within the CLI observation interval. Check its state and wait:
+
+```sh
+lore model status
+lore model load
+```
+
+Retry the original query. If Lorelum reports a missing index, inspect and build it:
+
+```sh
+lore index status
+lore index build
+```
+
+For `semantic.index-incompatible`, use `lore index rebuild` instead. An accepted build can still be running. Follow its operation ID with `lore index operation <operation-id>`. Use the same `--store-root` for Store-consuming commands. See [Index commands](./reference/indexing) for recovery errors.
+
+## A query returns no matches
+
+Run `lore pack list --details` and confirm the expected Pack is installed in this Store. Describe the task and decision rather than a broad topic; use `lore pack list <pack-name>` to browse Practices.
+
+An empty result is different from `preparing` or an error. Agent integrations should inspect the JSON result before deciding what happened; see [CLI protocol](./cli).
+
+## Model download fails
+
+Check the reported `error.code`, available disk space, and network access to the configured model source. After fixing the cause, `lore model load` retries and waits. Model paths, cache locations, and download settings are described in [Embedding configuration](./configuration).
+
+## Diagnose with keyword retrieval
+
+For an intentional offline search or to isolate a model problem, use:
+
+```sh
+lore query "authentication token session" --mode keyword
+```
+
+Keyword search matches terms rather than meaning. Continue with the default natural-language query after resolving the semantic retrieval problem.
+
+## Report a problem
+
+Include `lore --version`, your platform, the command, and the returned error code in a [GitHub issue](https://github.com/lorelum/lorelum/issues). Remove private Pack content and local credentials from examples. Report security issues through [SECURITY.md](https://github.com/lorelum/lorelum/blob/main/SECURITY.md).

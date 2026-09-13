@@ -1,0 +1,57 @@
+---
+title: Installation
+description: Install a release, verify the CLI, and update an existing setup.
+icon: Download
+---
+
+The public alpha provides a prebuilt release for macOS on Apple Silicon. Linux and Windows users can follow the [source-build guide](https://github.com/lorelum/lorelum/blob/main/docs/development/README.md). Lorelum is not distributed through npm.
+
+## Install the CLI
+
+Install the first public alpha directly:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/lorelum/lorelum/main/install.sh | sh -s -- --version 0.1.0-alpha.1
+```
+
+This installs `0.1.0-alpha.1`. The installer looks for a stable release when `--version` is omitted.
+
+The installer downloads the release archive and `SHA256SUMS`, checks the archive's SHA-256, and installs the full release under `~/.local/share/lorelum/versions/`. The command entrypoint is `~/.local/bin/lore`.
+
+If your shell cannot find `lore`, add `~/.local/bin` to `PATH` in your shell configuration, then open a new terminal:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Verify the installation:
+
+```sh
+lore --version
+```
+
+The output is a JSON response with the tool version. A desktop editor or agent may need restarting to inherit the updated `PATH`.
+
+## Install an archive manually
+
+Download the `darwin-arm64` archive and its `SHA256SUMS` from the same release. Compare the archive's checksum with the corresponding entry, extract it, and add the extracted directory to `PATH`.
+
+Keep the release directory intact. The executable needs the native libraries and runtime assets distributed alongside it; copying only `lore` is insufficient for semantic retrieval.
+
+## Prepare the first query
+
+The CLI installation does not download the embedding model. Pack installation and semantic commands prepare it when needed. The first setup therefore needs access to the Pack registry and model download source.
+
+Follow [Quickstart](./quickstart) to install a Pack and run a query. [Configuration](./configuration) covers model paths and download options, including environments that prepare the model in advance.
+
+## Update
+
+Read the target release's compatibility notes, then rerun the installer with its version. Stop a running local Backend so subsequent requests use the new installation:
+
+```sh
+lore backend stop
+```
+
+The next semantic command starts it again. Restart your agent application if it still uses the old CLI environment.
+
+CLI, Pack, and Plugin versions are managed separately. Use [Pack commands](./reference/packs) for Pack updates and [Codex integration](./codex) for Plugin updates. See [Alpha compatibility](./alpha) before moving an existing Store between versions.

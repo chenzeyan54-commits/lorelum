@@ -1,0 +1,20 @@
+---
+title: Alpha compatibility
+description: What to expect while Lorelum evolves between releases.
+icon: FlaskConical
+---
+
+Lorelum is in public alpha. A release may change CLI behavior, configuration, file formats, or retrieval results. Automatic migration is not promised, so read the release notes before upgrading a shared setup.
+
+Prebuilt archives currently support macOS on Apple Silicon. Build from source for other platforms. Pin both the CLI version and each Pack version when reproducing a result on another machine.
+
+Before adopting a new release or unfamiliar Pack, use a separate Store root:
+
+```sh
+lore --store-root /tmp/lorelum-check pack install agentic-coding@0.3.0
+lore --store-root /tmp/lorelum-check query "how should I verify this change?"
+```
+
+Keep the isolated Store until installation, indexing, and representative queries succeed. A Store contains Pack data and derived indexes; model and Backend configuration remain user-level.
+
+The release note for the installed version records the archive name, checksum, supported platforms, breaking changes, and known limitations. Include the CLI version, Store scope, and relevant error code when reporting an incompatibility.

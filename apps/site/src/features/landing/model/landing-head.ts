@@ -34,13 +34,13 @@ const landingMeta: Record<string, LandingMeta> = {
   en: {
     title: "Lorelum — the right Practice for the right task and moment",
     description:
-      "Lorelum keeps your team\u2019s engineering Practices structured and retrievable, and injects the right one into your AI coding agent\u2019s context exactly when the task needs it.",
+      "Lorelum is a local retrieval layer for engineering knowledge. Install Knowledge Packs and let your agent retrieve Practices for the current task and decision.",
     ogLocale: "en_US",
   },
   zh: {
-    title: "Lorelum —— 在正确的任务与关键时刻，检索正确的工程 Practice",
+    title: "Lorelum —— 在正确的任务、正确的时刻，提供正确的工程 Practice",
     description:
-      "Lorelum 让团队的工程 Practice 保持结构化、可检索，并在任务最需要的那一刻，把正确的那条注入 AI 编码智能体的上下文。",
+      "Lorelum 是工程知识的本地检索层。安装 Knowledge Pack，让 Agent 围绕当前任务和判断检索相关 Practice，并按适用条件应用指导。",
     ogLocale: "zh_CN",
   },
 };

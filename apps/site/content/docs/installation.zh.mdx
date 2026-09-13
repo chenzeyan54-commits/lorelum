@@ -1,0 +1,57 @@
+---
+title: 安装
+description: 安装发行包、验证 CLI，并更新已有环境。
+icon: Download
+---
+
+Public alpha 提供 macOS Apple Silicon 预编译发行包。Linux 和 Windows 用户可以按[开发指南](https://github.com/lorelum/lorelum/blob/main/docs/development/README.md)从源码构建。Lorelum 不通过 npm 分发。
+
+## 安装 CLI
+
+直接安装首个 public alpha：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/lorelum/lorelum/main/install.sh | sh -s -- --version 0.1.0-alpha.1
+```
+
+这会安装 `0.1.0-alpha.1`。省略 `--version` 时，安装器查找稳定发行版。
+
+安装器下载发行包和 `SHA256SUMS`，校验发行包的 SHA-256，并将完整文件安装到 `~/.local/share/lorelum/versions/`。命令入口位于 `~/.local/bin/lore`。
+
+如果 shell 找不到 `lore`，请在 shell 配置中将 `~/.local/bin` 加入 `PATH`，然后打开新终端：
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+验证安装：
+
+```sh
+lore --version
+```
+
+结果是包含工具版本的 JSON。桌面启动的编辑器或 Agent 可能需要重启，才能继承更新后的 `PATH`。
+
+## 手动安装发行包
+
+从同一个 release 下载 `darwin-arm64` 发行包及 `SHA256SUMS`。将发行包校验值与对应条目比较，确认一致后解压，再将解压目录加入 `PATH`。
+
+保留完整发行目录。可执行文件需要随包分发的原生库和运行时资源；只复制 `lore` 无法保证 semantic retrieval 可用。
+
+## 准备首次查询
+
+安装 CLI 不会直接下载 embedding 模型。Pack 安装和 semantic 命令在需要时准备模型，因此首次配置需要能够访问 Pack registry 和模型下载源。
+
+按[快速开始](./quickstart)安装 Pack 并执行查询。[配置](./configuration)说明模型路径和下载选项，也适用于提前准备模型文件的环境。
+
+## 更新
+
+阅读目标版本的兼容性说明，再使用对应版本重新运行安装器。停止正在运行的本地 Backend，使后续请求使用新安装：
+
+```sh
+lore backend stop
+```
+
+下一次 semantic 命令会重新启动服务。如果 Agent 仍使用旧的 CLI 环境，也需要重启 Agent 应用。
+
+CLI、Pack 和 Plugin 的版本分别管理。Pack 更新见 [Pack 命令](./reference/packs)，Plugin 更新见 [Codex 集成](./codex)。已有 Store 跨版本使用前，请阅读 [Alpha 兼容性](./alpha)。

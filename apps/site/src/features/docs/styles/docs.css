@@ -69,16 +69,48 @@
 #nd-docs-layout #nd-sidebar > div:last-child > div:has(> a[aria-label="GitHub"]) {
   align-self: flex-start;
   width: fit-content;
-  gap: 0.125rem;
-  border-color: var(--docs-divider);
+  gap: 0.25rem;
+  border-color: transparent;
+  background: transparent;
+  padding: 0;
+}
+
+#nd-docs-layout :is(#nd-sidebar, #nd-sidebar-mobile) .docs-nav-controls {
+  display: contents;
+}
+
+#nd-docs-layout
+  :is(#nd-sidebar, #nd-sidebar-mobile)
+  :is(.docs-nav-controls > a, .docs-nav-controls > button, a[aria-label="GitHub"]) {
+  height: var(--lore-size-control-sm);
+  border: 1px solid var(--docs-divider);
+  border-radius: var(--lore-radius-pill);
   background: var(--docs-control-surface);
 }
 
-#nd-docs-layout #nd-sidebar a[aria-label="GitHub"] {
+#nd-docs-layout :is(#nd-sidebar, #nd-sidebar-mobile) a[aria-label="GitHub"] {
+  order: 2;
   width: var(--lore-size-control-sm);
-  height: var(--lore-size-control-sm);
   padding: 0;
-  border-radius: var(--lore-radius-pill);
+}
+
+#nd-docs-layout :is(#nd-sidebar, #nd-sidebar-mobile) .docs-nav-controls .site-theme-toggle {
+  order: 1;
+}
+
+#nd-docs-layout :is(#nd-sidebar, #nd-sidebar-mobile) .docs-nav-controls .site-language-toggle {
+  order: 3;
+}
+
+#nd-docs-layout :is(#nd-sidebar, #nd-sidebar-mobile) a:has(img[src*="lorelum-horizontal"]) {
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  padding: 0;
+}
+
+#nd-docs-layout :is(#nd-sidebar, #nd-sidebar-mobile) a:has(img[src*="lorelum-horizontal"]):hover {
+  background: transparent !important;
 }
 
 #nd-docs-layout
@@ -129,6 +161,31 @@
 
 #nd-page > div.border-b {
   border-color: var(--docs-divider);
+}
+
+/* Page utilities and the docs language selector share the compact, quiet
+ * control treatment used by the rest of the site navigation. */
+#nd-page .docs-page-actions :is(button, a) {
+  min-height: var(--lore-size-control-sm);
+  border: 1px solid var(--docs-divider);
+  border-radius: var(--lore-radius-pill);
+  background: var(--docs-control-surface);
+  box-shadow: none;
+}
+
+#nd-page .docs-page-actions :is(button, a) {
+  padding-inline: 0.75rem;
+}
+
+#nd-page .docs-page-actions :is(button, a):hover {
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--docs-divider));
+  background: color-mix(in srgb, var(--primary) 8%, var(--docs-control-surface));
+  color: var(--primary);
+}
+
+#nd-page .docs-page-actions :is(button, a):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 #nd-page .fd-steps {

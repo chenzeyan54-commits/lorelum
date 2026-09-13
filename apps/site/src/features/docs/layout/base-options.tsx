@@ -1,8 +1,8 @@
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
 import { BrandLockup } from "@/shared/ui/brand-lockup";
-import { ThemeToggle } from "@/shared/ui/theme-toggle";
 import { gitConfig } from "@/shared/config/git";
 import { i18n } from "@/shared/i18n/config";
+import { DocsNavControls } from "./docs-nav-controls";
 
 interface BaseOptions {
   /**
@@ -23,16 +23,17 @@ export function baseOptions(
   opts: BaseOptions = {},
 ): BaseLayoutProps {
   const { withSearch = true } = opts;
+  const homeUrl = locale === i18n.defaultLanguage ? "/" : `/${locale}`;
 
   return {
-    // Language selection is intentionally kept out of the product navigation.
     i18n: false,
     searchToggle: withSearch ? undefined : { enabled: false },
     nav: {
       title: <BrandLockup />,
+      url: homeUrl,
     },
     themeSwitch: {
-      component: <ThemeToggle lang={locale} />,
+      component: <DocsNavControls locale={locale} />,
     },
     githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
   };

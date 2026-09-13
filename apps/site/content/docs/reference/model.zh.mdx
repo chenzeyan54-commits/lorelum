@@ -1,0 +1,41 @@
+---
+title: Model 命令
+description: 准备、查看或卸载本地 embedding 模型。
+---
+
+semantic query 和 index 工作会自动准备模型。这组命令用于等待加载、查看进度和释放资源。
+
+支持全局选项 `--log-level <level>` 与 `--store-root <path>`；模型状态和缓存属于用户级，`--store-root` 不会切换模型。
+
+Model 命令需要 Backend 已启动。必要时显式启动：
+
+```sh
+lore backend start
+lore model load
+```
+
+## load
+
+`lore model load` 在模型缺失时下载固定文件，校验并等待加载完成。它也可以重试之前失败的准备任务。进度写入 stderr，stdout 只返回最终 JSON 结果。
+
+重复调用会加入同一个准备任务。
+
+## status
+
+```sh
+lore model status
+```
+
+结果中的 `state` 为 `unloaded`、`loading`、`ready`、`unloading` 或 `failed`，并包含 `encodingId`、`device`、`dimensions`、`threads`。加载时包含 `progress`，失败时包含 embedding 错误码。
+
+status 不启动 Backend，也不下载模型。Backend 停止时返回 `backend.unavailable`。
+
+## unload
+
+```sh
+lore model unload
+```
+
+unload 取消准备或释放已加载的运行时，保留模型缓存和可续传的下载文件。
+
+Embedding 与 Backend 错误退出 `2`；查看返回错误码和 `lore backend status`。路径与下载设置见[配置](../configuration)。

@@ -1,0 +1,42 @@
+---
+title: Install and manage Packs
+description: Choose engineering knowledge, install a version, and maintain your local collection.
+icon: BookOpen
+---
+
+A Knowledge Pack is a versioned collection of Practices. Install the Packs that match your work; Lorelum searches them when an agent describes its task and current moment.
+
+## Official Packs
+
+The ecosystem is still small. Lorelum currently maintains two official Packs:
+
+| Pack | Version | What it covers |
+| --- | --- | --- |
+| `agentic-coding` | `0.3.0` | Planning, implementation, verification, recovery, and delivery decisions |
+| `pack-creator` | `0.1.0` | Writing, reviewing, and publishing Packs |
+
+```sh
+lore pack install agentic-coding@0.3.0
+lore pack install pack-creator@0.1.0
+```
+
+Install exact releases when repeatability matters. Browse the local installation:
+
+```sh
+lore pack list --details
+lore pack list agentic-coding
+```
+
+The first command shows Pack metadata; the second lists Practices in one Pack. Neither is a catalog of every available Pack. The [official Pack repository](https://github.com/lorelum/lorelum-packs) contains source and release history. See [Pack commands](./reference/packs) for update, remove, registry, and Store options.
+
+## Update or remove a Pack
+
+Use `lore pack update <pack-name>@<version>` to move an installed Pack to a selected release. Installation and update manage Pack content separately from derived index work; inspect `data.indexSync` before treating new content as searchable.
+
+Use `lore pack remove <pack-name>` to remove a Pack from the selected Store. Other installed Packs remain available. See [Pack commands](./reference/packs) for response fields and error handling.
+
+## Community Packs
+
+We welcome Packs for frameworks, infrastructure, team conventions, and other domains you know well. [Create a Pack](./create-pack) to share that knowledge.
+
+`awesome-lorelum` collects official and community Packs. Community Packs are maintained by their authors; check their source, license, and tested Lorelum version before installing.

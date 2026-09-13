@@ -412,9 +412,8 @@ summary {
 }
 
 /* ---------- Ecosystem logo wall ----------
- * Logos are monochrome dark marks (Simple Icons + favicons, downloaded to
- * /public/logos). Under the dark theme invert them so the wall reads on the
- * dark background; a soft brightness lift keeps grays from going flat. */
+ * Product-level SVG marks use a single monochrome treatment. Dark mode
+ * inverts the marks; names beneath each icon preserve clear identification. */
 html.dark .logo-wall img {
   filter: invert(1) brightness(1.2);
 }
@@ -429,14 +428,4 @@ html.dark .logo-wall img {
 
 html.dark .logo-wall li:hover img {
   filter: invert(1) brightness(1.7);
-}
-
-/* Aider's mark is brand green on transparent — inversion would turn it pink,
- * so it opts out of the dark-theme logo inversion. */
-html.dark .logo-wall img.logo-keep-color {
-  filter: none;
-}
-
-html.dark .logo-wall li:hover img.logo-keep-color {
-  filter: brightness(1.25);
 }

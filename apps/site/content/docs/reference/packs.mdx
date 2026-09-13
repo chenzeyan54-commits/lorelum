@@ -1,0 +1,53 @@
+---
+title: Pack commands
+description: Install, browse, update, remove, and validate Packs.
+---
+
+## Install
+
+```sh
+lore pack install agentic-coding@0.3.0
+```
+
+Global `--store-root <path>` selects the LocalStore and `--log-level <level>` controls stderr logs. `--registry <owner/repository>` is specific to install and update.
+
+A version pins the release. Omitting it selects the Registry's latest release. For a different Registry, pass `--registry owner/repository`.
+
+Installing the same artifact again is safe. If the installed name has different content, Lorelum returns `pack.update-required`; use `pack update`.
+
+Installation also starts the semantic index work needed for the Pack. The result's `indexSync` reports `ready`, `pending`, or `failed`; an index failure leaves the Pack installed. Registry, source, Pack validation, Store, and `pack.update-required` errors exit `2`; see [Troubleshooting](../troubleshooting).
+
+## Browse
+
+```sh
+lore pack list
+lore pack list --details
+lore pack list agentic-coding
+```
+
+The first command lists installed Packs. `--details` adds metadata for discovery. A Pack name lists that Pack's Practices. Use a returned ID with [get](./get).
+
+## Update and remove
+
+```sh
+lore pack update <pack-name>@<version>
+lore pack remove <pack-name>
+```
+
+Update one Pack at a time. Both commands return `pack.not-installed` if the Pack is absent.
+
+## Validate a Pack
+
+```sh
+lore validate /path/to/pack
+```
+
+Validation checks the Pack and reports localization state. Use it while [creating a Pack](../create-pack). Exit codes are `0`, `1`, or `2`; inspect the result and `lore describe validate` for the distinction between diagnostics and command errors.
+
+## Choose the Store
+
+```sh
+lore --store-root /path/to/store pack install agentic-coding@0.3.0
+```
+
+All Pack operations use the selected Store. Command schemas and errors are available through `lore describe`.

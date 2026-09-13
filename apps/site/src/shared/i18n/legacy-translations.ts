@@ -33,12 +33,14 @@ export interface LandingStrings {
   terminalSectionTitle: string;
   terminalSectionSub: string;
   terminalWindowTitle: string;
-  /** Human description of the `lore get` result's applies_when field. */
+  /** Natural-language query and readable guidance used by the visual demo. */
+  demoQuery: string;
+  demoMatchLabel: string;
+  demoReadNext: string;
+  demoGuidanceLabel: string;
+  demoGuidance: string[];
   getTitle: string;
   appliesWhen: string;
-  antiPattern: string;
-  /** Short label for how many Practices the install added. */
-  installAddedCount: string;
   // Problem
   problemEyebrow: string;
   problemHeading: string;
@@ -101,184 +103,191 @@ const en: LandingStrings = {
   navHome: "Home",
   navDocs: "Docs",
   toggleTheme: "Toggle theme",
-  // Hero
-  heroBadge: "Engineering knowledge, injected on demand",
+  heroBadge: "Engineering knowledge for Agent decisions",
   heroTitleBefore: "The right ",
   heroTitleGradient: "Practice",
   heroTitleComma: ",",
   heroTitleAfter: "at the right moment.",
   heroSub:
-    "Lorelum retrieves your team\u2019s engineering Practices and injects them into AI context exactly when they\u2019re needed \u2014 so agents follow your rules, not drift from them.",
-  heroTrust: "Apache-2.0 · Local-first · No cloud required",
+    "Turn engineering experience into Practices your agent can retrieve for the current task. Bring team standards and shared knowledge into planning, implementation, and verification.",
   heroTypewriter: [
-    "Injected when the moment matters.",
-    "Right Practice, right task.",
-    "Your rules, actually followed.",
+    "Define the scope before planning.",
+    "Read the guidance before applying it.",
+    "Match completion claims to evidence.",
   ],
+  heroTrust: "Public alpha · Local retrieval · Apache-2.0",
   ctaDocs: "Read the docs",
-  ctaGithub: "Star on GitHub",
-  // Terminal showcase
-  terminalSectionTitle: "See lore in action",
+  ctaGithub: "View on GitHub",
+  terminalSectionTitle: "Describe the task. Read the guidance.",
   terminalSectionSub:
-    "A real CLI transcript — the actual `lore install` and `lore get` output, replayed as JSON envelopes.",
-  terminalWindowTitle: "lore — interactive",
+    "Search for the decision in front of you, then read a relevant Practice before applying it.",
+  terminalWindowTitle: "lore — example workflow",
+  demoQuery: "The code changed after tests passed. Can I still use those results?",
+  demoMatchLabel: "Relevant Practice",
+  demoReadNext: "Next: read the full Practice to check how it applies.",
+  demoGuidanceLabel: "Guidance",
+  demoGuidance: [
+    "Check whether the code, config, or data changed after verification.",
+    "Repeat affected checks before relying on earlier results.",
+    "Report what the evidence covers and what remains unverified.",
+  ],
   getTitle: "Reuse Evidence Only When It Still Applies",
-  appliesWhen: "when earlier verification results may no longer describe the current work",
-  antiPattern: "Old result reused for changed work",
-  installAddedCount: "30",
-  // Problem
-  problemEyebrow: "The problem",
-  problemHeading: "Rules that don't reach the agent don't exist.",
+  appliesWhen: "When earlier test results may no longer describe the current work.",
+  problemEyebrow: "The engineering judgment gap",
+  problemHeading: "Available guidance still needs attention.",
   problemSub:
-    "Your AGENTS.md may be perfectly written \u2014 and still never make it into the context that matters.",
-  problem1Title: "Rules drift at scale",
+    "Skills and project instructions can be reinjected. As context grows, attention can still fade and relevant guidance can compete with unrelated information.",
+  problem1Title: "More context, competing signals",
   problem1Body:
-    "Frontier models comply with only ~68% of a 500-rule ruleset \u2014 every rule you add makes every other rule less likely to be followed.",
-  problem2Title: "Compaction eats context",
+    "Requirements, rules, code, and exploration accumulate in a long task. A rule can remain in context while receiving too little attention at the decision that needs it.",
+  problem2Title: "Correct advice, wrong scope",
   problem2Body:
-    "Long sessions trigger context compaction, and your early AGENTS.md falls out of the window \u2014 along with the requirements and evidence it encoded.",
-  problem3Title: "No signal until it\u2019s wrong",
+    "A familiar best practice can add unnecessary work to a small change. The agent needs to judge which guidance fits this task, its risk, and its current moment.",
+  problem3Title: "Experience you have yet to collect",
   problem3Body:
-    "There\u2019s no warning when the agent drifts \u2014 you only find out at review time, after the damage is done.",
-  // Features
-  featuresEyebrow: "Why Lorelum",
-  featuresHeading: "Built for the moment of truth",
+    "Writing project rules assumes you know what to include. Shared Knowledge Packs make engineering experience available before your team has learned every lesson itself.",
+  featuresEyebrow: "How Lorelum helps",
+  featuresHeading: "Retrieve guidance for the decision ahead.",
   featuresSub:
-    "Structured engineering knowledge, retrieved and injected at the instant it matters.",
-  feature1Title: "Practices, not prompts",
+    "Describe the task and moment, select relevant Practices, and read their applicability conditions before using them.",
+  feature1Title: "Guidance with applicability",
   feature1Body:
-    "Structured, retrievable engineering guidelines \u2014 the rules your team already believes in, made machine-readable.",
-  feature2Title: "Injected on demand",
+    "Each Practice explains what to do, when it applies, and which anti-patterns to avoid. Keep the context that makes engineering advice useful.",
+  feature2Title: "Local semantic retrieval",
   feature2Body:
-    "Practices reach the agent exactly when a relevant task is happening \u2014 not dumped once at session start.",
-  feature3Title: "Local-first MCP + CLI",
+    "Query installed Packs in natural language. Read selected Practices in full and retrieve again when the decision changes.",
+  feature3Title: "CLI, Skill, and Codex",
   feature3Body:
-    "A local MCP server and the lore CLI keep your knowledge on your machine, available to any agent.",
-  feature4Title: "Open format & packs",
+    "Use the CLI from a command-capable agent. The Skill guides retrieval, and the Codex Plugin supplies an installed-Pack catalog.",
+  feature4Title: "Knowledge you can maintain",
   feature4Body:
-    "A public Practice/pack spec and shareable knowledge packs \u2014 Apache-2.0, no lock-in.",
-  // Stats
-  statsEyebrow: "By the numbers",
-  statsHeading: "Lorelum at a glance",
-  stats1Label: "public spec",
-  stats2Label: "ways to use \u2014 CLI + MCP",
-  stats3Label: "open source (Apache-2.0)",
-  // Ecosystem
-  ecosystemEyebrow: "Ecosystem",
-  ecosystemHeading: "Works where your agents live",
-  ecosystemSub: "One source of truth for the rules your coding agents are already reading.",
-  // FAQ
-  faqEyebrow: "FAQ",
-  faqHeading: "Questions teams ask before switching",
-  faq1q: "Is Lorelum free?",
+    "Version and share team Practices in Packs, or start with official Packs. Review, validate, and update guidance as your work evolves.",
+  statsEyebrow: "Public alpha",
+  statsHeading: "A local foundation for shared knowledge",
+  stats1Label: "local retrieval engine",
+  stats2Label: "official Knowledge Packs",
+  stats3Label: "open-source Core · Apache-2.0",
+  ecosystemEyebrow: "Agent integrations",
+  ecosystemHeading: "Bring the knowledge to your workflow.",
+  ecosystemSub:
+    "Agents that can execute commands can use lore. Install the Skill through your host's supported mechanism; Codex also has an official Plugin.",
+  faqEyebrow: "Before you start",
+  faqHeading: "Using Lorelum",
+  faq1q: "What is available in the alpha?",
   faq1a:
-    "Yes — the core is Apache-2.0 open source, including the Practice/pack format, the CLI and the local MCP server.",
-  faq2q: "How is this different from writing better prompts?",
+    "Local semantic query, full Practice reads, Pack management, and CLI-based agent integration. Prebuilt releases support macOS on Apple Silicon; other platforms use a source build. Lorelum Core is Apache-2.0 open source.",
+  faq2q: "How does Lorelum work with Skills and AGENTS.md?",
   faq2a:
-    "Prompts tell an agent what to do once. Lorelum keeps your engineering Practices structured and retrievable, and injects the right one exactly when the task needs it.",
-  faq3q: "Does it work with my coding agent?",
+    "Keep project instructions for repository rules and use Skills to guide agent behavior. Lorelum supplies versioned engineering knowledge they can retrieve for the current decision. Reinjection makes instructions available; it does not guarantee that a growing context receives equal attention.",
+  faq3q: "Do I need to write my own Practices first?",
   faq3a:
-    "Any agent that reads AGENTS.md-style files works with Lorelum out of the box — via the CLI or the local MCP server.",
-  faq4q: "Where does my knowledge live?",
-  faq4a: "On your machine. Lorelum is local-first: no cloud upload, no vendor lock-in.",
-  // CTA + footer
-  ctaHeading: "Stop hoping your rules survive the session.",
-  ctaSub: "Give your agents the right Practice at the right moment.",
+    "Start with agentic-coding for planning, implementation, verification, recovery, and delivery guidance. Use pack-creator when you want to write and review your own Packs.",
+  faq4q: "Where does retrieval run?",
+  faq4a:
+    "Packs and indexes live in your local Store, and semantic retrieval uses a local model. Initial setup downloads Pack and model files. Practices read by an agent enter that agent's context, subject to the host's own data handling.",
+  ctaHeading: "Bring experience into the next decision.",
+  ctaSub: "Install a Pack, describe the task, and read the guidance that applies.",
   footerDocs: "Docs",
   footerGithub: "GitHub",
   footerDiscussions: "Discussions",
   footerLicense: "Apache-2.0",
-  notFoundTitle: "Page Not Found",
+  notFoundTitle: "Page not found",
   notFoundDescription:
-    "The page you are looking for might have been removed, had its name changed, or is temporarily unavailable.",
-  backHome: "Back to Home",
+    "This page is unavailable. Return to the homepage or use the documentation to find what you need.",
+  backHome: "Back to home",
   switchTo: "Switch language to",
 };
 
 const zh: LandingStrings = {
-  tagline: "在正确的任务与关键时刻，为 AI 编码智能体检索正确的工程 Practice。",
+  tagline: "在正确的任务、正确的时刻，为 Agent 提供正确的工程 Practice。",
   readDocs: "阅读文档",
   navHome: "首页",
   navDocs: "文档",
   toggleTheme: "切换主题",
-  // Hero
-  heroBadge: "按需注入的工程知识",
+  heroBadge: "为 Agent 提供工程判断依据",
   heroTitleBefore: "正确的 ",
   heroTitleGradient: "Practice",
   heroTitleComma: "，",
   heroTitleAfter: "出现在正确的时刻。",
   heroSub:
-    "Lorelum 在智能体最需要的时刻，把团队沉淀的工程 Practice 注入它的上下文——让 AI 遵循你的规则，而不是渐渐偏离。",
-  heroTrust: "Apache-2.0 · 本地优先 · 无需云端",
-  heroTypewriter: [
-    "在关键的时刻，注入正确的 Practice。",
-    "正确的 Practice，给正确的任务。",
-    "你的规则，被真正遵循。",
-  ],
+    "将工程经验整理为可检索的 Practice，让 Agent 围绕当前任务获取指导。让团队标准与共享知识参与规划、实现和验证。",
+  heroTypewriter: ["规划前，明确需求范围。", "应用前，读完相关指导。", "交付前，让结论对应证据。"],
+  heroTrust: "Public alpha · 本地检索 · Apache-2.0",
   ctaDocs: "阅读文档",
-  ctaGithub: "GitHub Star",
-  // Terminal showcase
-  terminalSectionTitle: "看看 lore 怎么工作",
-  terminalSectionSub: "真实 CLI 记录回放 —— `lore install` 与 `lore get` 的实际 JSON 协议输出。",
-  terminalWindowTitle: "lore — 交互演示",
-  getTitle: "Reuse Evidence Only When It Still Applies",
-  appliesWhen: "当先前的验证结果可能已不适用于当前改动时",
-  antiPattern: "改动之后复用旧结果",
-  installAddedCount: "30",
-  // Problem
-  problemEyebrow: "问题",
-  problemHeading: "到不了智能体手里的规则，等于不存在。",
-  problemSub: "你的 AGENTS.md 可能写得无可挑剔——却始终进不了真正重要的上下文。",
-  problem1Title: "规则越多，越不被遵守",
+  ctaGithub: "在 GitHub 查看",
+  terminalSectionTitle: "描述任务，读取相关指导。",
+  terminalSectionSub: "围绕眼前的判断发起查询，读完相关 Practice 后再应用。",
+  terminalWindowTitle: "lore — 使用示例",
+  demoQuery: "测试通过后代码又改了，之前的结果还能作为完成依据吗？",
+  demoMatchLabel: "相关 Practice",
+  demoReadNext: "下一步：读取完整 Practice，确认如何应用。",
+  demoGuidanceLabel: "工程指导",
+  demoGuidance: [
+    "检查验证之后，代码、配置或数据是否发生变化。",
+    "复用旧结果前，重新执行受这些变化影响的检查。",
+    "说明证据覆盖的范围，以及仍未验证的部分。",
+  ],
+  getTitle: "仅在仍然适用时复用证据",
+  appliesWhen: "适用于先前测试结果可能已不再代表当前改动的情况。",
+  problemEyebrow: "工程判断的难题",
+  problemHeading: "指导仍在，关注却可能减弱。",
+  problemSub:
+    "Skill 和项目指令可以重新注入。随着上下文变长，注意力仍可能衰减，相关指导也会与其他信息争夺关注。",
+  problem1Title: "上下文越长，信号越多",
   problem1Body:
-    "前沿模型对 500 条规则集只有约 68% 的遵循率——每新增一条规则，都会降低其他规则被遵循的概率。",
-  problem2Title: "上下文压缩吃掉规则",
-  problem2Body: "长会话会触发上下文压缩，你早期的 AGENTS.md 连同其中的需求与证据一起被挤出窗口。",
-  problem3Title: "等到发现时，已经错了",
-  problem3Body: "智能体偏离时没有任何预警——等你审查代码时才发现，而伤害已经造成。",
-  // Features
-  featuresEyebrow: "为什么选择 Lorelum",
-  featuresHeading: "为关键时刻而生",
-  featuresSub: "结构化的工程知识，在最重要的瞬间被检索并注入。",
-  feature1Title: "是 Practice，不是提示词",
-  feature1Body: "结构化、可检索的工程准则——把你团队本来就在坚持的规则，变成机器可读的格式。",
-  feature2Title: "按需注入",
-  feature2Body: "在与任务相关的时刻精确注入，而不是在会话开始时就一次性倾倒。",
-  feature3Title: "本地优先的 MCP + CLI",
-  feature3Body: "本地 MCP 服务器与 lore CLI 让知识留在你的机器上，随时可供任意智能体使用。",
-  feature4Title: "开放格式与知识包",
-  feature4Body: "公开的 Practice/pack 规范与可共享的知识包——Apache-2.0，无锁定。",
-  // Stats
-  statsEyebrow: "数据一览",
-  statsHeading: "Lorelum 一览",
-  stats1Label: "份公开规范",
-  stats2Label: "种使用方式 —— CLI + MCP",
-  stats3Label: "开源（Apache-2.0）",
-  // Ecosystem
-  ecosystemEyebrow: "生态",
-  ecosystemHeading: "在你智能体所在之处工作",
-  ecosystemSub: "为你的编码智能体正在阅读的规则，提供唯一的事实来源。",
-  // FAQ
-  faqEyebrow: "常见问题",
-  faqHeading: "团队在切换前最常问的问题",
-  faq1q: "Lorelum 免费吗？",
-  faq1a: "是的——核心完全 Apache-2.0 开源，包括 Practice/pack 格式、CLI 和本地 MCP 服务器。",
-  faq2q: "这和写更好的提示词有什么区别？",
+    "长任务不断积累需求、规则、代码和探索记录。规则仍在上下文里，却可能在需要它的那次判断中没有得到足够关注。",
+  problem2Title: "建议正确，也要判断适用性",
+  problem2Body:
+    "熟悉的最佳实践也可能给局部改动增加多余工作。Agent 需要判断哪些指导适合当前任务、风险和时刻。",
+  problem3Title: "有些经验，尚未积累",
+  problem3Body:
+    "编写项目规则的前提，是你知道该写什么。共享 Knowledge Pack 让团队可以获取尚未积累的工程经验。",
+  featuresEyebrow: "Lorelum 如何介入",
+  featuresHeading: "围绕下一次判断，检索相关指导。",
+  featuresSub: "描述任务和时刻，选择相关 Practice，读完适用条件后再应用。",
+  feature1Title: "带适用条件的指导",
+  feature1Body:
+    "每条 Practice 说明具体做法、适用条件和需要避免的反模式，让工程建议保留必要的上下文。",
+  feature2Title: "本地 semantic retrieval",
+  feature2Body:
+    "用自然语言查询已安装 Pack，选择相关 Practice 并读取全文。需要做出的判断变化时，可以再次检索。",
+  feature3Title: "CLI、Skill 与 Codex",
+  feature3Body:
+    "能执行命令的 Agent 可以调用 CLI。Skill 指导何时检索，Codex Plugin 提供已安装 Pack 的目录。",
+  feature4Title: "可以持续维护的知识",
+  feature4Body:
+    "将团队 Practice 组织成可版本化、可分享的 Pack，也可以从官方 Pack 开始。随着工作演进，评审、验证并更新指导。",
+  statsEyebrow: "Public alpha",
+  statsHeading: "在本地使用可共享的工程知识",
+  stats1Label: "个本地检索引擎",
+  stats2Label: "个官方 Knowledge Pack",
+  stats3Label: "Core 开源 · Apache-2.0",
+  ecosystemEyebrow: "Agent 集成",
+  ecosystemHeading: "让知识参与现有工作流。",
+  ecosystemSub:
+    "能执行命令的 Agent 可以调用 lore。按宿主支持的方式安装 Skill，Codex 还提供官方 Plugin。",
+  faqEyebrow: "开始使用前",
+  faqHeading: "了解 Lorelum 的使用方式",
+  faq1q: "Alpha 提供哪些能力？",
+  faq1a:
+    "本地 semantic query、Practice 全文读取、Pack 管理，以及通过 CLI 接入 Agent。预编译发行包支持 macOS Apple Silicon，其他平台从源码构建。Lorelum Core 采用 Apache-2.0 开源。",
+  faq2q: "如何与 Skill、AGENTS.md 一起使用？",
   faq2a:
-    "提示词只告诉智能体一次该做什么。Lorelum 让你的工程 Practice 保持结构化、可检索，并在任务最需要时精确注入正确的那条。",
-  faq3q: "能和我的编码智能体一起用吗？",
-  faq3a: "任何读取 AGENTS.md 这类文件的智能体都可以直接使用——通过 CLI 或本地 MCP 服务器。",
-  faq4q: "我的知识存在哪里？",
-  faq4a: "在你的机器上。Lorelum 本地优先：不上传云端，无厂商锁定。",
-  // CTA + footer
-  ctaHeading: "别再把规则交给运气。",
-  ctaSub: "在正确的时刻，把正确的 Practice 交给你的智能体。",
+    "项目指令继续承载仓库规则，Skill 指导 Agent 行为。Lorelum 提供可版本化的工程知识，供它们围绕当前判断检索。重新注入让指令可用，但不保证变长的上下文中每条指令都获得同样的关注。",
+  faq3q: "需要先编写自己的 Practice 吗？",
+  faq3a:
+    "可以从 agentic-coding 开始，获取规划、实现、验证、恢复和交付中的指导。需要编写和评审自己的 Pack 时，再使用 pack-creator。",
+  faq4q: "检索在哪里运行？",
+  faq4a:
+    "Pack 和索引保存在本地 Store，semantic retrieval 使用本地模型。首次配置需要下载 Pack 和模型文件。Agent 读取的 Practice 会进入它的上下文，后续数据处理遵循对应宿主的规则。",
+  ctaHeading: "让工程经验参与下一次判断。",
+  ctaSub: "安装 Pack，描述任务，读完适用的指导。",
   footerDocs: "文档",
   footerGithub: "GitHub",
   footerDiscussions: "讨论",
   footerLicense: "Apache-2.0",
   notFoundTitle: "页面未找到",
-  notFoundDescription: "您访问的页面可能已被移除、改名，或暂时不可用。",
+  notFoundDescription: "此页面暂不可用。可以返回首页，或通过文档查找所需内容。",
   backHome: "返回首页",
   switchTo: "切换语言到",
 };

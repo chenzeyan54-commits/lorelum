@@ -1,0 +1,37 @@
+---
+title: Index 命令
+description: 查看、构建或重建 Store 的 semantic index。
+---
+
+Pack 安装通常会启动所需的 index 工作。这组命令用于查看进度或恢复已有 Store。
+
+所有命令支持全局选项 `--store-root <path>` 与 `--log-level <level>`。选中的 Store 持有 derived index；Backend 和模型设置仍属于用户级。
+
+```sh
+lore index status
+lore index build
+lore index rebuild
+lore index operation <operation-id>
+```
+
+## 构建与重建
+
+`build` 复用兼容的 index 数据，更新变更过的 Practice，必要时启动 Backend 并准备模型。如果 index 已覆盖 Store，可以直接返回。
+
+`rebuild` 完整构建替换版本。Lorelum 报告 index 不兼容时使用它。
+
+两条命令都可能在后台工作完成前返回。跟踪返回的 operation ID，直到 ready 或 failed。断开 CLI 不会取消已接受的工作。
+
+## 状态
+
+`status` 查看 Store 的 index，不启动 Backend。返回 `state`（`missing`、`ready`、`stale` 或 `incompatible`）、`profileId`，就绪时还包含 `vectorCount`。缺失时使用 `build`，不兼容时使用 `rebuild`。这些命令与 query 保持相同的 `--store-root`。
+
+`status` 和 `operation` 需要 Backend 已运行，本身不会启动服务。若服务已停止，先运行 `lore backend start` 再检查。
+
+## Operation 与错误
+
+同一时刻只构建一个 Store。遇到 `backend.busy`，等待当前工作完成。
+
+operation ID 属于当前 daemon。重启后返回 `backend.operation-expired` 时，先查看 `index status`，再按需构建。
+
+状态查询与已接受的构建退出 `0`，确认失败退出 `2`。任务被接受并不表示已经完成。当前 schema 见 `lore describe index.build`。

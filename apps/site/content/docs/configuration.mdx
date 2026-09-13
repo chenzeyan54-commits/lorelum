@@ -1,0 +1,70 @@
+---
+title: Configuration
+description: Choose a Store and configure the local model and service.
+icon: Settings
+---
+
+Lorelum runs with defaults. User-level settings live in `~/.lorelum/config.yaml` and apply to every Store.
+
+## Store scope
+
+Use one `--store-root` consistently for Pack installation, index operations, query, and get:
+
+```sh
+lore --store-root /path/to/store pack install agentic-coding@0.3.0
+lore --store-root /path/to/store query "how should I verify an authentication change?"
+```
+
+This option selects Pack data and derived indexes only. It does not select the model, model cache, Backend address, or runtime directory.
+
+## Model and Backend
+
+Semantic query and semantic index operations use the fixed local embedding model. The default cache is `~/.lorelum/models/`.
+
+```sh
+lore backend start
+lore model status
+lore model load
+lore model unload
+lore backend status
+lore backend stop
+lore backend start
+```
+
+Semantic commands start Backend when needed. Standalone model commands require it to be running, so start it explicitly when preparing the model in advance. `model load` waits for preparation and loading; `unload` releases the runtime but keeps the cache. Restart Backend after changing configuration.
+
+## Embedding settings
+
+```yaml
+embedding:
+  threads: 4
+  download:
+    enabled: true
+    connectTimeoutSeconds: 30
+    stallTimeoutSeconds: 60
+    maxAttempts: 3
+```
+
+| Field | Default | Contract |
+| --- | --- | --- |
+| `embedding.modelPath` | unset | Absolute path to the fixed model; validated, never overwritten. |
+| `embedding.cacheDirectory` | `~/.lorelum/models` | Absolute cache path when `modelPath` is unset. |
+| `embedding.threads` | `4` | Integer from 1 to 64. |
+| `embedding.download.enabled` | `true` | Whether missing model files may be downloaded. |
+| `embedding.download.url` | built-in pinned source | HTTPS mirror for the same file; resumable downloads required. |
+| `embedding.download.connectTimeoutSeconds` | `30` | Connection timeout in seconds. |
+| `embedding.download.stallTimeoutSeconds` | `60` | Maximum time without received bytes. |
+| `embedding.download.maxAttempts` | `3` | Attempts for transient failures. |
+
+Custom paths or mirrors must provide the fixed Q4_0 file (66,345,216 bytes; SHA-256 `18e8ce8ce834790618e90d26bed465cca87362076f3042eb0d8eee0732596f59`). A different model is rejected. With downloads disabled and no valid file, loading reports `embedding.not-configured`.
+
+## Backend timeouts
+
+```yaml
+backend:
+  startupTimeoutMs: 10000
+  requestTimeoutMs: 5000
+  shutdownTimeoutMs: 5000
+```
+
+Each value is an integer from 1 to 120000 milliseconds. `LORELUM_BACKEND_STARTUP_TIMEOUT_MS`, `LORELUM_BACKEND_REQUEST_TIMEOUT_MS`, and `LORELUM_BACKEND_SHUTDOWN_TIMEOUT_MS` override YAML. Startup covers service and native runtime; request covers one request; shutdown covers unload and stop.

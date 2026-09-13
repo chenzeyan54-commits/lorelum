@@ -4,6 +4,7 @@ import { i18n } from "@/shared/i18n/config";
 import { BrandLockup } from "@/shared/ui/brand-lockup";
 import { GitHubLink } from "./github-link";
 import { LandingPrimaryNavigation } from "./landing-primary-navigation";
+import { LanguageToggle } from "@/shared/ui/language-toggle";
 import { ThemeToggle } from "@/shared/ui/theme-toggle";
 import { useLandingNavbarMorph } from "./use-landing-navbar-morph";
 import "./landing-navbar.css";
@@ -40,6 +41,7 @@ export function LandingNavbar({ lang }: { lang: string }) {
           <LandingPrimaryNavigation lang={lang} />
 
           <div className="flex items-center justify-self-end gap-1">
+            <LanguageToggle lang={lang} />
             <ThemeToggle lang={lang} />
             <GitHubLink />
           </div>

@@ -1,0 +1,18 @@
+---
+title: Backend 命令
+description: 启动、查看和停止 Lorelum 本地服务。
+---
+
+Backend 是承载 embedding 和 semantic index 操作的长期本地服务。start、status、stop 与 Store 选择相互独立。
+
+```sh
+lore backend start
+lore backend status
+lore backend stop
+```
+
+`start` 会初始化缺失的默认配置，启动或复用兼容的本地实例，并等待其 ready；不会加载模型。`status` 返回 `state`、`model`，以及可用时的 `instanceId`、`buildIdentity`，不会启动进程。`stop` 等待服务退出，服务已停止时重复调用也安全。
+
+默认服务地址为 loopback（`127.0.0.1:26186`）。全局 `--store-root` 只影响 Store 数据；`--log-level` 控制 stderr 的进度与诊断日志。
+
+常见错误包括 `backend.unavailable`、`backend.port-conflict`、`backend.incompatible`、`backend.config-invalid`、`backend.busy`、`backend.failed` 和 `backend.deadline-exceeded`。按错误信息处理本地状态后重试。成功退出 `0`，失败退出 `2`。各子命令 schema 见 `lore describe backend.start` 等。

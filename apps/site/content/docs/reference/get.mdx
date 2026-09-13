@@ -1,0 +1,20 @@
+---
+title: get
+description: Read one installed Practice by its exact ID.
+---
+
+Read a complete Practice from the selected LocalStore. The command is local and does not need the Backend, model, or network.
+
+```sh
+lore get <practice-id> [--store-root <path>]
+```
+
+Use the exact `id` returned by [`query`](./query) or `lore pack list <pack>`; titles, prefixes, and filenames are not accepted.
+
+```sh
+lore get example.practice-id
+```
+
+Success data contains `practice` (the full Practice and metadata), `contentDigest`, and `sources` (`packName` and `sourcePath`). Use the `practiceId` returned by query as the exact `practice-id`. An invalid ID returns `usage.invalid`; an ID absent from the selected Store returns `practice.not-found`. Store contention and recovery report `store.busy` or `store.recovery-required`.
+
+Exit `0` means success; all declared failures exit `2`. Run `lore describe get` for the exact result schema.

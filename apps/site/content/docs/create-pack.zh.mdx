@@ -1,0 +1,96 @@
+---
+title: 创建 Pack
+description: 编写、验证并测试第一条工程 Practice。
+icon: PenLine
+---
+
+有用的 Pack 从你熟悉的工程判断开始。本例编写一条指导：在宣布用户可见改动完成前，验证完整使用流程。
+
+## 1. 创建文件
+
+创建以下目录结构：
+
+```text
+team-engineering/
+├── pack.yaml
+└── practices/
+    └── verify-user-flow.md
+```
+
+在 `pack.yaml` 中填写清单：
+
+```yaml
+name: team-engineering
+version: 0.1.0
+description: Engineering guidance for delivering complete user-visible changes.
+license: CC-BY-4.0
+```
+
+Pack 名称是稳定的 kebab-case 标识，版本遵循语义化版本规则。许可证应根据你要分发的内容选择。
+
+## 2. 编写一条 Practice
+
+在 `practices/verify-user-flow.md` 中写入：
+
+```markdown
+---
+id: delivery.verify-user-flow
+title: 验证完整用户流程
+stage: verification
+tech_stack: [web]
+applies_when: 准备报告用户可见改动已完成时。
+severity: warn
+---
+
+# 验证完整用户流程
+
+选择验证方式前，先阅读已确认的验收条件。
+
+1. 明确用户操作及其预期可观察结果。
+2. 检查相关流程中的 UI、API 和持久化数据。
+3. 验证适用的失败路径或权限拒绝路径。
+4. 分别报告已验证的验收条件和仍未完成的部分。
+
+例如，账户设置表单成功渲染，并不能证明保存后的值在刷新后仍存在。如果持久化属于需求，就需要验证这一行为。
+
+验证规模应与实际改动和风险相称。仅修改文案时，无需重新验证无关的 API 或存储行为。
+```
+
+必填元数据为 `id`、`title`、`stage`、`tech_stack` 和 `applies_when`。点号分隔的 `id` 是读取标识；`applies_when` 说明指导适用的任务或时刻。每条 Practice 都应能独立理解。
+
+## 3. 验证
+
+对 Pack 目录运行：
+
+```sh
+lore validate ./team-engineering
+```
+
+检查 `data.pack.valid` 和 `data.pack.diagnostics`，发布前修复错误。验证发现问题时，命令可以返回成功响应并退出 `1`。验证、格式化和本地化命令见[编写命令](./reference/authoring)。
+
+格式验证不能代替内容评审。还需要判断 Agent 能否识别触发条件、执行指导中的动作，并理解建议的适用边界。
+
+## 4. 测试发行产物
+
+按 [Pack 仓库的编写与发布说明](https://github.com/lorelum/lorelum-packs)发布可安装产物和 registry 条目。CLI 安装的是 registry release，本地源文件目录不能直接作为 `pack install` 参数。
+
+发布后，将示例 registry 和版本替换为自己的信息：
+
+```sh
+lore --store-root /path/to/test-store pack install team-engineering@0.1.0 --registry owner/repository
+lore --store-root /path/to/test-store query "我修改了账户设置，准备判断是否可以报告整个功能完成。"
+lore --store-root /path/to/test-store get delivery.verify-user-flow
+```
+
+检查安装返回的索引状态，完成尚未结束的工作后再评价检索结果。分别测试一个适用任务和一个超出 Pack 范围的任务。
+
+## 获取编写指导
+
+官方 `pack-creator` Pack 提供更详细的指导：
+
+```sh
+lore pack install pack-creator@0.1.0
+lore query "我正在编写 Knowledge Pack，准备评审每条 Practice 能否独立使用，以及适用边界是否明确。"
+```
+
+用 `lore get` 读取相关结果。分享 Pack 时，说明用途、安装命令、查询示例、许可证和测试过的 Lorelum 版本。

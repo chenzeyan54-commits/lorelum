@@ -1,0 +1,80 @@
+---
+title: CLI 参考
+description: 命令发现、全局选项、JSON 响应和退出码。
+icon: Terminal
+---
+
+`lore` CLI 是 Agent 集成调用 Lorelum 的接口。每次调用都向 stdout 输出一个 JSON 响应，包括 help 和 version 命令。诊断和进度输出到 stderr。
+
+## 命令目录
+
+| 命令                                                 | 用途                               |
+| ---------------------------------------------------- | ---------------------------------- |
+| [query](./reference/query)                           | 围绕任务和时刻检索 Practice 摘要。 |
+| [get](./reference/get)                               | 读取已安装 Practice 的全文。       |
+| [pack](./reference/packs)                            | 安装、列出、更新和移除 Pack。      |
+| [index](./reference/indexing)                        | 检查、构建和重建 semantic index。  |
+| [model](./reference/model)                           | 检查、加载和卸载 embedding 模型。  |
+| [backend](./reference/backend)                       | 启动、检查和停止本地服务。         |
+| [validate、format、i18n sync](./reference/authoring) | 验证 Pack 内容并维护本地化。       |
+| `describe`                                           | 返回命令能力和 schema。            |
+
+## 查询已安装版本的合同
+
+```sh
+lore describe
+lore describe query
+lore describe index.build
+lore --help
+lore --version
+```
+
+`describe` 返回参数、选项、结果 schema、错误码和退出码。嵌套命令使用点号标识：`index.build` 对应 `lore index build`。
+
+针对某个发行版本编写自动化时，以已安装的 schema 为准。Alpha 版本可能调整命令合同。
+
+## 全局选项
+
+| 选项                  | 用途                                              |
+| --------------------- | ------------------------------------------------- |
+| `--store-root <path>` | 选择 Pack、query、get 和 index 命令使用的 Store。 |
+| `--log-level <level>` | 设置 stderr 诊断级别，默认 `error`。              |
+| `--help`、`-h`        | 返回机器可读的命令能力。                          |
+| `--version`、`-V`     | 在根命令返回协议和工具版本。                      |
+
+相对 Store 路径基于当前工作目录解析。相关命令应使用同一个 root：
+
+```sh
+lore --store-root /path/to/store pack list
+lore --store-root /path/to/store query "评审一个局部 UI 修改的需求范围"
+```
+
+模型配置和 Backend 运行状态仍属于用户级环境。详细说明见[配置](./configuration)。
+
+## 响应结构
+
+每个响应都包含 `protocolVersion`、`toolVersion`、`command` 和 `ok`。
+
+| 字段              | 含义                             |
+| ----------------- | -------------------------------- |
+| `protocolVersion` | JSON 协议版本。                  |
+| `toolVersion`     | 已安装 CLI 的版本。              |
+| `command`         | 生成结果的命令标识。             |
+| `ok`              | 本次调用是否产生成功的命令结果。 |
+| `data`            | 成功时的命令结果。               |
+| `error.code`      | 失败时的稳定错误标识。           |
+| `error.message`   | 失败时供人阅读的原因说明。       |
+
+程序应按错误码分支，不解析错误消息。响应成功时，仍需检查命令的具体状态，才能判断异步工作是否完成。
+
+## 退出码
+
+| 退出码 | 含义                                                              |
+| ------ | ----------------------------------------------------------------- |
+| `0`    | 成功结果，也可能只是接受了仍在执行的 operation。                  |
+| `1`    | 命令特定的诊断或尚未完成的结果，例如 query 准备中或验证发现问题。 |
+| `2`    | 调用失败，检查 `error.code`。                                     |
+
+query 返回 `ok: true` 且 `data.state: "preparing"` 时退出码为 `1`，不代表查询结果为空。index 命令接受后台工作后可以退出 `0`；需要根据返回的 operation ID 继续检查是否完成。
+
+各命令参考说明其支持的状态和退出码。

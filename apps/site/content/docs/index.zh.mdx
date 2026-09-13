@@ -1,71 +1,58 @@
 ---
-title: 简介
-description: Lorelum 在正确的任务与关键时刻，为 AI 编码智能体检索正确的工程 Practice。
-icon: Rocket
+title: 概述
+description: 在正确的任务、正确的时刻，为 Agent 提供正确的工程 Practice。
+icon: BookOpen
 ---
 
-Lorelum 把团队的工程经验沉淀为离散、可检索、按触发条件注入的 **Practice**，并在需要的那一刻注入到 AI 上下文。
+Lorelum 为 AI 编码 Agent 检索工程指引。它把可复用的工程经验组织成 **Practice**：离散、可检索、带适用条件的指导。**Knowledge Pack（知识包）** 将多条 Practice 组织成可安装、可分享的版本化集合，后文简称 Pack。
 
-<Callout type="info">
-本页用于在 TanStack Start 上验证 Fumadocs 的中英双语能力：MDX 组件、Shiki 高亮、表格与搜索都应在同一个可静态渲染的应用中工作。
-</Callout>
+调用方描述 Agent 正在做什么、即将做出什么判断。Lorelum 从已安装 Pack 中检索相关 Practice 摘要，Agent 读取全文后，再将指导用于当前任务。
 
-## 检索如何工作
+专业团队可以维护自己的标准；vibe coder 和小团队也可以从共享 Pack 开始，不必先独自发现所有工程反模式。
 
-两类线索驱动检索：
+## 从这里开始
 
-- **任务（Task）** —— 智能体当前正在做什么。
-- **时刻（Moment）** —— 智能体正处于开发生命周期的哪个阶段。
+| 你要做什么                        | 阅读                        |
+| --------------------------------- | --------------------------- |
+| 安装 Lorelum，检索第一条 Practice | [快速开始](./quickstart)    |
+| 选择安装方式或更新 CLI            | [安装](./installation)      |
+| 在编码 Agent 中使用 Lorelum       | [接入 Agent](./agent-setup) |
+| 查找和管理工程知识                | [安装与管理 Pack](./packs)  |
+| 编写自己的工程指引                | [创建 Pack](./create-pack)  |
+| 查询参数、返回字段或错误          | [CLI 参考](./cli)           |
 
-<Tabs items={['任务', '时刻', '组合']}>
-  <Tab value="任务">
-    正在构建认证流程、修改数据库结构、编写组件测试。
-  </Tab>
-  <Tab value="时刻">
-    刚开始理解复杂需求、在上下文压缩后恢复、决定是否修改失败的测试。
-  </Tab>
-  <Tab value="组合">
-    调用方同时描述两者；Lorelum 对相关 Practice 进行排序。
-  </Tab>
-</Tabs>
+## 围绕任务和时刻检索
 
-## 示例查询
+有效的查询同时说明当前工作和需要做出的判断：
 
-```text
-$ lore query "我正在实现权限管理，定向测试已通过，准备宣布整个能力完成。"
+```sh
+lore query "我正在按现有设计实现设置卡片，准备确定改动范围、实现计划和验证方式。"
 ```
 
-### TypeScript
+使用结果中的 `practiceId` 读取完整 Practice：
 
-```ts
-import { retrieve } from '@lorelum/engine';
-
-const result = await retrieve({
-  task: 'building the RBAC admin panel',
-  moment: 'about to claim completion',
-});
+```sh
+lore get <practice-id>
 ```
 
-### Shell
+同一任务在规划、实现、恢复和验证时，可能需要不同的指导。判断发生变化时可以再次检索，无需在每条命令前机械调用。具体方法见[检索与应用 Practice](./retrieval)。
 
-```bash
-lore query "building the RBAC admin panel"
-```
+## 核心概念
 
-## 上线步骤
+| 概念           | 含义                                                              |
+| -------------- | ----------------------------------------------------------------- |
+| Practice       | 独立完整的工程指引，说明适用条件、具体做法和需要避免的反模式。    |
+| Knowledge Pack | 围绕某个领域、技术栈或团队标准组织的版本化 Practice 集合。        |
+| Store          | 本地已安装 Pack 及其派生索引的存储位置。                          |
+| Skill          | 指导 Agent 判断何时检索、如何应用 Practice 的说明。               |
+| Plugin         | 面向具体 Agent 宿主的集成，可包含 Skill 和受支持的生命周期 Hook。 |
 
-<Steps>
-  <Step>通过 Bun 或 npm 安装 Lorelum。</Step>
-  <Step>为你的团队编写一组 Practices。</Step>
-  <Step>连接 Skill 或 Plugin/Hook 来触发检索。</Step>
-</Steps>
+默认自然语言检索使用本地 embedding 模型；也可以明确选择离线关键词检索。两者都检索所选 Store 中的 Pack，不搜索互联网。
 
-## 功能矩阵
+## Lorelum 的职责
 
-| 功能          | 状态     |
-| ------------- | -------- |
-| MDX 组件      | ✅ 可用  |
-| Shiki 高亮    | ✅ 可用  |
-| 静态搜索      | ✅ 可用  |
-| i18n（中英）  | ✅ Spike  |
-| Cloudflare Pages | 🚧 Spike |
+Lorelum 负责检索和排序 Practice。调用方负责描述任务与时刻、读取指导，并结合仓库事实和用户要求判断如何应用。
+
+Lorelum Core 不管理任务、不读取完整会话，也不自行推断宿主生命周期事件。[Codex Plugin](./codex) 在受支持的会话事件中提供 Pack 目录，但目录出现不代表 Agent 已遵循所有相关 Practice。[为什么需要 Lorelum](./why-lorelum)说明它要解决的知识与判断缺位。
+
+> Lorelum 处于 public alpha。更新共享环境前，请阅读 [Alpha 兼容性](./alpha)。

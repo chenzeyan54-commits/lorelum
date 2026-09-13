@@ -1,0 +1,53 @@
+---
+title: Pack 命令
+description: 安装、浏览、更新、移除和校验 Pack。
+---
+
+## 安装
+
+```sh
+lore pack install agentic-coding@0.3.0
+```
+
+全局 `--store-root <path>` 选择 LocalStore，`--log-level <level>` 控制 stderr 日志；`--registry <owner/repository>` 仅用于 install 和 update。
+
+指定版本可固定发行内容。省略版本时，使用 Registry 选择的最新版本。其他 Registry 通过 `--registry owner/repository` 指定。
+
+重复安装相同内容是安全的。如果同名 Pack 已安装不同内容，会返回 `pack.update-required`，请改用 `pack update`。
+
+安装也会启动 Pack 所需的 semantic index 工作。结果中的 `indexSync` 为 `ready`、`pending` 或 `failed`；index 失败不会撤销 Pack 安装。Registry、source、Pack 校验、Store 与 `pack.update-required` 错误退出 `2`，恢复步骤见[故障排查](../troubleshooting)。
+
+## 浏览
+
+```sh
+lore pack list
+lore pack list --details
+lore pack list agentic-coding
+```
+
+第一条列出已安装 Pack，`--details` 加上发现所需的元数据，指定 Pack 名则列出其中的 Practice。把结果中的 ID 传给 [get](./get)。
+
+## 更新和移除
+
+```sh
+lore pack update <pack-name>@<version>
+lore pack remove <pack-name>
+```
+
+每次更新一个 Pack。两条命令在 Pack 未安装时返回 `pack.not-installed`。
+
+## Validate a Pack
+
+```sh
+lore validate /path/to/pack
+```
+
+校验检查 Pack 并报告本地化状态，适合[创建 Pack](../create-pack) 时使用。退出码为 `0`、`1` 或 `2`；具体诊断与命令错误的区别见结果和 `lore describe validate`。
+
+## 选择 Store
+
+```sh
+lore --store-root /path/to/store pack install agentic-coding@0.3.0
+```
+
+所有 Pack 操作都使用选中的 Store。完整命令 schema 与错误见 `lore describe`。

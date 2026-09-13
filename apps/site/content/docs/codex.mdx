@@ -1,0 +1,58 @@
+---
+title: Codex
+description: Install the official Plugin to discover Packs and retrieve Practices in Codex.
+icon: Plug
+---
+
+The Lorelum Plugin gives Codex an installed-Pack catalog and a Skill for retrieving engineering Practices. The catalog helps Codex discover available knowledge; the Skill guides targeted queries and full Practice reads.
+
+## Prerequisites
+
+Complete [Quickstart](./quickstart), then check these commands in the environment that runs Codex:
+
+```sh
+lore --version
+lore pack list --details
+```
+
+The Plugin does not bundle, install, or update the CLI. It uses the Packs already installed in the local Store.
+
+## Install
+
+Add the marketplace and install the Plugin:
+
+```sh
+codex plugin marketplace add lorelum/lorelum
+codex plugin add lorelum@lorelum
+```
+
+Review the Plugin's Hook when Codex requests it, then start a new task. The Hook executes `lore pack list --details` to obtain Pack metadata.
+
+## How retrieval works
+
+1. At supported session-start events, the Hook supplies a compact catalog of installed Packs.
+2. The Skill uses the catalog as a relevance hint and queries for the task and current decision.
+3. Codex reads the complete Practice with `lore get` before applying its guidance.
+
+A catalog entry is not the full guidance. Catalog limits can omit Packs, so the catalog is not a hard filter on what may be relevant. Codex can refresh it with `lore pack list --details`.
+
+The Hook does not query, install Packs, or load the model by itself. When the Skill invokes a semantic query, the CLI starts the required Backend and prepares the model as needed.
+
+## Verify
+
+In a new task, ask Codex to use Lorelum before defining an implementation or verification plan. Check that it runs a meaningful query and reads a relevant Practice. If a query returns `preparing`, finish preparation and retry; a catalog alone does not verify semantic retrieval.
+
+## Update
+
+```sh
+codex plugin marketplace upgrade lorelum
+codex plugin add lorelum@lorelum
+```
+
+Review changed Hooks if Codex requests it, and start a new task. CLI and Pack updates remain separate.
+
+## Troubleshoot
+
+If the catalog is missing, check that `lore` is on the Codex process's `PATH`, a Pack is installed, and the Hook is approved. An unavailable CLI or malformed catalog produces a diagnostic; the task can continue without injected catalog context.
+
+Use [Troubleshooting](./troubleshooting) for model and index problems. See [Agent instructions](./agents) for response handling and retrieval behavior.

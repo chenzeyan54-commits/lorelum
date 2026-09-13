@@ -1,0 +1,33 @@
+---
+title: query
+description: Find the right installed Practices for an AI coding task and moment.
+---
+
+`query` searches the selected local Store and returns ranked Practice summaries. Semantic relevance is the default; keyword mode is an explicit offline path.
+
+```sh
+lore query <text> [--mode semantic|keyword] [--top-k <n>] [--store-root <path>]
+```
+
+`text` is required, must be non-empty after trimming, and is limited to 4,096 Unicode code points. `--top-k` accepts an integer from 1 to 50 and defaults to 5. `--mode` is `semantic` (default) or `keyword`. The global `--store-root` selects the LocalStore; `--log-level` controls stderr logging.
+
+```sh
+lore query "I am about to define scope and validation for a small UI change"
+lore query "authorization boundary" --top-k 10
+lore query "token session cookie" --mode keyword
+```
+
+Successful data has `mode` and `results`. Each result includes `practiceId`, `title`, `stage`, `techStack`, `appliesWhen`, `severity`, and `contentDigest`; pass that `practiceId` to [`get`](./get). Semantic results also include `profileId` and `coverage`: `complete` means every current Practice is indexed; `partial` means changed Practices are temporarily excluded, so results remain usable but may omit the newest content. Run `lore index build` to refresh coverage.
+
+If the semantic model is still preparing, data is `{ "state": "preparing", "preparationId": "...", "message": "..." }` and the process exits `1`; check `lore model status`, wait with `lore model load`, then retry. Query does not build a missing index.
+
+| Error | Action |
+| --- | --- |
+| `semantic.index-not-ready` | Run `lore index build`. |
+| `semantic.index-incompatible` | Run `lore index rebuild`. |
+| `semantic.embedding-failed` or `embedding.*` | Check `lore model status`, then retry `lore model load`. |
+| `query.unavailable` / `query.failed` | Inspect the keyword index and Store state. |
+| `store.busy` / `store.recovery-required` | Wait for the active Store operation or perform the documented recovery. |
+| `usage.invalid` | Correct the query text or option values. |
+
+Successful results exit `0`; preparation exits `1`; failures exit `2`. For the installed schema and complete error allowlist, run `lore describe query`.

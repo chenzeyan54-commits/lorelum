@@ -1,0 +1,80 @@
+---
+title: CLI reference
+description: Command discovery, global options, JSON responses, and exit codes.
+icon: Terminal
+---
+
+The `lore` CLI is the interface used by agent integrations. Every invocation writes one JSON response to stdout, including help and version commands. Diagnostics and progress go to stderr.
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| [query](./reference/query) | Retrieve Practice summaries by task and moment. |
+| [get](./reference/get) | Read an installed Practice in full. |
+| [pack](./reference/packs) | Install, list, update, and remove Packs. |
+| [index](./reference/indexing) | Inspect, build, and rebuild the semantic index. |
+| [model](./reference/model) | Inspect, load, and unload the embedding model. |
+| [backend](./reference/backend) | Start, inspect, and stop the local service. |
+| [validate, format, i18n sync](./reference/authoring) | Validate Pack content and maintain localization. |
+| `describe` | Return command capabilities and schemas. |
+
+## Discover the installed contract
+
+```sh
+lore describe
+lore describe query
+lore describe index.build
+lore --help
+lore --version
+```
+
+`describe` returns arguments, options, result schemas, error codes, and exit codes. Use dotted identifiers for nested commands: `index.build` describes `lore index build`.
+
+Use the installed schema when automating against a particular release. Alpha versions may change command contracts.
+
+## Global options
+
+| Option                | Purpose                                                        |
+| --------------------- | -------------------------------------------------------------- |
+| `--store-root <path>` | Select the Store used by Pack, query, get, and index commands. |
+| `--log-level <level>` | Set stderr diagnostic verbosity; default `error`.              |
+| `--help`, `-h`        | Return machine-readable command capabilities.                  |
+| `--version`, `-V`     | Return protocol and tool versions at the root command.         |
+
+Relative Store paths resolve from the current working directory. Use the same root across related commands:
+
+```sh
+lore --store-root /path/to/store pack list
+lore --store-root /path/to/store query "reviewing the scope of a small UI change"
+```
+
+Model configuration and Backend runtime remain user-level. See [Configuration](./configuration).
+
+## Response envelope
+
+Every response includes `protocolVersion`, `toolVersion`, `command`, and `ok`.
+
+| Field             | Meaning                                                      |
+| ----------------- | ------------------------------------------------------------ |
+| `protocolVersion` | Version of the JSON protocol.                                |
+| `toolVersion`     | Version of the installed CLI.                                |
+| `command`         | Identifier of the command that produced the result.          |
+| `ok`              | Whether the invocation produced a successful command result. |
+| `data`            | Command-specific result on success.                          |
+| `error.code`      | Stable error identifier on failure.                          |
+| `error.message`   | Human-readable explanation on failure.                       |
+
+Branch on error codes instead of parsing messages. Within a successful result, inspect command-specific state before treating asynchronous work as complete.
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Successful result, including an accepted operation that may still be running. |
+| `1` | A command-specific diagnostic or non-final result, such as query preparation or validation diagnostics. |
+| `2` | Failed invocation; inspect `error.code`. |
+
+A query with `ok: true` and `data.state: "preparing"` exits `1`. This is not an empty search result. Index commands can exit `0` after accepting work; use the returned operation ID to check completion.
+
+The command references specify which states and exit codes each command supports.

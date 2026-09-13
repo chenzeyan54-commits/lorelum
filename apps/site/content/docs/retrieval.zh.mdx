@@ -1,0 +1,50 @@
+---
+title: 检索与应用 Practice
+description: 按任务查找知识，阅读相关指导，再用于实际工作。
+icon: Search
+---
+
+有用的查询会同时描述决策和当前工作时刻，而不只是主题。“认证”是一个宽泛领域；“我正在添加登录页面，需要在编码前检查现有认证接口”则提供了可以匹配的任务。
+
+## 描述眼前的工作
+
+```sh
+lore query "我正在添加登录页面，需要在编码前检查现有认证接口。"
+```
+
+默认使用本地 semantic 检索。Lorelum 搜索当前 Store 中已安装的 Pack，默认返回最多五条摘要；`--top-k` 范围为 1–50。摘要只用于发现候选，完整指导需要另行获取。
+
+需要更多候选结果时：
+
+```sh
+lore query "审查数据库迁移和回滚方案" --top-k 10
+```
+
+## 阅读后再应用
+
+将结果中的 ID 传给 `get`：
+
+```sh
+lore get <practice-id>
+```
+
+阅读指导时，也要看适用条件。审查既有设计与选择新架构需要的建议可能不同，应采用符合当前任务的部分。
+
+Agent 通过 [Lorelum Skill](./agent-setup)执行同样的 query → get 流程。检索用于辅助判断，不能替代检查仓库、设计和验收条件。
+
+## 浏览已安装的内容
+
+已经知道需要哪个 Pack 时，浏览目录可能更直接：
+
+```sh
+lore pack list --details
+lore pack list agentic-coding
+```
+
+第一条列出 Pack 元数据，第二条列出某个 Pack 中的 Practice。这里展示的是本地安装内容，不是整个生态的 Pack 列表。
+
+## 找不到需要的结果
+
+先确认安装了相关 Pack，再补充具体的任务描述。Lorelum 能检索的知识来自你选择安装的 Pack。
+
+需要明确的离线查找或 semantic runtime 诊断时，才使用 `--mode keyword`；它不需要 Backend 或模型。`preparing`、错误与空结果分别表示不同状态。按[故障排查](./troubleshooting)完成模型准备或恢复 index。详细选项和响应字段见 [query 参考](./reference/query)。

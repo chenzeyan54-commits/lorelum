@@ -1,0 +1,24 @@
+{
+  "pages": [
+    "index",
+    "---Get started---",
+    "quickstart",
+    "installation",
+    "---Guides---",
+    "retrieval",
+    "packs",
+    "create-pack",
+    "---Agent integrations---",
+    "agent-setup",
+    "codex",
+    "agents",
+    "---Reference---",
+    "cli",
+    "reference",
+    "configuration",
+    "---Resources---",
+    "troubleshooting",
+    "why-lorelum",
+    "alpha"
+  ]
+}

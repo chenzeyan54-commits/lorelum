@@ -1,0 +1,76 @@
+---
+title: Quickstart
+description: Install a Pack, retrieve relevant guidance, and connect your agent.
+icon: Rocket
+---
+
+This guide takes you from a working CLI to your first full Practice. Prebuilt alpha releases support macOS on Apple Silicon; see [Installation](./installation) for the installer and source-build path.
+
+## Let your agent run the setup
+
+Hand the complete setup to a command-capable agent:
+
+```text
+Set up Lorelum v0.1.0-alpha.1 for this project using
+https://lorelum.com/en/docs/agents.md. Install the CLI and the agentic-coding
+Pack, connect the Lorelum Skill for this host, then verify a natural-language
+query and a full Practice read before using it for work.
+```
+
+## 1. Check the CLI
+
+After installation, run:
+
+```sh
+lore --version
+```
+
+Lorelum returns JSON, including the installed tool version. Check it in the same environment your agent uses.
+
+## 2. Install a Knowledge Pack
+
+The official `agentic-coding` Pack covers engineering decisions during planning, implementation, verification, recovery, and delivery:
+
+```sh
+lore pack install agentic-coding@0.3.0
+```
+
+Installation saves the Pack and starts the semantic index work it needs. Check `data.indexSync`: the Pack can be installed while model preparation or indexing is pending. See [Pack commands](./reference/packs).
+
+## 3. Describe the task and moment
+
+```sh
+lore query "I am implementing a settings card from an existing design. I am about to define the scope, implementation plan, and validation."
+```
+
+A ready result contains `data.results`. Each item includes `practiceId`, `title`, and `appliesWhen` to help you choose relevant guidance.
+
+The first query may return `data.state: "preparing"` while the local model downloads or loads. Wait for it, then retry:
+
+```sh
+lore model load
+```
+
+If the query reports `semantic.index-not-ready`, run `lore index build`. When it returns an operation ID, inspect it with `lore index operation <operation-id>` until it is ready, then repeat the query. [Troubleshooting](./troubleshooting) covers failed preparation and other errors.
+
+## 4. Read the Practice
+
+Replace the placeholder with a `practiceId` from the result:
+
+```sh
+lore get <practice-id>
+```
+
+Read the full instructions and applicability conditions. The summary helps you choose what to read; the body is the guidance you apply. For this example, use it to define the settings card's requested scope and a proportionate verification plan.
+
+## 5. Connect your agent
+
+Follow [Agent integration](./agent-setup) to install the Lorelum Skill, or the [Codex Plugin](./codex) if you use Codex. In a new task, ask:
+
+```text
+Use Lorelum before planning this change. Describe the task and current
+decision, retrieve relevant Practices, and read the full text of any
+Practice you use. Explain how the guidance affects the plan.
+```
+
+Continue with [Retrieve and apply Practices](./retrieval) for query examples or [Install and manage Packs](./packs) to choose more knowledge.

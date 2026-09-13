@@ -1,0 +1,39 @@
+---
+title: Why Lorelum
+description: Bring engineering knowledge and judgment into the task when they are needed.
+icon: Lightbulb
+---
+
+Working code can still miss an engineering boundary. A login page may render correctly while putting HTTP calls and token persistence inside the component. A narrow UI change may acquire extra behavior, abstractions, and tests before the user has agreed to any of them.
+
+These problems share a knowledge-and-judgment gap: the relevant guidance does not reliably reach the agent, with its applicability boundary, when the agent plans or acts.
+
+## Make guidance specific to the decision
+
+Project instructions remain useful for durable repository rules. Reusable engineering experience also needs a way to be selected for the current task.
+
+Lorelum packages that experience as Practices and retrieves them on demand. A query can describe the implementation goal, its scope and risk, and the moment of judgment:
+
+```sh
+lore query "I am implementing a settings card from an existing design. I am about to define the scope, implementation plan, and validation."
+```
+
+The agent reads relevant results with `lore get`, checks their applicability against the design and repository, and uses them to keep the plan proportional to the requested change.
+
+## Support teams and individual developers
+
+Teams can maintain Practices for their own standards and recurring decisions. Vibe coders and small teams can install shared Knowledge Packs to access experience they have not yet collected themselves.
+
+Packs are versioned and portable across command-capable agents. The [Skill](./agent-setup) explains when to retrieve, while the CLI supplies the same retrieval and reading interface.
+
+## Revisit guidance as the work changes
+
+A task can need scope guidance before implementation, recovery guidance after context loss, and verification guidance before a completion claim. The caller can query again for those moments.
+
+Lorelum Core does not inspect the whole conversation or control compaction. Lifecycle integrations depend on the host. The current [Codex Plugin](./codex) supplies an installed-Pack catalog; broader compaction guidance described in the project research is not a universal shipped capability.
+
+## Keep responsibility with the caller
+
+Retrieval gives the agent relevant guidance, not proof that the implementation is correct. The agent still needs to read the code, honor the user's scope, and verify the requested result. Practice applicability determines whether a recommendation belongs in this task.
+
+Start with [Quickstart](./quickstart), then [Retrieve and apply Practices](./retrieval) to use that guidance in real work.

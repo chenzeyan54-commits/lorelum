@@ -1,0 +1,50 @@
+---
+title: Retrieve and apply Practices
+description: Search by task, read the relevant guidance, and put it to work.
+icon: Search
+---
+
+A useful query describes both a decision and the moment of work. “Authentication” names a broad area; “I am adding a login screen and need to check the existing authentication API before coding” gives Lorelum a task to match.
+
+## Search the work in front of you
+
+```sh
+lore query "I am adding a login screen and need to check the existing authentication API before coding."
+```
+
+The default is local semantic retrieval. Lorelum searches Packs installed in the selected Store and returns up to five summaries; `--top-k` accepts 1–50. A summary is discovery material, not the complete Practice.
+
+To ask for more candidates:
+
+```sh
+lore query "reviewing a database migration and its rollback plan" --top-k 10
+```
+
+## Read before applying
+
+Pass a returned ID to `get`:
+
+```sh
+lore get <practice-id>
+```
+
+Read the applicability conditions as well as the instructions. A Practice about reviewing an existing design may help with a different decision from one about choosing a new architecture. Keep the guidance that fits the task.
+
+An agent follows the same query → get flow through the [Lorelum Skill](./agent-setup). Retrieval supports judgment; it does not replace checking the repository, design, or acceptance criteria.
+
+## Browse what is installed
+
+When you know which Pack you need, browsing can be quicker than another search:
+
+```sh
+lore pack list --details
+lore pack list agentic-coding
+```
+
+The first command lists Pack metadata; the second lists Practices in one Pack. Both describe your local installation, not every Pack available in the ecosystem.
+
+## When results are missing
+
+Check that a relevant Pack is installed, then make the task description more specific. Lorelum can only retrieve knowledge from the Packs you have chosen.
+
+Use `--mode keyword` only for an intentional offline lookup or semantic-runtime diagnosis; it does not need Backend or the model. A `preparing` response or an error is different from an empty result. Follow [Troubleshooting](./troubleshooting) to finish model preparation or restore the index. Detailed options and response fields are in the [query reference](./reference/query).

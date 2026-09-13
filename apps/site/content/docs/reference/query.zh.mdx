@@ -1,0 +1,33 @@
+---
+title: query
+description: 为 AI coding task 和 moment 找到合适的已安装 Practice。
+---
+
+`query` 搜索选中的本地 Store，返回按相关性排序的 Practice 摘要。默认使用 semantic relevance；`keyword` 是明确指定的离线路径。
+
+```sh
+lore query <text> [--mode semantic|keyword] [--top-k <n>] [--store-root <path>]
+```
+
+`text` 必填，去除首尾空白后不能为空，最多 4,096 个 Unicode 码点。`--top-k` 接受 1–50 的整数，默认 5。`--mode` 可选 `semantic`（默认）或 `keyword`。全局 `--store-root` 选择 LocalStore，`--log-level` 控制 stderr 日志级别。
+
+```sh
+lore query "我将为一个小型 UI 改动定义范围和验证方式"
+lore query "授权边界" --top-k 10
+lore query "token session cookie" --mode keyword
+```
+
+成功结果包含 `mode` 和 `results`。每项包含 `practiceId`、`title`、`stage`、`techStack`、`appliesWhen`、`severity`、`contentDigest`；将该 `practiceId` 传给 [`get`](./get)。Semantic 结果还包含 `profileId` 与 `coverage`：`complete` 表示当前所有 Practice 都已建立 index；`partial` 表示变更过的 Practice 暂时排除，结果仍可用但可能缺少最新内容。运行 `lore index build` 可刷新 coverage。
+
+模型仍在准备时，data 为 `{ "state": "preparing", "preparationId": "...", "message": "..." }`，进程退出码为 `1`；查看 `lore model status`，用 `lore model load` 等待后重试。query 不会构建缺失的 index。
+
+| 错误 | 处理 |
+| --- | --- |
+| `semantic.index-not-ready` | 运行 `lore index build`。 |
+| `semantic.index-incompatible` | 运行 `lore index rebuild`。 |
+| `semantic.embedding-failed` 或 `embedding.*` | 查看 `lore model status`，再重试 `lore model load`。 |
+| `query.unavailable` / `query.failed` | 检查 keyword index 与 Store 状态。 |
+| `store.busy` / `store.recovery-required` | 等待 Store 操作完成或按文档执行恢复。 |
+| `usage.invalid` | 修正查询文本或选项值。 |
+
+成功退出 `0`，准备中退出 `1`，失败退出 `2`。完整 schema 与错误允许列表见 `lore describe query`。

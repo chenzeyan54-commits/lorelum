@@ -2,12 +2,13 @@
 
 ## Supported Versions
 
-Lorelum is in active early development. Security fixes are applied to the latest `main` branch only — there are no stable release lines yet.
+Lorelum is a public alpha. Security fixes are applied to the latest `main` branch and the latest exact alpha release. Older alpha versions may require an upgrade rather than a backport.
 
-| Version         | Supported |
-| --------------- | --------- |
-| `main`          | ✅        |
-| tagged releases | ✅        |
+| Version                | Supported        |
+| ---------------------- | ---------------- |
+| `main`                 | ✅               |
+| latest published alpha | ✅               |
+| older alpha releases   | best effort only |
 
 ## Reporting a Vulnerability
 
@@ -42,13 +43,17 @@ We follow **coordinated disclosure**. Once a fix is released, we'll credit you i
 - The Lorelum CLI (`lore`) and local engine in this repository
 - Security issues caused by how Lorelum parses, stores, or retrieves knowledge packs
 - Injection risks via malicious pack content
+- The official Codex Plugin and its released CLI integration contract
 
 **Out of scope:**
 
 - Vulnerabilities in third-party dependencies (report to the upstream maintainer)
 - Issues in the SaaS platform / enterprise components (separate private repos)
 - Social engineering, physical attacks, DoS
+- Security defects owned by a third-party Pack's source repository; report them to that Pack's maintainer as well
 
 ## Security design notes
 
-Lorelum retrieves and injects third-party knowledge-pack content into AI context. Treat **any community pack like any other open-source dependency** — review it before installing, just as you would a npm package. The registry will ship quality scoring and sensitive-info scanning, but human review is the final gate.
+Lorelum retrieves and injects third-party knowledge-pack content into AI context. Treat **any community Pack like any other open-source dependency** — review it before installing, just as you would a package dependency. An `awesome-lorelum` listing is a discovery aid, not a security audit, content review, or compatibility certification.
+
+During alpha, use an isolated `--store-root` when evaluating unfamiliar Packs. A Pack can affect the guidance an agent receives even when it does not execute code locally. Do not include private Pack contents, credentials, access tokens, or personal data in a public issue, listing submission, or vulnerability report.

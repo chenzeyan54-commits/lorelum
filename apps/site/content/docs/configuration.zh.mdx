@@ -1,0 +1,87 @@
+---
+title: 配置
+description: 选择 Store，并配置本地模型和服务。
+icon: Settings
+---
+
+Lorelum 默认即可使用。用户级配置保存在 `~/.lorelum/config.yaml`，并由所有 Store 共享。
+
+## 选择 Store
+
+用 `--store-root` 将项目的 Pack 和 index 单独保存：
+
+```sh
+lore --store-root /path/to/store pack install agentic-coding@0.3.0
+lore --store-root /path/to/store query "认证改动应该怎样验证？"
+```
+
+安装、index、query 和 `get` 应使用同一个 Store root。这个选项只选择 Pack 数据与派生 index，不会改变模型、缓存、Backend 地址或 runtime 目录。
+
+## 本地模型
+
+默认 query 和 semantic index 使用固定的本地 embedding 模型。Lorelum 按需下载并复用缓存文件，缓存位于 `~/.lorelum/models/`。
+
+```sh
+lore backend start
+lore model status
+lore model load
+lore model unload
+```
+
+独立运行 model 命令需要 Backend 已启动，因此提前准备模型时先运行 `backend start`。`load` 等待模型准备和加载完成；`unload` 释放运行时，但保留模型缓存。详见 [Model 命令](./reference/model)。
+
+## 本地服务
+
+semantic 检索需要服务时，Backend 会自动启动。修改配置后可以用以下命令检查或重启：
+
+```sh
+lore backend status
+lore backend stop
+lore backend start
+```
+
+配置无效时会明确报错。修改配置后重启 Backend 才会生效。
+
+## 模型设置
+
+需要覆盖默认值时，在 `config.yaml` 中加入 `embedding`：
+
+```yaml
+embedding:
+  threads: 4
+  download:
+    enabled: true
+    connectTimeoutSeconds: 30
+    stallTimeoutSeconds: 60
+    maxAttempts: 3
+```
+
+| 字段 | 默认值 | 用途 |
+| --- | --- | --- |
+| `embedding.modelPath` | 未设置 | 固定模型文件的绝对路径；Lorelum 会验证，但不会覆盖该文件。 |
+| `embedding.cacheDirectory` | `~/.lorelum/models` | 未设置 `modelPath` 时使用的缓存绝对路径。 |
+| `embedding.threads` | `4` | CPU 线程数，范围 1–64。 |
+| `embedding.download.enabled` | `true` | 缺少模型时是否允许下载。 |
+| `embedding.download.url` | 内置固定来源 | 同一模型文件的 HTTPS 镜像，需支持断点续传。 |
+| `embedding.download.connectTimeoutSeconds` | `30` | 各连接阶段的超时秒数。 |
+| `embedding.download.stallTimeoutSeconds` | `60` | 连续没有收到文件字节的最长秒数。 |
+| `embedding.download.maxAttempts` | `3` | 临时网络错误的尝试次数。 |
+
+自定义路径或镜像必须提供固定的 Q4_0 模型：66,345,216 字节，SHA-256 为 `18e8ce8ce834790618e90d26bed465cca87362076f3042eb0d8eee0732596f59`。它不能用来选择其他模型。禁用下载且没有有效模型时，加载返回 `embedding.not-configured`。
+
+## 服务设置
+
+```yaml
+backend:
+  startupTimeoutMs: 10000
+  requestTimeoutMs: 5000
+  shutdownTimeoutMs: 5000
+```
+
+三个值均为 1–120000 的整数，单位毫秒。以下环境变量可以覆盖 YAML：
+
+- `LORELUM_BACKEND_STARTUP_TIMEOUT_MS`
+- `LORELUM_BACKEND_REQUEST_TIMEOUT_MS`
+- `LORELUM_BACKEND_SHUTDOWN_TIMEOUT_MS`
+
+startup 控制服务与 native runtime 启动，request 控制单次请求，shutdown 控制卸载与停止。模型文件的下载时间由上面的下载设置控制。

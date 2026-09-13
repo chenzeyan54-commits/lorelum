@@ -1,0 +1,37 @@
+---
+title: Index commands
+description: Inspect, build, or rebuild a Store's semantic index.
+---
+
+Pack installation normally starts the required index work. Use these commands to inspect progress or recover an existing Store.
+
+All commands accept the global `--store-root <path>` and `--log-level <level>` options. The selected Store owns the derived index; Backend and model settings remain user-level.
+
+```sh
+lore index status
+lore index build
+lore index rebuild
+lore index operation <operation-id>
+```
+
+## Build and rebuild
+
+`build` reuses compatible index data and updates changed Practices. It starts the Backend and prepares the model when needed. If the index already covers the Store, it can return without rebuilding.
+
+`rebuild` discards reuse and builds a complete replacement. Use it when Lorelum reports an incompatible index.
+
+Both commands can return while work continues. Follow the returned operation ID until the result is ready or failed. Disconnecting the CLI does not cancel accepted work.
+
+## Status
+
+`status` inspects the Store's index without starting the Backend. It returns `state` (`missing`, `ready`, `stale`, or `incompatible`), `profileId`, and, when ready, `vectorCount`. A missing index needs `build`; an incompatible index needs `rebuild`. Keep the same `--store-root` across these commands and your query.
+
+`status` and `operation` require a running Backend and do not start it themselves. If the service is stopped, run `lore backend start` before inspecting them.
+
+## Operations and errors
+
+Only one Store build runs at a time. If the Backend reports `backend.busy`, wait for the active work.
+
+Operation IDs belong to a running daemon. After a restart, `backend.operation-expired` means you should inspect `index status` and start another build if needed.
+
+Status and accepted builds exit `0`; confirmed failures exit `2`. An accepted operation is not necessarily finished. Run `lore describe index.build` for the current schema.

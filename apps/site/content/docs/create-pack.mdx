@@ -1,0 +1,96 @@
+---
+title: Create a Pack
+description: Write, validate, and test your first engineering Practice.
+icon: PenLine
+---
+
+A useful Pack starts with an engineering decision you know well. This example creates guidance for verifying a user-visible change before declaring it complete.
+
+## 1. Create the files
+
+Create a directory with this structure:
+
+```text
+team-engineering/
+├── pack.yaml
+└── practices/
+    └── verify-user-flow.md
+```
+
+Add a manifest in `pack.yaml`:
+
+```yaml
+name: team-engineering
+version: 0.1.0
+description: Engineering guidance for delivering complete user-visible changes.
+license: CC-BY-4.0
+```
+
+The Pack name is a stable kebab-case identifier. Its version uses semantic versioning. Choose a license appropriate to the content you are distributing.
+
+## 2. Write one Practice
+
+Add the following to `practices/verify-user-flow.md`:
+
+```markdown
+---
+id: delivery.verify-user-flow
+title: Verify the complete user flow
+stage: verification
+tech_stack: [web]
+applies_when: Preparing to report completion of a user-visible change.
+severity: warn
+---
+
+# Verify the complete user flow
+
+Read the agreed acceptance criteria before selecting verification.
+
+1. Identify the user action and its expected observable result.
+2. Check the relevant path through the UI, API, and persisted data.
+3. Exercise the applicable failure or denied-access path.
+4. Report which acceptance criteria were verified and which remain open.
+
+For an account-settings change, rendering the form does not demonstrate that a saved value survives reload. Verify that persistence when it is part of the requested behavior.
+
+Scale verification to the actual change and risk. A copy-only edit does not require revalidating unrelated API or storage behavior.
+```
+
+The required metadata is `id`, `title`, `stage`, `tech_stack`, and `applies_when`. The dotted `id` is the retrieval key; `applies_when` states the task or moment in which the advice helps. Keep each Practice independently understandable.
+
+## 3. Validate
+
+Run validation against the Pack directory:
+
+```sh
+lore validate ./team-engineering
+```
+
+Inspect `data.pack.valid` and `data.pack.diagnostics`. Fix errors before release. A successful invocation can exit `1` when validation finds problems; see [Authoring commands](./reference/authoring) for validation, formatting, and localization.
+
+Validation checks the format. To assess the guidance itself, ask whether an agent can recognize the trigger, take the specified actions, and understand where the advice stops applying.
+
+## 4. Test the released artifact
+
+Follow the [Pack repository's authoring and release instructions](https://github.com/lorelum/lorelum-packs) to publish an installable artifact and registry entry. The CLI installs registry releases; a local source directory is not a `pack install` argument.
+
+After publishing, replace the example registry and version with yours:
+
+```sh
+lore --store-root /path/to/test-store pack install team-engineering@0.1.0 --registry owner/repository
+lore --store-root /path/to/test-store query "I changed account settings and am deciding whether I can report the feature complete."
+lore --store-root /path/to/test-store get delivery.verify-user-flow
+```
+
+Check installation's index state and finish any pending work before judging retrieval. Try both an applicable task and a task outside the Pack's scope.
+
+## Get authoring guidance
+
+The official `pack-creator` Pack provides more detailed guidance:
+
+```sh
+lore pack install pack-creator@0.1.0
+lore query "I am writing a Knowledge Pack and reviewing whether each Practice is standalone and has a clear applicability boundary."
+```
+
+Read relevant results with `lore get`. Include the Pack's purpose, installation command, example queries, license, and tested Lorelum version when sharing it.

@@ -1,0 +1,18 @@
+---
+title: Backend commands
+description: Start, inspect, and stop Lorelum's local service.
+---
+
+The Backend is the long-lived local host for embedding and semantic index operations. Start, status, and stop are independent of Store selection.
+
+```sh
+lore backend start
+lore backend status
+lore backend stop
+```
+
+`start` initializes missing default configuration, starts or reuses a compatible local instance, and waits until it is ready. It does not load the model. `status` reports `state`, `model`, and, when available, `instanceId` and `buildIdentity`; it never starts a process. `stop` waits for the service to exit and is safe when it is already stopped.
+
+The default service address is loopback (`127.0.0.1:26186`). Global `--store-root` affects Store data only. `--log-level` controls stderr progress and diagnostics.
+
+Backend errors include `backend.unavailable`, `backend.port-conflict`, `backend.incompatible`, `backend.config-invalid`, `backend.busy`, `backend.failed`, and `backend.deadline-exceeded`. Correct the reported local condition and retry. Success exits `0`; failures exit `2`. Use `lore describe backend.start` (or the other subcommand) for the installed schema.
