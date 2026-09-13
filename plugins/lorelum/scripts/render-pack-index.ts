@@ -9,9 +9,9 @@ const CATALOG_INTRO = "This compact catalog is a relevance hint, not complete gu
 const CATALOG_FOOTER =
   "For a matching task or decision, use the Lorelum Skill to retrieve detailed Practices. Do not infer that a Pack is irrelevant from missing description or stack scope.";
 const TRUNCATION_NOTE =
-  "Catalog entries truncated. Other Packs may still be installed; run `lore list packs` to refresh when needed.";
+  "Catalog entries truncated. Other Packs may still be installed; run `lore pack list --details` to refresh when needed.";
 const MINIMAL_TRUNCATION_CONTEXT =
-  "Lorelum catalog truncated. Run `lore list packs` to refresh when needed.";
+  "Lorelum catalog truncated. Run `lore pack list --details` to refresh when needed.";
 
 export interface RenderPackIndexOptions {
   readonly maxCharacters?: number;

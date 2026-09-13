@@ -7,7 +7,7 @@ This is the first Codex integration for Lorelum. It brings relevant engineering 
 3. Codex queries targeted Practice summaries when the task, decision, verification, or recovery moment could benefit from them.
 4. Before applying a Practice or claiming that work follows it, Codex reads the full Practice.
 
-The bundled runtime integration calls `lore list packs`, the rich Pack metadata command defined by the list catalog contract (ADR 0014). It runs for supported `SessionStart` sources, including `compact`, so the Catalog is regenerated before Codex continues after compaction. The command invocation is isolated in `scripts/inject-pack-index.ts`; set `LORELUM_CLI_COMMAND` and `LORELUM_CLI_ARGS` (a JSON array of strings) to test with a custom executable, and pass a custom source in unit tests.
+The bundled runtime integration calls `lore pack list --details`, the rich Pack metadata command defined by the Pack catalog contract (ADR 0014). It runs for supported `SessionStart` sources, including `compact`, so the Catalog is regenerated before Codex continues after compaction. The command invocation is isolated in `scripts/inject-pack-index.ts`; set `LORELUM_CLI_COMMAND` and `LORELUM_CLI_ARGS` (a JSON array of strings) to test with a custom executable, and pass a custom source in unit tests.
 
 The integration requests Pack metadata only. It does not install or update Packs, or proactively run `lore query` or `lore get`; opening the LocalStore still follows its normal lifecycle. If the CLI is unavailable or returns malformed data, the integration writes a diagnostic to stderr and lets the host continue without additional context.
 
@@ -32,11 +32,11 @@ python "$env:USERPROFILE\.codex\skills\.system\plugin-creator\scripts\validate_p
 bun test plugins/lorelum/scripts
 ```
 
-The CLI and Store integration is connected end to end: the hook spawns `lore list packs` against the LocalStore and renders the returned summaries. To smoke-check it, install Packs into an isolated Store root, then run the command and pipe a hook event through the script:
+The CLI and Store integration is connected end to end: the hook spawns `lore pack list --details` against the LocalStore and renders the returned summaries. To smoke-check it, install Packs into an isolated Store root, then run the command and pipe a hook event through the script:
 
 ```powershell
-bun packages/cli/src/main.ts list packs --store-root D:\Temp\lore-e2e-store
+bun packages/cli/src/main.ts pack list --details --store-root D:\Temp\lore-e2e-store
 $env:LORELUM_CLI_COMMAND = "bun"
-$env:LORELUM_CLI_ARGS = '["packages/cli/src/main.ts","list","packs","--store-root","D:/Temp/lore-e2e-store"]'
+$env:LORELUM_CLI_ARGS = '["packages/cli/src/main.ts","pack","list","--details","--store-root","D:/Temp/lore-e2e-store"]'
 '{"hook_event_name":"SessionStart"}' | bun plugins/lorelum/scripts/inject-pack-index.ts
 ```

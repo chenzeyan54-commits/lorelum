@@ -11,7 +11,7 @@ Lorelum is an optional local retrieval layer for engineering Practices. It store
 
 1. Treat the injected **Installed Pack Catalog** as lightweight routing metadata, not as complete engineering guidance.
 2. Use each Pack's description and declared stack scope as relevance hints. A missing description or stack scope does not prove that a Pack is irrelevant; it only leaves less routing evidence.
-3. If the catalog is truncated or unavailable, do not assume omitted Packs are absent. Run `lore list packs` only when refreshing discovery would help the current task or decision.
+3. If the catalog is truncated or unavailable, do not assume omitted Packs are absent. Run `lore pack list --details` only when refreshing discovery would help the current task or decision.
 4. When a Pack may be relevant, query with both the task goal and the current work moment, for example:
 
    ```sh

@@ -1,4 +1,4 @@
-// Local re-declaration of the `lore list packs` summary (ADR 0014). The plugin
+// Local re-declaration of the `lore pack list --details` summary (ADR 0014). The plugin
 // is intentionally outside the Bun workspace, so it does not import
 // @lorelum/engine; keep this shape in sync with the CLI contract when either
 // side changes.

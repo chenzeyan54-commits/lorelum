@@ -8,7 +8,7 @@ import type {
 import { renderPackIndex } from "./render-pack-index";
 
 const DEFAULT_CLI_COMMAND = "lore";
-const DEFAULT_CLI_ARGS = ["list", "packs"] as const;
+const DEFAULT_CLI_ARGS = ["pack", "list", "--details"] as const;
 // Must stay below the `timeout` (seconds) declared in hooks/hooks.json so the
 // source times out and degrades before the host kills the hook process.
 export const DEFAULT_CLI_TIMEOUT_MS = 9_000;

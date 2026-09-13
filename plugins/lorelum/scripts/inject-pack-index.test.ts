@@ -83,23 +83,32 @@ describe("inject-pack-index", () => {
     }
   });
 
-  test("runs the hook entrypoint for SessionStart", async () => {
+  test("runs the hook entrypoint with default lore pack list details arguments", async () => {
     const rootPath = await mkdtemp(join(tmpdir(), "lorelum-plugin-hook-"));
-    const fakeSourcePath = join(rootPath, "fake-lore.ts");
+    const fakeCommandPath = join(rootPath, "pack");
     const hookPath = join(import.meta.dir, "inject-pack-index.ts");
     await writeFile(
-      fakeSourcePath,
-      'process.stdout.write(JSON.stringify({ ok: true, data: { packs: [{ name: "react", version: "1.0.0", appliesTo: ["frontend"] }] } }));',
+      fakeCommandPath,
+      [
+        "const args = process.argv.slice(2);",
+        'if (JSON.stringify(args) !== JSON.stringify(["list", "--details"])) {',
+        "  process.stderr.write(`unexpected arguments: ${JSON.stringify(args)}`);",
+        "  process.exitCode = 1;",
+        "} else {",
+        '  process.stdout.write(JSON.stringify({ ok: true, data: { packs: [{ name: "react", version: "1.0.0", description: "React engineering practices.", appliesTo: ["frontend"] }] } }));',
+        "}",
+      ].join("\n"),
       "utf8",
     );
 
     try {
+      const { LORELUM_CLI_ARGS: _ignoredCliArgs, ...environment } = process.env;
       const child = Bun.spawn([process.execPath, hookPath], {
         env: {
-          ...process.env,
+          ...environment,
           LORELUM_CLI_COMMAND: process.execPath,
-          LORELUM_CLI_ARGS: JSON.stringify([fakeSourcePath]),
         },
+        cwd: rootPath,
         stdin: "pipe",
         stdout: "pipe",
         stderr: "pipe",
@@ -117,7 +126,7 @@ describe("inject-pack-index", () => {
       expect(JSON.parse(stdout)).toEqual({
         hookSpecificOutput: {
           hookEventName: "SessionStart",
-          additionalContext: expect.stringContaining("react"),
+          additionalContext: expect.stringContaining("React engineering practices."),
         },
       });
     } finally {
