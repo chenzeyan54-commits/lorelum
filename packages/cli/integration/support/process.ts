@@ -23,8 +23,18 @@ export class ProcessTimeoutError extends Error {
 export async function runProcess(
   command: readonly string[],
   timeoutMs = 60_000,
+  input?: string,
 ): Promise<ProcessResult> {
-  const child = Bun.spawn({ cmd: [...command], stderr: "pipe", stdout: "pipe" });
+  const child = Bun.spawn({
+    cmd: [...command],
+    stdin: input === undefined ? "ignore" : "pipe",
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  if (input !== undefined) {
+    child.stdin.write(input);
+    child.stdin.end();
+  }
   const completed = Promise.all([
     new Response(child.stdout).text(),
     new Response(child.stderr).text(),

@@ -14,6 +14,20 @@ test("collects a completed process result", async () => {
   });
 });
 
+test("forwards optional standard input before collecting process output", async () => {
+  await expect(
+    runProcess(
+      [bunExecutable, "-e", "process.stdout.write(await Bun.stdin.text())"],
+      60_000,
+      "hook payload",
+    ),
+  ).resolves.toEqual({
+    exitCode: 0,
+    stderr: "",
+    stdout: "hook payload",
+  });
+});
+
 test("terminates a timed-out process before rejecting", async () => {
   try {
     await runProcess(

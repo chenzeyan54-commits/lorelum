@@ -4,28 +4,26 @@ This guide is for maintainers developing the **Lorelum** Codex Plugin from a che
 
 ## Source and contract boundary
 
-The Plugin source is [`plugins/lorelum`](../../plugins/lorelum). It is outside the Bun workspace and communicates with Lorelum only through the public `lore` CLI. Do not import Engine packages, read LocalStore files, or duplicate retrieval/ranking logic in the Plugin.
+The Plugin source is [`plugins/lorelum`](../../plugins/lorelum). It is outside the Bun workspace and communicates with Lorelum only through the public `lore` CLI. The CLI owns the Codex Hook protocol adapter and Catalog rendering; the Plugin owns lifecycle matching and Skill guidance. Do not import Engine packages, read LocalStore files, or duplicate retrieval/ranking logic in the Plugin.
 
-The Hook defaults to `lore list packs`; the Lorelum Skill invokes `lore query` and `lore get` when appropriate. A normal installed Plugin should therefore use the stable `lore` command from the primary checkout or a released CLI, not a command built from a temporary worktree. To validate current CLI source, use the source-entrypoint workflow in [Local CLI and multiple worktrees](./README.md#local-cli-and-multiple-worktrees) and pass it explicitly to the hook smoke test below.
+The Hook defaults to `lore hook codex`; the Lorelum Skill invokes `lore query` and `lore get` when appropriate. A normal installed Plugin requires Lorelum CLI v0.1.0 or later and should use the stable `lore` command from a release, not a command built from a temporary worktree. The Hook wrapper degrades safely when an older CLI does not recognize the ABI. To validate current CLI source, use the source-entrypoint workflow in [Local CLI and multiple worktrees](./README.md#local-cli-and-multiple-worktrees).
 
 ## Verify source changes
 
 From the repository root:
 
 ```sh
-bun test plugins/lorelum
+bun test packages/cli/src/hook plugins/lorelum/scripts
 python3 "$HOME/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py" plugins/lorelum
 ```
 
 The validator may require PyYAML in the Python environment. If it is unavailable, use the test suite and JSON/YAML structural checks as a fallback, but do not treat that fallback as a successful validator run.
 
-Smoke-test the Hook against the current CLI source without altering the global `lore` command. Use an isolated Store root for any Store-opening check:
+Smoke-test the Hook against the current CLI source without altering the global `lore` command. Use an isolated Store root for any Store-opening check. This maintainer workflow uses Bun to execute TypeScript source; ordinary Plugin users run the compiled `lore` release only:
 
 ```sh
-export LORELUM_CLI_COMMAND=bun
-export LORELUM_CLI_ARGS='["packages/cli/src/main.ts","list","packs","--store-root","/absolute/path/to/isolated-store"]'
 printf '%s\n' '{"hook_event_name":"SessionStart","source":"compact"}' \
-  | bun plugins/lorelum/scripts/inject-pack-index.ts
+  | bun packages/cli/src/main.ts hook codex --store-root /absolute/path/to/isolated-store
 ```
 
 The result should contain `hookSpecificOutput.additionalContext` headed `Lorelum Installed Pack Catalog`. A `PostCompact` event is intentionally unsupported and should degrade to `{ "continue": true }`: Codex restores the catalog through the supported `SessionStart` source `compact` instead.

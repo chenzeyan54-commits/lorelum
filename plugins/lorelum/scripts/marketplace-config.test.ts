@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 interface PluginManifest {
   readonly name: string;
+  readonly version: string;
   readonly homepage: string;
   readonly interface: {
     readonly displayName: string;
@@ -43,6 +44,7 @@ test("public marketplace exposes the lorelum Plugin from its matching root", asy
   ]);
 
   expect(manifest.name).toBe("lorelum");
+  expect(manifest.version).toBe("0.1.0");
   expect(manifest.homepage).toBe("https://lorelum.com");
   expect(manifest.interface).toEqual(
     expect.objectContaining({

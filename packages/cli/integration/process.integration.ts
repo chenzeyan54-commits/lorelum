@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import { createInstalledPacksFixture } from "./fixtures/installed-packs.js";
 import { verifyGetAndQueryScenario } from "./scenarios/get-query.js";
+import { verifyCodexHookScenario } from "./scenarios/hook-codex.js";
 import { verifyListPacksScenario } from "./scenarios/list-packs.js";
 import { runProcess } from "./support/process.js";
 import { selectProtocolFields } from "./support/protocol.js";
@@ -16,26 +17,46 @@ async function main(): Promise<void> {
   if (bunExecutable === null)
     throw new Error("Bun executable is required for CLI integration tests.");
 
-  await verifySourceEntrypoint(bunExecutable);
   const directory = await mkdtemp(join(tmpdir(), "lorelum-cli-"));
   try {
+    await verifySourceEntrypoint(bunExecutable, directory);
     const executable = join(directory, process.platform === "win32" ? "lore.exe" : "lore");
     await compileCli(bunExecutable, executable);
     await verifyCompiledEntrypoint(executable, directory);
 
     const fixture = await createInstalledPacksFixture(directory);
     await verifyListPacksScenario(executable, fixture, directory);
+    await verifyCodexHookScenario(executable, fixture, directory);
     await verifyGetAndQueryScenario(executable, fixture, directory);
   } finally {
     await rm(directory, { force: true, recursive: true });
   }
 }
 
-async function verifySourceEntrypoint(bunExecutable: string): Promise<void> {
+async function verifySourceEntrypoint(bunExecutable: string, directory: string): Promise<void> {
   const source = await runProcess([bunExecutable, entrypoint, "--version"]);
   assert.equal(source.exitCode, 0);
   assert.deepEqual(selectProtocolFields(source.stdout), { command: "version", ok: true });
   assert.equal(source.stderr, "");
+
+  const hook = await runProcess(
+    [
+      bunExecutable,
+      entrypoint,
+      "hook",
+      "codex",
+      "--store-root",
+      join(directory, "source-hook-store"),
+    ],
+    60_000,
+    '{"hook_event_name":"SessionStart"}',
+  );
+  assert.equal(hook.exitCode, 0);
+  assert.equal(hook.stderr, "");
+  const hookResponse = JSON.parse(hook.stdout) as Record<string, unknown>;
+  assert.equal("protocolVersion" in hookResponse, false);
+  assert.equal("command" in hookResponse, false);
+  assert.equal(typeof hookResponse.hookSpecificOutput, "object");
 
   const hiddenWithoutGrant = await runProcess([
     bunExecutable,

@@ -7,7 +7,7 @@ This is the first Codex integration for Lorelum. It brings relevant engineering 
 3. Codex queries targeted Practice summaries when the task, decision, verification, or recovery moment could benefit from them.
 4. Before applying a Practice or claiming that work follows it, Codex reads the full Practice.
 
-The bundled runtime integration calls `lore pack list --details`, the rich Pack metadata command defined by the Pack catalog contract (ADR 0014). It runs for supported `SessionStart` sources, including `compact`, so the Catalog is regenerated before Codex continues after compaction. The command invocation is isolated in `scripts/inject-pack-index.ts`; set `LORELUM_CLI_COMMAND` and `LORELUM_CLI_ARGS` (a JSON array of strings) to test with a custom executable, and pass a custom source in unit tests.
+The bundled runtime integration calls `lore hook codex`, the versioned Codex Hook ABI introduced in Lorelum CLI v0.1.0. It runs for supported `SessionStart` sources, including `compact`, so the Catalog is regenerated before Codex continues after compaction. The CLI reads the Hook payload from stdin and writes the Codex `hookSpecificOutput` envelope directly to stdout.
 
 The integration requests Pack metadata only. It does not install or update Packs, or proactively run `lore query` or `lore get`; opening the LocalStore still follows its normal lifecycle. If the CLI is unavailable or returns malformed data, the integration writes a diagnostic to stderr and lets the host continue without additional context.
 
@@ -17,11 +17,11 @@ The integration requests Pack metadata only. It does not install or update Packs
 
 ## Installation
 
-This Plugin is a Codex adapter. It requires both `bun` and a compatible Lorelum CLI available as `lore` on `PATH`; it does not embed, build, or update either dependency. See the [Codex installation guide](../../docs/plugins/codex.md) for the public marketplace commands and [the development guide](../../docs/development/plugins.md) for a checkout-backed development install.
+This Plugin is a Codex adapter. Ordinary users need Lorelum CLI v0.1.0 or later, available as `lore` on `PATH`; it does not embed, build, or update the CLI. Bun is only required for maintainers running the source and test workflows. See the [Codex installation guide](../../docs/plugins/codex.md) for the public marketplace commands and [the development guide](../../docs/development/plugins.md) for a checkout-backed development install.
 
 ### Windows notes
 
-Codex runs hook commands through PowerShell on Windows, so `commandWindows` uses PowerShell syntax (`$env:PLUGIN_ROOT`), and `bun` must resolve to a real executable on `PATH` — the shim script that `npm install -g bun` creates will not run. Hooks are gated by review: after any change to `hooks.json`, re-trust them in the Codex plugin UI, otherwise Codex silently skips them.
+Codex runs hook commands through PowerShell on Windows. The Plugin invokes the compiled `lore` command directly and does not require Bun or Node on the user machine. Hooks are gated by review: after any change to `hooks.json`, re-trust them in the Codex plugin UI, otherwise Codex silently skips them.
 
 ## Local validation
 
@@ -32,11 +32,8 @@ python "$env:USERPROFILE\.codex\skills\.system\plugin-creator\scripts\validate_p
 bun test plugins/lorelum/scripts
 ```
 
-The CLI and Store integration is connected end to end: the hook spawns `lore pack list --details` against the LocalStore and renders the returned summaries. To smoke-check it, install Packs into an isolated Store root, then run the command and pipe a hook event through the script:
+The CLI and Store integration is connected end to end: the Hook runs `lore hook codex` against the LocalStore and renders the returned summaries. To smoke-check current source, install Packs into an isolated Store root, then pipe a Hook event through the source entrypoint. This source-only check requires Bun; an installed Plugin does not.
 
 ```powershell
-bun packages/cli/src/main.ts pack list --details --store-root D:\Temp\lore-e2e-store
-$env:LORELUM_CLI_COMMAND = "bun"
-$env:LORELUM_CLI_ARGS = '["packages/cli/src/main.ts","pack","list","--details","--store-root","D:/Temp/lore-e2e-store"]'
-'{"hook_event_name":"SessionStart"}' | bun plugins/lorelum/scripts/inject-pack-index.ts
+'{"hook_event_name":"SessionStart"}' | bun packages/cli/src/main.ts hook codex --store-root D:\Temp\lore-e2e-store
 ```

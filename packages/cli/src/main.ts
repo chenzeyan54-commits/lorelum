@@ -2,6 +2,12 @@
 
 import { hasDaemonLaunchEnvironment } from "@lorelum/backend/config";
 import { createProgram, type CliRuntime } from "./create-program.js";
+import {
+  parseCodexHookInvocation,
+  runCodexHook,
+  type CodexHookServices,
+  type TextInput,
+} from "./hook/codex.js";
 import { renderFailure, type OutputWriter } from "./output/protocol.js";
 import { rootCommand, type CommandDefinition, type KnownCommand } from "./registry.js";
 import { toVisibleCliError } from "./runtime/errors.js";
@@ -12,6 +18,10 @@ export interface RunOptions {
   registry?: readonly CommandDefinition[];
   /** Prebuilt runtime override; omit to use the process stderr-backed runtime. */
   runtime?: CliRuntime;
+  /** Override the raw Codex Hook input stream in source-level tests. */
+  stdin?: TextInput;
+  /** Override the raw Codex Hook Store adapter in source-level tests. */
+  codexHookServices?: CodexHookServices;
   stderr?: OutputWriter;
   stdout?: OutputWriter;
 }
@@ -20,6 +30,16 @@ export interface RunOptions {
 export async function run(arguments_: string[], options: RunOptions = {}): Promise<number> {
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
+  const codexHook = parseCodexHookInvocation(arguments_);
+  if (codexHook !== undefined) {
+    return runCodexHook({
+      stdin: options.stdin ?? standardInput,
+      stdout,
+      stderr,
+      ...(options.codexHookServices === undefined ? {} : { services: options.codexHookServices }),
+      ...(codexHook.storeRoot === undefined ? {} : { storeRoot: codexHook.storeRoot }),
+    });
+  }
   let command: KnownCommand | "unknown" = "unknown";
   let commandExitCode: 0 | 1 = 0;
   let visibleErrorCodes = rootCommand.errorCodes;
@@ -48,6 +68,10 @@ export async function run(arguments_: string[], options: RunOptions = {}): Promi
     return cliError.exitCode;
   }
 }
+
+const standardInput: TextInput = {
+  text: () => Bun.stdin.text(),
+};
 
 if (import.meta.main) {
   const args = process.argv.slice(2);

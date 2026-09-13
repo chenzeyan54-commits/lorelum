@@ -1,4 +1,9 @@
-import type { InstalledPackSummary } from "./types";
+export interface InstalledPackCatalogEntry {
+  readonly name: string;
+  readonly version: string;
+  readonly description?: string;
+  readonly appliesTo: readonly string[];
+}
 
 // Headroom below the hooks.json `additionalContextLimit` (5000) so the frozen
 // envelope fields never push the delivered context over the host budget.
@@ -13,7 +18,7 @@ const TRUNCATION_NOTE =
 const MINIMAL_TRUNCATION_CONTEXT =
   "Lorelum catalog truncated. Run `lore pack list --details` to refresh when needed.";
 
-export interface RenderPackIndexOptions {
+export interface RenderPackCatalogOptions {
   readonly maxCharacters?: number;
 }
 
@@ -30,12 +35,12 @@ function normalizeText(value: string): string {
     .trim();
 }
 
-function comparePacks(left: InstalledPackSummary, right: InstalledPackSummary): number {
+function comparePacks(left: InstalledPackCatalogEntry, right: InstalledPackCatalogEntry): number {
   if (left.name !== right.name) return left.name < right.name ? -1 : 1;
   return left.version < right.version ? -1 : left.version > right.version ? 1 : 0;
 }
 
-function renderPack(pack: InstalledPackSummary): string {
+function renderPack(pack: InstalledPackCatalogEntry): string {
   const lines = [`- ${normalizeText(pack.name)} (${normalizeText(pack.version)})`];
   const appliesTo = pack.appliesTo.map(normalizeText).filter(Boolean);
   if (appliesTo.length > 0) lines.push(`  Stack scope: ${appliesTo.join(", ")}`);
@@ -58,9 +63,10 @@ function renderContext(body: string, truncationNote?: string): string {
     .join("\n\n");
 }
 
-export function renderPackIndex(
-  packs: readonly InstalledPackSummary[],
-  options: RenderPackIndexOptions = {},
+/** Render the bounded Catalog context consumed by the Codex Hook ABI. */
+export function renderPackCatalog(
+  packs: readonly InstalledPackCatalogEntry[],
+  options: RenderPackCatalogOptions = {},
 ): string {
   const maxCharacters = options.maxCharacters ?? DEFAULT_MAX_CHARACTERS;
   if (!Number.isSafeInteger(maxCharacters) || maxCharacters < 64) {
@@ -68,8 +74,8 @@ export function renderPackIndex(
   }
 
   // The manifest guarantees unique active Pack names; keep the first entry in
-  // case a host delivers a duplicated list anyway.
-  const uniquePacks = new Map<string, InstalledPackSummary>();
+  // case a Store ever delivers a duplicated list anyway.
+  const uniquePacks = new Map<string, InstalledPackCatalogEntry>();
   for (const pack of packs) {
     const name = normalizeText(pack.name);
     if (name !== "" && !uniquePacks.has(name)) {

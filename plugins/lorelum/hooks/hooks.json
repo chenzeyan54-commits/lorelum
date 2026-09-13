@@ -7,10 +7,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$PLUGIN_ROOT/scripts/inject-pack-index.ts\"",
+            "command": "if output=\"$(lore hook codex)\"; then printf '%s\\n' \"$output\"; else printf '%s\\n' '{\"continue\":true}'; fi",
             "timeout": 10,
             "additionalContextLimit": 5000,
-            "commandWindows": "bun \"$env:PLUGIN_ROOT\\scripts\\inject-pack-index.ts\""
+            "commandWindows": "try { $output = & lore hook codex; if ($LASTEXITCODE -eq 0) { $output } else { '{\"continue\":true}' } } catch { '{\"continue\":true}' }"
           }
         ]
       }
