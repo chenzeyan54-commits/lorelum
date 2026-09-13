@@ -88,23 +88,23 @@ function failingService(error: unknown): ListService {
   return service({ list: fail, listPackDetails: fail, listPack: fail });
 }
 
-test("describes the LocalStore-backed list command contract", () => {
-  expect(describeCommand("list")).toMatchObject({
-    name: "list",
-    usage: "list [scope]",
-    positionals: [{ name: "scope", required: false, values: ["packs"] }],
+test("describes the LocalStore-backed Pack catalog command contract", () => {
+  expect(describeCommand("pack.list")).toMatchObject({
+    name: "pack.list",
+    usage: "pack list [pack]",
+    positionals: [{ name: "pack", required: false }],
     options: [
       { name: "-h, --help", required: false },
       { name: "--log-level <level>", required: false },
       { name: "--store-root <path>", required: false },
-      { name: "--pack <name>", required: false },
+      { name: "--details", required: false },
     ],
     errorCodes: [
       "usage.invalid",
       "runtime.unexpected",
       "store.busy",
       "store.recovery-required",
-      "list.pack-not-found",
+      "pack.not-installed",
     ],
     exitCodes: [0, 2],
   });
@@ -116,26 +116,24 @@ test("returns all list modes through their result schema", async () => {
     createListCommand({ list: service(), storageRoot: defaultStorageRoot() }),
   ]);
 
-  expect(await run(["list"], { registry: definitions, stdout })).toBe(0);
+  expect(await run(["pack", "list"], { registry: definitions, stdout })).toBe(0);
   let response = JSON.parse(stdout.value);
-  expect(response).toMatchObject({ command: "list", ok: true, data: packsResult });
-  let description = describeCommand("list") as { resultSchema: JsonSchema };
+  expect(response).toMatchObject({ command: "pack.list", ok: true, data: packsResult });
+  let description = describeCommand("pack.list") as { resultSchema: JsonSchema };
   expect(validateJsonSchema(response.data, description.resultSchema)).toEqual([]);
 
   stdout.value = "";
-  expect(await run(["list", "--pack", "agentic-coding"], { registry: definitions, stdout })).toBe(
-    0,
-  );
+  expect(await run(["pack", "list", "agentic-coding"], { registry: definitions, stdout })).toBe(0);
   response = JSON.parse(stdout.value);
-  expect(response).toMatchObject({ command: "list", ok: true, data: packResult });
-  description = describeCommand("list") as { resultSchema: JsonSchema };
+  expect(response).toMatchObject({ command: "pack.list", ok: true, data: packResult });
+  description = describeCommand("pack.list") as { resultSchema: JsonSchema };
   expect(validateJsonSchema(response.data, description.resultSchema)).toEqual([]);
 
   stdout.value = "";
-  expect(await run(["list", "packs"], { registry: definitions, stdout })).toBe(0);
+  expect(await run(["pack", "list", "--details"], { registry: definitions, stdout })).toBe(0);
   response = JSON.parse(stdout.value);
   expect(response).toMatchObject({
-    command: "list",
+    command: "pack.list",
     ok: true,
     data: {
       generation: 1,
@@ -151,7 +149,7 @@ test("returns all list modes through their result schema", async () => {
       ],
     },
   });
-  description = describeCommand("list") as { resultSchema: JsonSchema };
+  description = describeCommand("pack.list") as { resultSchema: JsonSchema };
   expect(validateJsonSchema(response.data, description.resultSchema)).toEqual([]);
 
   expect(
@@ -168,7 +166,7 @@ test("returns all list modes through their result schema", async () => {
   ).toEqual([]);
 });
 
-test("rejects conflicting and unknown list scopes before service dispatch", async () => {
+test("rejects conflicting or extra Pack catalog arguments before service dispatch", async () => {
   const calls: string[] = [];
   const definitions: readonly CommandDefinition[] = snapshotCommandDefinitions([
     createListCommand({
@@ -191,8 +189,8 @@ test("rejects conflicting and unknown list scopes before service dispatch", asyn
   ]);
 
   const invocations = [
-    { args: ["list", "unknown"], command: "unknown" },
-    { args: ["list", "packs", "--pack", "agentic-coding"], command: "list" },
+    { args: ["pack", "list", "agentic-coding", "extra"], command: "unknown" },
+    { args: ["pack", "list", "agentic-coding", "--details"], command: "pack.list" },
   ];
   const results = await Promise.all(
     invocations.map(async ({ args, command }) => {
@@ -236,14 +234,14 @@ test("rejects malformed Pack names before service dispatch", async () => {
   const results = await Promise.all(
     ["", "   ", "Agentic", "agentic_coding", "agentic--coding"].map(async (packName) => {
       const stdout = new MemoryWriter();
-      const exitCode = await run(["list", "--pack", packName], { registry: definitions, stdout });
+      const exitCode = await run(["pack", "list", packName], { registry: definitions, stdout });
       return { exitCode, response: JSON.parse(stdout.value) };
     }),
   );
   for (const { exitCode, response } of results) {
     expect(exitCode).toBe(2);
     expect(response).toMatchObject({
-      command: "list",
+      command: "pack.list",
       ok: false,
       error: { code: "usage.invalid" },
     });
@@ -270,9 +268,11 @@ test("rejects an empty --store-root value before service dispatch", async () => 
   ]);
 
   const stdout = new MemoryWriter();
-  expect(await run(["list", "--store-root", ""], { registry: definitions, stdout })).toBe(2);
+  expect(await run(["pack", "list", "--store-root", ""], { registry: definitions, stdout })).toBe(
+    2,
+  );
   expect(JSON.parse(stdout.value)).toMatchObject({
-    command: "list",
+    command: "pack.list",
     ok: false,
     error: { code: "usage.invalid" },
   });
@@ -292,14 +292,14 @@ test("maps an unknown Pack without echoing the supplied name", async () => {
     }),
   ]);
 
-  expect(
-    await run(["list", "--pack", "private-pack-name"], { registry: definitions, stdout }),
-  ).toBe(2);
+  expect(await run(["pack", "list", "private-pack-name"], { registry: definitions, stdout })).toBe(
+    2,
+  );
   expect(JSON.parse(stdout.value)).toMatchObject({
-    command: "list",
+    command: "pack.list",
     ok: false,
     error: {
-      code: "list.pack-not-found",
+      code: "pack.not-installed",
       message: "The requested Pack is not installed.",
     },
   });
@@ -316,10 +316,14 @@ async function expectListFailure(
     createListCommand({ list, storageRoot: defaultStorageRoot() }),
   ]);
   expect(await run([...args], { registry: definitions, stdout })).toBe(2);
-  expect(JSON.parse(stdout.value)).toMatchObject({ command: "list", ok: false, error });
+  expect(JSON.parse(stdout.value)).toMatchObject({ command: "pack.list", ok: false, error });
 }
 
-const listModeArguments = [["list"], ["list", "packs"], ["list", "--pack", "agentic-coding"]];
+const listModeArguments = [
+  ["pack", "list"],
+  ["pack", "list", "--details"],
+  ["pack", "list", "agentic-coding"],
+];
 
 test("maps LocalStore recovery failures from every list mode", async () => {
   const list = failingService(new StoreRecoveryRequiredError("test recovery failure"));
@@ -346,9 +350,9 @@ test("normalizes undeclared list failures without exposing their details", async
     }),
   ]);
 
-  expect(await run(["list", "packs"], { registry: definitions, stdout })).toBe(2);
+  expect(await run(["pack", "list", "--details"], { registry: definitions, stdout })).toBe(2);
   expect(JSON.parse(stdout.value)).toMatchObject({
-    command: "list",
+    command: "pack.list",
     ok: false,
     error: {
       code: "runtime.unexpected",
@@ -361,7 +365,7 @@ test("normalizes undeclared list failures without exposing their details", async
 test("passes through declared CliErrors from the list service", async () => {
   await expectListFailure(
     failingService(new CliError(cliErrorCodes.usageInvalid, "The list request was rejected.")),
-    ["list", "packs"],
+    ["pack", "list", "--details"],
     { code: "usage.invalid", message: "The list request was rejected." },
   );
 });
@@ -392,9 +396,9 @@ test("resolves --store-root and forwards the selected Store to every list mode",
 
   await Promise.all(
     [
-      ["list", "--store-root", "isolated-store"],
-      ["list", "packs", "--store-root", "isolated-store"],
-      ["list", "--pack", "agentic-coding", "--store-root", "isolated-store"],
+      ["pack", "list", "--store-root", "isolated-store"],
+      ["pack", "list", "--details", "--store-root", "isolated-store"],
+      ["pack", "list", "agentic-coding", "--store-root", "isolated-store"],
     ].map(async (args) => {
       const stdout = new MemoryWriter();
       expect(await run(args, { registry: definitions, stdout })).toBe(0);
@@ -408,6 +412,6 @@ test("resolves --store-root and forwards the selected Store to every list mode",
   expect(listPackRequests[0]?.packName).toBe("agentic-coding");
 });
 
-test("list is included in the production command registry", () => {
-  expect(commandRegistry.map((definition) => definition.name)).toContain("list");
+test("Pack catalog is included in the production command registry", () => {
+  expect(commandRegistry.map((definition) => definition.name)).toContain("pack.list");
 });

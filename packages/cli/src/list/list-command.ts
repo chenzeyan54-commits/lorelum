@@ -151,14 +151,13 @@ function toPracticeCatalogData(result: ListPackPracticesResult): JsonValue {
 
 export function createListCommand(services: ListCommandServices): CommandDefinition {
   return {
-    name: "list",
+    name: "pack.list",
     summary: "List installed Packs and their Practice catalogs from the LocalStore.",
-    positionals: [{ name: "scope", required: false, values: ["packs"] }],
+    positionals: [{ name: "pack", required: false }],
     options: [
       {
-        longFlag: "--pack",
-        description: "List the Practice catalog for one installed Pack.",
-        value: { name: "name", required: true },
+        longFlag: "--details",
+        description: "Include rich metadata for every installed Pack.",
         optionRequired: false,
       },
     ],
@@ -166,14 +165,10 @@ export function createListCommand(services: ListCommandServices): CommandDefinit
     errorCodes: listErrorCodes,
     exitCodes: [0, 2],
     async handler(invocation) {
-      const scope = invocation.positionals[0];
-      const packName = invocation.options.pack;
-      if (scope !== undefined && scope !== "packs") throw invalidInvocationError();
-      if (scope === "packs" && packName !== undefined) throw invalidInvocationError();
-      if (
-        packName !== undefined &&
-        (typeof packName !== "string" || !PACK_NAME_REGEX.test(packName))
-      ) {
+      const packName = invocation.positionals[0];
+      const details = invocation.options.details;
+      if (details !== undefined && details !== true) throw invalidInvocationError();
+      if (packName !== undefined && (!PACK_NAME_REGEX.test(packName) || details === true)) {
         throw invalidInvocationError();
       }
 
@@ -183,7 +178,7 @@ export function createListCommand(services: ListCommandServices): CommandDefinit
       );
 
       try {
-        if (scope === "packs") {
+        if (details === true) {
           return { data: toRichPackListData(await services.list.listPackDetails({ storageRoot })) };
         }
         if (packName === undefined) {

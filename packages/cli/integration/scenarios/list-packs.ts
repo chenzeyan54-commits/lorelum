@@ -9,7 +9,7 @@ import {
   requireSuccessData,
 } from "../support/protocol.js";
 
-/** Verify the legacy catalog and the `list packs` metadata view. */
+/** Verify the Pack catalog and its rich metadata view. */
 export async function verifyListPacksScenario(
   compiledBinary: string,
   fixture: InstalledPacksFixture,
@@ -18,15 +18,15 @@ export async function verifyListPacksScenario(
   const listed = await runList(compiledBinary, fixture.storageRoot);
   assert.equal(listed.exitCode, 0);
   assert.equal(listed.stderr, "");
-  assert.deepEqual(requireSuccessData(parseSingleResponse(listed.stdout), "list").packs, [
+  assert.deepEqual(requireSuccessData(parseSingleResponse(listed.stdout), "pack.list").packs, [
     { name: "integration-pack", version: "1.0.0", practiceCount: 2 },
     { name: "minimal-pack", version: "1.0.0", practiceCount: 1 },
   ]);
 
-  const details = await runList(compiledBinary, fixture.storageRoot, { scope: "packs" });
+  const details = await runList(compiledBinary, fixture.storageRoot, { details: true });
   assert.equal(details.exitCode, 0);
   assert.equal(details.stderr, "");
-  assert.deepEqual(requireSuccessData(parseSingleResponse(details.stdout), "list").packs, [
+  assert.deepEqual(requireSuccessData(parseSingleResponse(details.stdout), "pack.list").packs, [
     {
       name: "integration-pack",
       version: "1.0.0",
@@ -41,7 +41,7 @@ export async function verifyListPacksScenario(
   });
   assert.equal(catalog.exitCode, 0);
   assert.equal(catalog.stderr, "");
-  const catalogData = requireSuccessData(parseSingleResponse(catalog.stdout), "list");
+  const catalogData = requireSuccessData(parseSingleResponse(catalog.stdout), "pack.list");
   assert.deepEqual(catalogData.pack, { name: "integration-pack", version: "1.0.0" });
   assert(Array.isArray(catalogData.practices));
   assert(
@@ -57,16 +57,22 @@ export async function verifyListPacksScenario(
   const emptyStoreRoot = join(workingDirectory, "empty-list-store");
   const emptyCatalog = await runList(compiledBinary, emptyStoreRoot);
   assert.equal(emptyCatalog.exitCode, 0);
-  assert.deepEqual(requireSuccessData(parseSingleResponse(emptyCatalog.stdout), "list").packs, []);
+  assert.deepEqual(
+    requireSuccessData(parseSingleResponse(emptyCatalog.stdout), "pack.list").packs,
+    [],
+  );
 
-  const emptyDetails = await runList(compiledBinary, emptyStoreRoot, { scope: "packs" });
+  const emptyDetails = await runList(compiledBinary, emptyStoreRoot, { details: true });
   assert.equal(emptyDetails.exitCode, 0);
   assert.equal(emptyDetails.stderr, "");
-  assert.deepEqual(requireSuccessData(parseSingleResponse(emptyDetails.stdout), "list").packs, []);
+  assert.deepEqual(
+    requireSuccessData(parseSingleResponse(emptyDetails.stdout), "pack.list").packs,
+    [],
+  );
 
   const missingPack = await runList(compiledBinary, fixture.storageRoot, {
     packName: "missing-pack",
   });
   assert.equal(missingPack.exitCode, 2);
-  requireFailureCode(parseSingleResponse(missingPack.stdout), "list", "list.pack-not-found");
+  requireFailureCode(parseSingleResponse(missingPack.stdout), "pack.list", "pack.not-installed");
 }

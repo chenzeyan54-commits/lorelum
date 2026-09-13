@@ -2,18 +2,18 @@ import { StoreBusyError, StoreRecoveryRequiredError, UnknownPackError } from "@l
 
 import { CliError, cliErrorCodes, frameworkErrorCodes } from "../runtime/errors.js";
 
-/** Error allowlist for the LocalStore-backed catalog command (`lore list`). */
+/** Error allowlist for the LocalStore-backed Pack catalog command. */
 export const listErrorCodes = Object.freeze([
   ...frameworkErrorCodes,
   cliErrorCodes.storeBusy,
   cliErrorCodes.storeRecoveryRequired,
-  cliErrorCodes.listPackNotFound,
+  cliErrorCodes.packNotInstalled,
 ]);
 
 /** Convert engine domain errors to visible CLI errors; returns undefined when not one. */
 export function toListCliError(error: unknown): CliError | undefined {
   if (error instanceof UnknownPackError) {
-    return new CliError(cliErrorCodes.listPackNotFound, "The requested Pack is not installed.");
+    return new CliError(cliErrorCodes.packNotInstalled, "The requested Pack is not installed.");
   }
   return undefined;
 }

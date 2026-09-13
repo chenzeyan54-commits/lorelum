@@ -1,4 +1,4 @@
-# ADR 0014: LocalStore-backed lore list catalog contract
+# ADR 0014: LocalStore-backed Pack catalog contract
 
 - **Date:** 2026-09-08
 - **Status:** Proposed (local implementation)
@@ -11,33 +11,33 @@
 The target workflow is:
 
 ```text
-lore list                  # discover installed Packs
-lore list packs            # read Pack metadata for an integration
-lore list --pack <name>    # inspect that Pack's Practice summaries
+lore pack list             # discover installed Packs
+lore pack list --details   # read Pack metadata for an integration
+lore pack list <name>      # inspect that Pack's Practice summaries
 lore get <practice-id>     # retrieve the complete Practice
 ```
 
-`list` is therefore a catalog command, not a task-retrieval command. `query` remains the entry point for finding Practices from task text. An explicit Pack path or Registry lookup would recreate discovery outside LocalStore and split the runtime source of truth.
+`pack list` is therefore a Pack catalog command, not a task-retrieval command. `query` remains the entry point for finding Practices from task text. An explicit Pack path or Registry lookup would recreate discovery outside LocalStore and split the runtime source of truth.
 
-This ADR defines the CLI/engine catalog contract, including the Pack metadata shape required by an integration that invokes `lore list packs`. It does not define how an Agent learns that Lorelum exists or when a Skill, Plugin, Hook, or MCP adapter should invoke the command; those lifecycle contracts remain separate.
+This ADR defines the CLI/engine catalog contract, including the Pack metadata shape required by an integration that invokes `lore pack list --details`. It does not define how an Agent learns that Lorelum exists or when a Skill, Plugin, Hook, or MCP adapter should invoke the command; those lifecycle contracts remain separate.
 
 ## Decision
 
 ### Command surface
 
 ```text
-lore list [--store-root <path>]
-lore list packs [--store-root <path>]
-lore list --pack <name> [--store-root <path>]
+lore pack list [--store-root <path>]
+lore pack list --details [--store-root <path>]
+lore pack list <name> [--store-root <path>]
 ```
 
-The optional positional scope accepts only `packs`. The three supported modes are:
+The optional positional Pack name and `--details` option select three modes:
 
-- no scope and no `--pack`: the existing Pack catalog;
-- positional scope `packs`: the rich Pack metadata catalog;
-- `--pack <name>`: the selected Pack's Practice catalog.
+- no Pack argument: the existing Pack catalog;
+- `--details`: the rich Pack metadata catalog;
+- `<name>`: the selected Pack's Practice catalog.
 
-`packs` is a selector handled by the existing `list` command, not a dotted `list.packs` registry command. This preserves the current registry constraint that a command with local options cannot also own child commands. All modes honor the global `--store-root` option through the same invocation Store resolution as `install`, `query`, and `get`. The response envelope `command` remains `"list"` in every mode.
+`pack.list` is a dotted command under the existing Pack namespace. All modes honor the global `--store-root` option through the same invocation Store resolution as `pack.install`, `query`, and `get`. The response envelope `command` remains `"pack.list"` in every mode.
 
 ### Application boundary
 
@@ -71,7 +71,7 @@ Practice-catalog mode returns `generation`, `effectiveRevision`, `pack`, and `pr
 
 The id can be passed directly to `lore get`. Body and anti-pattern content remains intentionally deferred to `get`.
 
-Rich Pack metadata mode (`lore list packs`) returns `generation`, `effectiveRevision`, and `packs[]`. Each Pack contains:
+Rich Pack metadata mode (`lore pack list --details`) returns `generation`, `effectiveRevision`, and `packs[]`. Each Pack contains:
 
 - `name`;
 - `version`;
@@ -84,15 +84,15 @@ Pack entries sort by `name`; Practice entries sort by `id`. Both comparisons use
 
 ### Errors and empty state
 
-A fresh Store is a successful Pack-list or rich Pack metadata result with `packs: []`. A format-valid but uninstalled Pack raises `UnknownPackError`, which the CLI maps to `list.pack-not-found` with exit code 2. This distinguishes an uninstalled Pack from an installed Pack with zero Practices, whose catalog is successful and empty.
+A fresh Store is a successful Pack-list or rich Pack metadata result with `packs: []`. A format-valid but uninstalled Pack raises `UnknownPackError`, which the CLI maps to `pack.not-installed` with exit code 2. This distinguishes an uninstalled Pack from an installed Pack with zero Practices, whose catalog is successful and empty.
 
-The CLI validates `--pack` against `PACK_NAME_REGEX` before Store dispatch and returns `usage.invalid` for malformed input. Unknown positional scopes and `lore list packs --pack <name>` also return `usage.invalid` before service dispatch. Engine ListService does not duplicate the Pack-name format-schema validation. The CLI's `list.pack-not-found` message is generic and does not echo the supplied Pack name; `registry.pack-not-found` remains the separate Registry-install error.
+The CLI validates `<name>` against `PACK_NAME_REGEX` before Store dispatch and returns `usage.invalid` for malformed input. Extra positionals and `lore pack list <name> --details` also return `usage.invalid` before service dispatch. Engine ListService does not duplicate the Pack-name format-schema validation. The CLI's `pack.not-installed` message is generic and does not echo the supplied Pack name; `registry.pack-not-found` remains the separate Registry-install error.
 
 LocalStore `StoreBusyError` and `StoreRecoveryRequiredError` keep their existing CLI mappings.
 
 ### Non-goals
 
-Registry search, remote installable Pack discovery, semantic retrieval, ranking, fuzzy matching, pagination, filters, full Practice bodies, MCP wiring, registry parent/child command refactoring, and new Store tables or derived indexes are deferred. Cross-command snapshot consistency is not promised: `list`, `list packs`, `list --pack`, and `get` are separate invocations and may observe different Store revisions.
+Registry search, remote installable Pack discovery, semantic retrieval, ranking, fuzzy matching, pagination, filters, full Practice bodies, MCP wiring, and new Store tables or derived indexes are deferred. Cross-command snapshot consistency is not promised: `pack list`, `pack list --details`, `pack list <name>`, and `get` are separate invocations and may observe different Store revisions.
 
 ## Consequences
 
@@ -103,5 +103,5 @@ Source-claim counting preserves provenance but means counts are not a global uni
 **Follow-ups:**
 
 - Keep the equivalent Plugin parser fixture aligned with the consuming integration contract if that contract changes.
-- User documentation must distinguish browsing (`list`) from task retrieval (`query`).
+- User documentation must distinguish Pack browsing (`pack list`) from task retrieval (`query`).
 - A future MCP adapter must define its own input schema and error mapping before exposing this service.

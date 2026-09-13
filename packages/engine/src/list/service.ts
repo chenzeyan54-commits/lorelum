@@ -27,7 +27,7 @@ export interface ListServiceOptions {
   readonly storageRoot?: StorageRoot;
 }
 
-/** Application boundary for the LocalStore-backed `lore list` catalog. */
+/** Application boundary for the LocalStore-backed Pack catalog. */
 export function createListService(options: ListServiceOptions = {}): ListService {
   const store = options.store ?? createLocalStore();
   const fallbackStorageRoot = options.storageRoot ?? defaultStorageRoot();

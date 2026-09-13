@@ -11,8 +11,8 @@ Lorelum CLI 的机器接口是单行 JSON envelope。成功输出包含 `command
 - [Semantic index](index.md)：查看、构建或替换某个 Store 的 semantic index。
 - [Query](query.md)：默认使用本地 semantic query；`--mode keyword` 保留离线 keyword query。
 - [Get](get.md)：读取一个已安装 Practice。
-- [List](list.md)：列出 Pack 或 Practice 目录。
-- [Pack 生命周期](packs.md)：安装、升级或卸载某个 Pack。
+- [Pack catalog](list.md)：列出已安装 Pack 或其 Practice 目录。
+- [Pack 生命周期](packs.md)：安装、更新或移除某个 Pack。
 
 使用 `lore --version` 查询 CLI 版本；`--help` 和 `--log-level` 是全局选项。需要 Store 的命令支持 `--store-root <path>`；backend/model 命令不读取或修改 LocalStore，传入该选项不会改变它们的模型来源。
 

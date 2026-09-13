@@ -48,7 +48,7 @@ test("exposes an immutable production command registry", () => {
   expect(Object.isFrozen(commandRegistry[0]?.resultSchema)).toBe(true);
 });
 
-test("discovers the supported Pack lifecycle commands", () => {
+test("discovers the supported Pack lifecycle and catalog commands", () => {
   const update = describeCommand("pack.update") as {
     name: string;
     usage: string;
@@ -79,6 +79,22 @@ test("discovers the supported Pack lifecycle commands", () => {
     "--store-root <path>",
   ]);
   expect(remove.errorCodes).toContain("pack.not-installed");
+
+  const list = describeCommand("pack.list") as {
+    name: string;
+    usage: string;
+    options: readonly { name: string }[];
+    errorCodes: readonly string[];
+  };
+  expect(list.name).toBe("pack.list");
+  expect(list.usage).toBe("pack list [pack]");
+  expect(list.options.map((option) => option.name)).toEqual([
+    "-h, --help",
+    "--log-level <level>",
+    "--store-root <path>",
+    "--details",
+  ]);
+  expect(list.errorCodes).toContain("pack.not-installed");
 });
 
 test("rejects command metadata that omits framework errors or exit codes", () => {
@@ -254,7 +270,7 @@ test("describes registered commands from a single registry", () => {
               "pack.remove",
               "get",
               "query",
-              "list",
+              "pack.list",
               "backend.start",
               "backend.status",
               "backend.stop",
@@ -279,7 +295,7 @@ test("describes registered commands from a single registry", () => {
       { name: "pack.remove", positionals: [{ name: "pack", required: true }] },
       { name: "get", positionals: [{ name: "practice-id", required: true }] },
       { name: "query", positionals: [{ name: "text", required: true }] },
-      { name: "list" },
+      { name: "pack.list", positionals: [{ name: "pack", required: false }] },
       { name: "backend.start" },
       { name: "backend.status" },
       { name: "backend.stop" },
@@ -301,6 +317,7 @@ test("describes registered commands from a single registry", () => {
       { behavior: "store-root", scope: "global" },
     ],
   });
+  expect(describeCommand("list")).toBeUndefined();
   const install = describeCommand("pack.install") as {
     options: readonly { name: string }[];
     usage: string;
@@ -345,7 +362,7 @@ test("derives parser options and describe metadata from registered commands", as
           "pack.remove",
           "get",
           "query",
-          "list",
+          "pack.list",
           "backend.start",
           "backend.status",
           "backend.stop",

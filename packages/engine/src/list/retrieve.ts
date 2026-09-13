@@ -36,7 +36,7 @@ function projectPractice(effectivePractice: EffectivePractice): ListedPractice {
   });
 }
 
-/** Project the active manifest into the `lore list` Pack catalog. */
+/** Project the active manifest into the Pack catalog. */
 export function retrievePacks(input: RetrievePacksInput): RetrievePacksResult {
   const counts = practiceCountsByPack(input.effectivePractices);
   const packs: readonly ListedPack[] = input.packs

@@ -16,11 +16,11 @@ export async function runGet(
 export async function runList(
   binaryPath: string,
   storageRoot: string,
-  options: { readonly packName?: string; readonly scope?: "packs" } = {},
+  options: { readonly details?: boolean; readonly packName?: string } = {},
 ): Promise<ProcessResult> {
-  const args = [binaryPath, "list"];
-  if (options.scope !== undefined) args.push(options.scope);
-  if (options.packName !== undefined) args.push("--pack", options.packName);
+  const args = [binaryPath, "pack", "list"];
+  if (options.details === true) args.push("--details");
+  if (options.packName !== undefined) args.push(options.packName);
   args.push("--store-root", storageRoot);
   return runProcess(args);
 }

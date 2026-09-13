@@ -55,7 +55,7 @@ test("returns machine-readable root capability discovery", async () => {
         { name: "pack.remove" },
         { name: "get" },
         { name: "query" },
-        { name: "list" },
+        { name: "pack.list" },
         { name: "backend.start" },
         { name: "backend.status" },
         { name: "backend.stop" },
