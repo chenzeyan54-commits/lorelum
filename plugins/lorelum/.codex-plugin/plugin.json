@@ -11,7 +11,7 @@
   "keywords": ["lorelum", "codex", "practices", "engineering-guidance"],
   "skills": "./skills/",
   "interface": {
-    "displayName": "Lorelum for Codex",
+    "displayName": "Lorelum",
     "shortDescription": "On-demand engineering Practices for Codex",
     "longDescription": "Lorelum gives Codex a compact catalog of installed Knowledge Packs, then retrieves detailed Practices when they can inform the current task, decision, verification, or recovery.",
     "developerName": "Lorelum",

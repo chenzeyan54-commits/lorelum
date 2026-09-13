@@ -4,7 +4,7 @@
 
 ## 结论
 
-Lorelum 是产品和发布方。当前 Codex 适配物使用一个完整的 Lorelum Plugin，不按检索、学习或其他能力提前拆分。公开 marketplace 和 Plugin ID 都是 `lorelum`，用户安装 `lorelum@lorelum`，界面显示为 **Lorelum for Codex**。
+Lorelum 是产品和发布方。当前 Codex 适配物使用一个完整的 Lorelum Plugin，不按检索、学习或其他能力提前拆分。公开 marketplace 和 Plugin ID 都是 `lorelum`，用户安装 `lorelum@lorelum`，界面显示为 **Lorelum**。
 
 ```text
 plugins/
@@ -55,7 +55,7 @@ Plugin 对 Core 的唯一运行时依赖是公开 CLI：Hook 读取 `lore list p
 ## 本阶段完成项
 
 1. `plugins/lorelum/` 作为唯一的 Codex Plugin 根目录。
-2. manifest、marketplace 和公开 selector 使用 `lorelum`；显示名为 **Lorelum for Codex**。
+2. manifest、marketplace 和公开 selector 使用 `lorelum`；显示名为 **Lorelum**。
 3. 仓库提供可发现的 `.agents/plugins/marketplace.json`，source 为 `./plugins/lorelum`。
 4. 用户安装说明与维护者热更新说明分离，明确 CLI/Bun 前置依赖、Hook 信任和新 task 边界。
 5. Plugin 继续经 CLI 获取 Catalog；目录迁移不改变 CLI/Engine/Store 行为。

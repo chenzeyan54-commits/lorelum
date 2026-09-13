@@ -1,6 +1,6 @@
-# Lorelum for Codex
+# Lorelum
 
-Lorelum for Codex makes installed Knowledge Packs discoverable in a compact context catalog, then lets Codex retrieve full Practices only when they are relevant to the task or decision. It is distributed as the `lorelum` Plugin in the `lorelum` marketplace, so the public selector is `lorelum@lorelum`.
+Lorelum's Codex integration makes installed Knowledge Packs discoverable in a compact context catalog, then lets Codex retrieve full Practices only when they are relevant to the task or decision. The Plugin is displayed as **Lorelum** and is distributed in the `lorelum` marketplace, so the public selector is `lorelum@lorelum`.
 
 ## Prerequisites
 

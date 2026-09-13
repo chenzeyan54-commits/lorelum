@@ -1,6 +1,6 @@
 # Plugin development
 
-This guide is for maintainers developing **Lorelum for Codex** from a checkout. It deliberately separates a user's public marketplace installation from a checkout-backed development installation: they share the same public selector, `lorelum@lorelum`, but must not be enabled together.
+This guide is for maintainers developing the **Lorelum** Codex Plugin from a checkout. It deliberately separates a user's public marketplace installation from a checkout-backed development installation: they share the same public selector, `lorelum@lorelum`, but must not be enabled together.
 
 ## Source and contract boundary
 

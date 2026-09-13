@@ -46,7 +46,7 @@ test("public marketplace exposes the lorelum Plugin from its matching root", asy
   expect(manifest.homepage).toBe("https://lorelum.com");
   expect(manifest.interface).toEqual(
     expect.objectContaining({
-      displayName: "Lorelum for Codex",
+      displayName: "Lorelum",
       websiteURL: "https://lorelum.com",
       brandColor: "#35B88F",
       composerIcon: "./assets/lorelum-icon.svg",

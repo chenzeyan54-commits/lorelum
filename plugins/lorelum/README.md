@@ -1,4 +1,4 @@
-# Lorelum for Codex
+# Lorelum
 
 This is the first Codex integration for Lorelum. It brings relevant engineering Practices into Codex when they can inform a task or decision, without loading every rule at once. Its progressive-disclosure flow is:
 
