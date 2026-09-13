@@ -6,7 +6,7 @@
 
 ## Context
 
-Lorelum 已能把有效 Pack 目录原子安装到 user-level LocalStore，但 CLI 还不能把 `lore install agentic-coding` 解析为可安装目录。公共 `lorelum/lorelum-packs` 也缺少 machine-readable Catalog。
+Lorelum 已能把有效 Pack 目录原子安装到 user-level LocalStore，但 CLI 还不能把 `lore pack install agentic-coding` 解析为可安装目录。公共 `lorelum/lorelum-packs` 也缺少 machine-readable Catalog。
 
 本轮需要连接三个已有边界：Pack root 格式、安装名到 Git release 的索引，以及 LocalStore 的 seal/activate 语义。若同时加入 project scope、lockfile、依赖解析和通用 transport，会把首个安装纵切扩成包管理器。
 
@@ -16,7 +16,7 @@ Lorelum 已能把有效 Pack 目录原子安装到 user-level LocalStore，但 C
 
 ### 1. Phase 1 只安装到 user scope
 
-`lore install <pack>` 安装并激活到 `defaultStorageRoot()`（`~/.lorelum`）。本轮不接受 `--scope`，也不扫描项目 `.lorelum/packs/`。
+`lore pack install <pack>[@version]` 安装并激活到 `defaultStorageRoot()`（`~/.lorelum`）。本轮不接受 `--scope`，也不扫描项目 `.lorelum/packs/`。
 
 项目自己维护的 Pack 源码仍建议放在 `<project>/.lorelum/packs/<name>/`。其 config/lock、trust 和与 user scope 的合并语义需要独立 ADR。
 
@@ -25,13 +25,13 @@ Lorelum 已能把有效 Pack 目录原子安装到 user-level LocalStore，但 C
 CLI 内置官方仓库标识 `lorelum/lorelum-packs`，不内置 Pack 内容。默认命令：
 
 ```sh
-lore install agentic-coding
+lore pack install agentic-coding
 ```
 
 用户可以一次性显式选择另一个公开 GitHub Registry 仓库：
 
 ```sh
-lore install backend-standards --registry acme/team-packs
+lore pack install backend-standards --registry acme/team-packs
 ```
 
 `--registry` 接受 `owner/repository` 或规范的 `https://github.com/owner/repository(.git)`。CLI 从同一仓库的 `.lorelum/registry.yaml` 读取索引，并从同一仓库物化 release。Phase 1 不接受本地文件、`file:`、任意 HTTP descriptor、其他 Git host 或持久 `registry add`。
@@ -59,9 +59,9 @@ Registry schema 是 strict 的：拒绝未知字段、不安全 ref/path、重�
 ### 4. 版本选择确定且保守
 
 - 默认选择最高稳定 semver，不依赖 YAML 顺序。
-- `--pack-version` 只接受 Registry 中存在的精确版本；prerelease 必须显式选择。
+- Pack specifier 的 `@version` 只接受 Registry 中存在的精确版本；prerelease 必须显式选择。
 - 物化后再次校验 `pack.yaml.name/version` 与 Registry entry/release 完全一致。
-- 已安装相同 canonical artifact 为幂等成功；同名但内容不同返回 `pack.upgrade-required`，不静默替换。
+- 已安装相同 canonical artifact 为幂等成功；同名但内容不同返回 `pack.update-required`，不静默替换。
 
 Phase 1 不解析 semver range、依赖或 update policy。
 
@@ -107,8 +107,7 @@ Registry/source/Pack/Store errors 在 CLI 边界映射为 install 命令声明�
 
 1. 为 project/local scope、`.lorelum/packs`、config/lock 和 trust gate 编写独立 ADR。
 2. 设计私有 Registry 认证、其他 Git host、签名/checksum 和撤回机制。
-3. 增加显式 `lore upgrade` / `uninstall`，保持 install 不静默升级。
-4. 正式编写 `agentic-coding` 的 25–30 条 Practice，替换占位内容后再发布稳定 release。
+3. 正式编写 `agentic-coding` 的 25–30 条 Practice，替换占位内容后再发布稳定 release。
 
 ## References
 

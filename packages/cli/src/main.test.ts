@@ -50,7 +50,9 @@ test("returns machine-readable root capability discovery", async () => {
       name: "lore",
       commands: [
         { name: "describe" },
-        { name: "install" },
+        { name: "pack.install" },
+        { name: "pack.update" },
+        { name: "pack.remove" },
         { name: "get" },
         { name: "query" },
         { name: "list" },
@@ -167,7 +169,7 @@ test("validates invalid calls before help and version responses", async () => {
     ["describe", "--version"],
     ["--log-level"],
     ["--store-root"],
-    ["install", "agentic-coding", "--store-root="],
+    ["pack", "install", "agentic-coding", "--store-root="],
     ["--private-token"],
   ];
   await Promise.all(

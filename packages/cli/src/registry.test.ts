@@ -48,6 +48,39 @@ test("exposes an immutable production command registry", () => {
   expect(Object.isFrozen(commandRegistry[0]?.resultSchema)).toBe(true);
 });
 
+test("discovers the supported Pack lifecycle commands", () => {
+  const update = describeCommand("pack.update") as {
+    name: string;
+    usage: string;
+    options: readonly { name: string }[];
+    errorCodes: readonly string[];
+  };
+  expect(update.name).toBe("pack.update");
+  expect(update.usage).toBe("pack update <pack[@version]>");
+  expect(update.options.map((option) => option.name)).toEqual([
+    "-h, --help",
+    "--log-level <level>",
+    "--store-root <path>",
+    "--registry <repository>",
+  ]);
+  expect(update.errorCodes).toContain("pack.not-installed");
+
+  const remove = describeCommand("pack.remove") as {
+    name: string;
+    usage: string;
+    options: readonly { name: string }[];
+    errorCodes: readonly string[];
+  };
+  expect(remove.name).toBe("pack.remove");
+  expect(remove.usage).toBe("pack remove <pack>");
+  expect(remove.options.map((option) => option.name)).toEqual([
+    "-h, --help",
+    "--log-level <level>",
+    "--store-root <path>",
+  ]);
+  expect(remove.errorCodes).toContain("pack.not-installed");
+});
+
 test("rejects command metadata that omits framework errors or exit codes", () => {
   expect(() =>
     snapshotCommandDefinitions([{ ...futureCommand, errorCodes: [cliErrorCodes.usageInvalid] }]),
@@ -216,7 +249,9 @@ test("describes registered commands from a single registry", () => {
             name: "command",
             values: [
               "describe",
-              "install",
+              "pack.install",
+              "pack.update",
+              "pack.remove",
               "get",
               "query",
               "list",
@@ -237,9 +272,11 @@ test("describes registered commands from a single registry", () => {
         ],
       },
       {
-        name: "install",
-        positionals: [{ name: "pack", required: true }],
+        name: "pack.install",
+        positionals: [{ name: "pack[@version]", required: true }],
       },
+      { name: "pack.update", positionals: [{ name: "pack[@version]", required: true }] },
+      { name: "pack.remove", positionals: [{ name: "pack", required: true }] },
       { name: "get", positionals: [{ name: "practice-id", required: true }] },
       { name: "query", positionals: [{ name: "text", required: true }] },
       { name: "list" },
@@ -264,12 +301,15 @@ test("describes registered commands from a single registry", () => {
       { behavior: "store-root", scope: "global" },
     ],
   });
-  const install = describeCommand("install") as { options: readonly { name: string }[] };
+  const install = describeCommand("pack.install") as {
+    options: readonly { name: string }[];
+    usage: string;
+  };
+  expect(install.usage).toBe("pack install <pack[@version]>");
   expect(install.options.map((option) => option.name)).toEqual([
     "-h, --help",
     "--log-level <level>",
     "--store-root <path>",
-    "--pack-version <version>",
     "--registry <repository>",
   ]);
 });
@@ -300,7 +340,9 @@ test("derives parser options and describe metadata from registered commands", as
         name: "command",
         values: [
           "describe",
-          "install",
+          "pack.install",
+          "pack.update",
+          "pack.remove",
           "get",
           "query",
           "list",

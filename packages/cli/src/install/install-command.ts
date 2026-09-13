@@ -1,5 +1,6 @@
 import {
   InvalidSourcePathError,
+  PackNotInstalledError,
   PackValidationError,
   PracticeConflictError,
   SnapshotFormatError,
@@ -17,13 +18,20 @@ import type { JsonSchema, JsonValue } from "../output/protocol.js";
 import type { CommandDefinition } from "../registry.js";
 import { CliError, cliErrorCodes, frameworkErrorCodes } from "../runtime/errors.js";
 import { resolveInvocationStorageRoot } from "../store/storage-root.js";
+import {
+  mutationResultProperties,
+  mutationResultRequired,
+  stringSchema,
+  toMutationResultData,
+} from "../store/mutation-result.js";
 import { loadRegistry, type LoadedRegistry } from "./load-registry.js";
 import { materializeRegistryRelease, type MaterializedPackSource } from "./materialize-source.js";
+import { parsePackSpecifier } from "./pack-specifier.js";
 import { resolveRegistryRelease } from "./resolve-release.js";
 
 export interface InstallCommandServices {
   /** Core storage dependencies are supplied by the CLI composition root. */
-  readonly store: Pick<LocalStore, "install">;
+  readonly store: Pick<LocalStore, "install" | "upgrade">;
   readonly storageRoot: StorageRoot;
   /** Ancillary dependencies default to the production implementations. */
   readonly loadRegistry?: (locator?: string) => Promise<LoadedRegistry>;
@@ -36,42 +44,15 @@ export interface InstallCommandServices {
 
 type ResolvedInstallCommandServices = Required<InstallCommandServices>;
 
-const stringSchema: JsonSchema = { type: "string" };
-const stringArraySchema: JsonSchema = { type: "array", items: stringSchema };
-const deltaSchema: JsonSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["added", "changed", "invalidated"],
-  properties: {
-    added: stringArraySchema,
-    changed: stringArraySchema,
-    invalidated: stringArraySchema,
-  },
-};
-const diagnosticSchema: JsonSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["level", "code", "path", "message"],
-  properties: {
-    level: { enum: ["error", "warning", "info"] },
-    code: stringSchema,
-    path: stringSchema,
-    message: stringSchema,
-  },
-};
-const installResultSchema: JsonSchema = {
+const registryMutationResultSchema: JsonSchema = {
   type: "object",
   additionalProperties: false,
   required: [
     "pack",
     "registry",
     "source",
-    "generation",
-    "effectiveRevision",
-    "delta",
-    "diagnostics",
+    ...mutationResultRequired,
     "idempotent",
-    "cleanupPending",
     "artifactDigest",
   ],
   properties: {
@@ -93,17 +74,13 @@ const installResultSchema: JsonSchema = {
       required: ["type", "ref", "commit"],
       properties: { type: { const: "git" }, ref: stringSchema, commit: stringSchema },
     },
-    generation: { type: "integer" },
-    effectiveRevision: { type: "integer" },
-    delta: deltaSchema,
-    diagnostics: { type: "array", items: diagnosticSchema },
+    ...mutationResultProperties,
     idempotent: { type: "boolean" },
-    cleanupPending: { type: "boolean" },
     artifactDigest: stringSchema,
   },
 };
 
-const installErrorCodes = Object.freeze([
+const registryMutationErrorCodes = Object.freeze([
   ...frameworkErrorCodes,
   cliErrorCodes.registryUnavailable,
   cliErrorCodes.registryInvalid,
@@ -112,10 +89,19 @@ const installErrorCodes = Object.freeze([
   cliErrorCodes.sourceUnavailable,
   cliErrorCodes.sourceInvalid,
   cliErrorCodes.packInvalid,
-  cliErrorCodes.packUpgradeRequired,
   cliErrorCodes.practiceConflict,
   cliErrorCodes.storeBusy,
   cliErrorCodes.storeRecoveryRequired,
+]);
+
+const installErrorCodes = Object.freeze([
+  ...registryMutationErrorCodes,
+  cliErrorCodes.packUpdateRequired,
+]);
+
+const updateErrorCodes = Object.freeze([
+  ...registryMutationErrorCodes,
+  cliErrorCodes.packNotInstalled,
 ]);
 
 function optionString(
@@ -126,7 +112,7 @@ function optionString(
   return typeof value === "string" ? value : undefined;
 }
 
-function throwVisibleInstallError(error: unknown): never {
+function throwVisibleRegistryMutationError(error: unknown): never {
   if (error instanceof CliError) throw error;
   if (
     error instanceof SnapshotFormatError ||
@@ -136,7 +122,13 @@ function throwVisibleInstallError(error: unknown): never {
     throw new CliError(cliErrorCodes.packInvalid, "The selected Pack is invalid.");
   }
   if (error instanceof UpgradeRequiredError) {
-    throw new CliError(cliErrorCodes.packUpgradeRequired, error.message);
+    throw new CliError(
+      cliErrorCodes.packUpdateRequired,
+      "The selected Pack has changed; use `lore pack update` to replace it.",
+    );
+  }
+  if (error instanceof PackNotInstalledError) {
+    throw new CliError(cliErrorCodes.packNotInstalled, "The specified Pack is not installed.");
   }
   if (error instanceof PracticeConflictError) {
     throw new CliError(
@@ -156,12 +148,15 @@ function throwVisibleInstallError(error: unknown): never {
   throw error;
 }
 
-async function installPack(
+type RegistryMutationOperation = "install" | "update";
+
+async function mutateRegistryPack(
   services: ResolvedInstallCommandServices,
   storageRoot: StorageRoot,
   packName: string,
   requestedVersion?: string,
   registryLocator?: string,
+  operation: RegistryMutationOperation = "install",
 ): Promise<JsonValue> {
   const loaded = await services.loadRegistry(registryLocator);
   const resolved = resolveRegistryRelease(loaded.registry, packName, requestedVersion);
@@ -180,7 +175,7 @@ async function installPack(
         "The fetched Pack identity does not match the Registry release.",
       );
     }
-    const result = await services.store.install(
+    const result = await services.store[operation === "update" ? "upgrade" : "install"](
       storageRoot,
       decoded.candidate,
       decoded.diagnostics,
@@ -193,14 +188,7 @@ async function installPack(
         ref: materialized.resolvedRef,
         commit: materialized.resolvedCommit,
       },
-      generation: result.generation,
-      effectiveRevision: result.effectiveRevision,
-      delta: {
-        added: [...result.delta.added],
-        changed: [...result.delta.changed],
-        invalidated: [...result.delta.invalidated],
-      },
-      diagnostics: result.diagnostics.map((diagnostic) => ({ ...diagnostic })),
+      ...toMutationResultData(result),
       idempotent: result.idempotent,
       cleanupPending: result.cleanupPending,
       artifactDigest: result.artifactDigest,
@@ -210,7 +198,10 @@ async function installPack(
   }
 }
 
-export function createInstallCommand(services: InstallCommandServices): CommandDefinition {
+function createRegistryMutationCommand(
+  operation: RegistryMutationOperation,
+  services: InstallCommandServices,
+): CommandDefinition {
   const resolvedServices = {
     loadRegistry: services.loadRegistry ?? loadRegistry,
     materializeRelease: services.materializeRelease ?? materializeRegistryRelease,
@@ -219,16 +210,13 @@ export function createInstallCommand(services: InstallCommandServices): CommandD
     storageRoot: services.storageRoot,
   };
   return {
-    name: "install",
-    summary: "Install a Knowledge Pack into the selected local Store.",
-    positionals: [{ name: "pack", required: true }],
+    name: `pack.${operation}`,
+    summary:
+      operation === "install"
+        ? "Install a Knowledge Pack into the selected local Store."
+        : "Update an installed Knowledge Pack in the selected local Store.",
+    positionals: [{ name: "pack[@version]", required: true }],
     options: [
-      {
-        longFlag: "--pack-version",
-        description: "Install one exact Registry release version.",
-        value: { name: "version", required: true },
-        optionRequired: false,
-      },
       {
         longFlag: "--registry",
         description: "Use a GitHub repository containing .lorelum/registry.yaml.",
@@ -236,26 +224,37 @@ export function createInstallCommand(services: InstallCommandServices): CommandD
         optionRequired: false,
       },
     ],
-    resultSchema: installResultSchema,
-    errorCodes: installErrorCodes,
+    resultSchema: registryMutationResultSchema,
+    errorCodes: operation === "install" ? installErrorCodes : updateErrorCodes,
     exitCodes: [0, 2],
     async handler(invocation) {
       try {
+        // Validate the compact Pack reference before touching the Registry or Store.
+        const specifier = parsePackSpecifier(invocation.positionals[0]!);
         return {
-          data: await installPack(
+          data: await mutateRegistryPack(
             resolvedServices,
             resolveInvocationStorageRoot(
               invocation.options.storeRoot,
               resolvedServices.storageRoot,
             ),
-            invocation.positionals[0]!,
-            optionString(invocation.options, "packVersion"),
+            specifier.packName,
+            specifier.requestedVersion,
             optionString(invocation.options, "registry"),
+            operation,
           ),
         };
       } catch (error) {
-        throwVisibleInstallError(error);
+        throwVisibleRegistryMutationError(error);
       }
     },
   };
+}
+
+export function createInstallCommand(services: InstallCommandServices): CommandDefinition {
+  return createRegistryMutationCommand("install", services);
+}
+
+export function createUpdateCommand(services: InstallCommandServices): CommandDefinition {
+  return createRegistryMutationCommand("update", services);
 }

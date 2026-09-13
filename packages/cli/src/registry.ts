@@ -12,10 +12,11 @@ import {
 } from "@lorelum/engine";
 import { frameworkErrorCodes, invalidInvocationError } from "./runtime/errors.js";
 import { logLevels } from "./runtime/logger.js";
-import { createInstallCommand } from "./install/install-command.js";
+import { createInstallCommand, createUpdateCommand } from "./install/install-command.js";
 import { createGetCommand } from "./get/get-command.js";
 import { createQueryCommand } from "./query/query-command.js";
 import { createListCommand } from "./list/list-command.js";
+import { createRemoveCommand } from "./uninstall/uninstall-command.js";
 import {
   createBackendCommands,
   createProcessBackendSupervisor,
@@ -253,6 +254,8 @@ const sharedListService = createListService({
 export const commandRegistry = snapshotCommandDefinitions([
   discoveryCommandDefinition,
   createInstallCommand({ store: sharedStore, storageRoot: sharedStorageRoot }),
+  createUpdateCommand({ store: sharedStore, storageRoot: sharedStorageRoot }),
+  createRemoveCommand({ store: sharedStore, storageRoot: sharedStorageRoot }),
   createGetCommand({ store: sharedStore, storageRoot: sharedStorageRoot }),
   createQueryCommand({
     queryService: sharedQueryService,

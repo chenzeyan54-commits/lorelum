@@ -2,7 +2,7 @@
 
 This is the reproducible lifecycle benchmark for [Issue #79](https://github.com/lorelum/lorelum/issues/79), following the incremental projection change in [Issue #73](https://github.com/lorelum/lorelum/issues/73). It measures one-Practice `add`, `change`, and `remove` mutations against 1,000, 5,000, and 20,000 Practice baselines.
 
-It deliberately uses a small **compiled internal runner**, not the public `lore` CLI. The public CLI has no offline upgrade or uninstall contract, while this benchmark needs deterministic fixture inputs and all three lifecycle operations without Registry or Git access. The runner imports Engine lifecycle internals only; it does not add a CLI command or change CLI JSON, MCP, or Pack contracts.
+It deliberately uses a small **compiled internal runner**, not the public `lore` CLI. The public CLI has no offline update or remove contract, while this benchmark needs deterministic fixture inputs and all three lifecycle operations without Registry or Git access. The runner imports Engine lifecycle internals only; it does not add a CLI command or change CLI JSON, MCP, or Pack contracts.
 
 Build the runner from the repository root, then pass its path explicitly:
 

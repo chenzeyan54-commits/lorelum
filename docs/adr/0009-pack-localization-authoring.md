@@ -78,7 +78,7 @@ Creating a manifest also requires `--source-locale`; later synchronization reads
 
 Localization assets do not enter `PackCandidate`, runtime artifact digests, LocalStore generations or effective revisions, conflict resolution, indexing, retrieval, Decision traversal, or Agent context.
 
-`lore install` continues to materialize only `pack.yaml`, optional `decisions.yaml`, and `practices/**/*.md`. This ADR adds no locale install flag, Registry locale metadata, localized content cache, multilingual embedding/ranking behavior, or CLI message localization.
+`lore pack install` continues to materialize only `pack.yaml`, optional `decisions.yaml`, and `practices/**/*.md`. This ADR adds no locale install flag, Registry locale metadata, localized content cache, multilingual embedding/ranking behavior, or CLI message localization.
 
 The agent-first JSON protocol keeps command names, field names, error codes, Practice ids, and enum values stable and unlocalized. Authoring commands and their result/diagnostic schemas remain discoverable through the existing command registry.
 

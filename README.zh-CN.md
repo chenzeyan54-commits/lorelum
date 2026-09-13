@@ -319,7 +319,7 @@ _（CLI 处于 pre-alpha，以下命令展示的是设计中的交互形态。�
 
 ```bash
 # 从社区 Knowledge Pack 开始，即使你还不知道所有规则
-lore install react-fullstack
+lore pack install react-fullstack
 
 # 问：我当前的任务该遵循哪些 Practice？
 lore query "带权限控制、表单、测试的设置页"
@@ -383,7 +383,7 @@ Lorelum 不是"更好的 .cursorrules"，而是位于你所用 AI 工具背后�
 
 两种模式共用同一套命令：
 
-- **本地模式（默认）：** `lore install` 一个公开包，离线查询，零运维。像 npm 一样简单。
+- **本地模式（默认）：** `lore pack install` 一个公开包，离线查询，零运维。像 npm 一样简单。
 - **端点模式：** 把 CLI 指向团队 / SaaS / 自托管端点，享受实时同步与多人协作。
 
 当前本地基础能力包含按 ID 精确读取的 `lore get` 和离线关键词检索的 `lore query`；语义与混合检索仍在路线图中。
@@ -393,7 +393,7 @@ Lorelum 不是"更好的 .cursorrules"，而是位于你所用 AI 工具背后�
 我们以里程碑方式公开推进：
 
 - **P0–P2** — 核心引擎：Practice 格式、检索（语义 + 元数据）、`lore query` / `get` / `check`。仅本地模式。
-- **P3–P4** — 第一个公开包（`react-fullstack`）、MCP Server、`lore install` / `search`、公开 Registry MVP。
+- **P3–P4** — 第一个公开包（`react-fullstack`）、MCP Server、`lore pack install` / `search`、公开 Registry MVP。
 - **P5** — 端点服务内核（AGPL，可自托管）、团队知识包。
 - **P6** — 企业治理（SSO、审计、敏感信息扫描）。
 

@@ -320,7 +320,7 @@ _(CLI is pre-alpha — commands below show the intended UX.)_
 
 ```bash
 # Start with a community pack — even if you do not know every rule yet
-lore install react-fullstack
+lore pack install react-fullstack
 
 # Ask: "what practices apply to my current task?"
 lore query "settings page with permission guard, form, and tests"
@@ -384,7 +384,7 @@ The integration layer owns **when to call** and **how to inject**. Lifecycle sig
 
 Two modes share the same commands:
 
-- **Local mode (default):** `lore install` a public pack, query offline. Zero ops. Like npm.
+- **Local mode (default):** `lore pack install` a public pack, query offline. Zero ops. Like npm.
 - **Endpoint mode:** point the CLI at a team/SaaS/self-hosted endpoint for real-time, multi-user knowledge.
 
 The current local foundation provides exact `lore get`, local semantic `lore query`, and an explicit offline keyword fallback with `lore query --mode keyword`. Hybrid retrieval remains on the roadmap.
@@ -394,7 +394,7 @@ The current local foundation provides exact `lore get`, local semantic `lore que
 We're building in the open, in milestones:
 
 - **P0–P2** — Core engine: Practice format, retrieval (embed + metadata), `lore query` / `get` / `check`. Local mode only.
-- **P3–P4** — First public pack (`react-fullstack`), MCP server, `lore install` / `search`, public registry MVP.
+- **P3–P4** — First public pack (`react-fullstack`), MCP server, `lore pack install` / `search`, public registry MVP.
 - **P5** — Endpoint kernel (AGPL, self-hostable), team packs.
 - **P6** — Enterprise governance (SSO, audit, sensitive-info scanning).
 
