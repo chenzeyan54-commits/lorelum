@@ -130,7 +130,7 @@ factory、session、migrator 与 index-file publisher 都只有一份实现。�
 4. `persistence/database/migrator.ts` 是唯一运行入口：它把新建的 LocalStore `.next` 文件或 index staging 文件交给 Drizzle `migrate()`。迁移完成后才进入业务 transaction 写 projection 或 index rows；不把 migration 嵌套进业务 transaction。
 5. read-only active index 不运行 migration，只验证它已处于当前 baseline。legacy 文件先走本节定义的 reset，而不是交给 Drizzle 接管。
 
-Drizzle 的运行时 migrator 需要读取生成的 migration 目录。因此 release/compiled CLI 必须把三套 migration assets 一并打包，并以可执行文件可定位的路径传入 factory；不能依赖仓库 cwd 或用户机器上的源码目录。
+Drizzle 的运行时 migrator 需要读取生成的 migration 目录。因此 `build:cli`、CLI integration 与 release compiler 都通过 Bun `--asset` / `compile.assets` 嵌入三套 migration 目录；standalone executable 从 `import.meta.dir/migrations/<database>` 定位它们，不能依赖仓库 cwd 或用户机器上的源码目录。compiled cold-open regression 覆盖这条路径。
 
 当前的物理布局仍应保留：
 

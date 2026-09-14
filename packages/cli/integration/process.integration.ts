@@ -77,6 +77,8 @@ async function compileCli(bunExecutable: string, executable: string): Promise<vo
     bunExecutable,
     "build",
     "--compile",
+    "--asset",
+    "packages/engine/src/persistence/migrations",
     entrypoint,
     "--outfile",
     executable,

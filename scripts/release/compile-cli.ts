@@ -10,6 +10,7 @@ import type { NativeArtifactManifest } from "../../packages/backend/src/runtime/
 
 const repositoryRoot = resolve(import.meta.dir, "../..");
 const defaultEntrypoint = join(repositoryRoot, "packages/cli/src/main.ts");
+const migrationAssetsDirectory = "packages/engine/src/persistence/migrations";
 
 export interface CompileReleaseCliOptions {
   readonly nativeManifest: NativeArtifactManifest;
@@ -50,6 +51,7 @@ export async function compileReleaseCli(
     compile: {
       target: compileTarget,
       outfile: options.outfile,
+      assets: [migrationAssetsDirectory],
       autoloadDotenv: false,
       autoloadBunfig: false,
     },
@@ -99,6 +101,8 @@ async function compileBundledEntry(
         `--target=${compileTarget}`,
         "--no-compile-autoload-dotenv",
         "--no-compile-autoload-bunfig",
+        "--asset",
+        migrationAssetsDirectory,
         bundleOutfile,
         "--outfile",
         options.outfile,

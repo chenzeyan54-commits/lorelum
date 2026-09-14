@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import * as keywordIndexSchema from "./schemas/keyword-index";
@@ -11,6 +12,9 @@ export interface SqliteDatabaseDefinition<Schema extends Record<string, unknown>
 }
 
 function migrationFolder(name: string): string {
+  if (Bun.isStandaloneExecutable) {
+    return join(import.meta.dir, "migrations", name);
+  }
   return fileURLToPath(new URL(`./migrations/${name}/`, import.meta.url));
 }
 

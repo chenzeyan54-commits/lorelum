@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import {
   resolveEmbeddingNativeArtifact,
   trustedEmbeddingManifestPath,
@@ -11,6 +11,7 @@ import type { NativeArtifactManifest } from "../../packages/backend/src/runtime/
 import { compileReleaseCli } from "./compile-cli";
 
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
+const repositoryRoot = resolve(import.meta.dir, "../..");
 const artifact = resolveEmbeddingNativeArtifact("darwin", "arm64");
 if (artifact === undefined) throw new Error("darwin-arm64 artifact is required");
 
@@ -99,6 +100,47 @@ test("release compiler replaces the embedding catalog's trusted manifest", async
     expect(exitCode).toBe(0);
     expect(stderr).toBe("");
     expect(stdout.trim()).toBe(releaseManifest.buildIdentity);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("release compiler embeds Drizzle migrations for cold LocalStore initialization", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "lore-release-migrations-"));
+  try {
+    const manifestArtifact = join(directory, "expected-manifest.json");
+    const entrypoint = join(directory, "entry.ts");
+    const executable = join(directory, "fixture");
+    await writeFile(manifestArtifact, JSON.stringify({ buildIdentity: "source-build" }));
+    await writeFile(
+      entrypoint,
+      [
+        'import { Database } from "bun:sqlite";',
+        `import { createSqliteConnection, localStoreDatabaseDefinition, migrateSqlite } from ${JSON.stringify(join(repositoryRoot, "packages/engine/src/persistence/index.ts"))};`,
+        'const connection = createSqliteConnection(new Database(":memory:"), localStoreDatabaseDefinition.schema);',
+        "migrateSqlite(connection, localStoreDatabaseDefinition);",
+        'console.log(connection.client.query("SELECT COUNT(*) AS count FROM __drizzle_migrations").get().count);',
+        "connection.close();",
+      ].join("\n"),
+    );
+
+    const compiled = await compileReleaseCli({
+      nativeManifest: manifest,
+      outfile: executable,
+      entrypoint,
+      manifestArtifact,
+      artifact,
+      target: `bun-${process.platform}-${process.arch}` as Bun.Build.CompileTarget,
+    });
+    const child = Bun.spawn([compiled.output], { stdout: "pipe", stderr: "pipe" });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stderr).toBe("");
+    expect(stdout.trim()).toBe("1");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

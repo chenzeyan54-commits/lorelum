@@ -17,7 +17,7 @@
     "design:lint": "designmd lint DESIGN.md",
     "typecheck": "bun run --filter '*' typecheck && tsc --noEmit -p scripts/release/tsconfig.json",
     "build:native": "bun scripts/native/build-embedding.ts",
-    "build:cli": "bun build --compile packages/cli/src/main.ts --outfile dist/lore",
+    "build:cli": "bun build --compile --asset packages/engine/src/persistence/migrations packages/cli/src/main.ts --outfile dist/lore",
     "build:release-staging": "bun scripts/release/build.ts",
     "build:release": "bun scripts/release/package.ts",
     "build:site": "bun run --filter @lorelum/site build",
