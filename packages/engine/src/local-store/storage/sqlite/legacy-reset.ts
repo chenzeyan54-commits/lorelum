@@ -2,8 +2,18 @@ import { access, mkdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 
+import { diffEffectivePractices } from "../../model";
 import { rebuildEffectivePracticesFromManifest } from "../artifacts/rebuild";
-import { tryReadManifest } from "../manifest/manifest-store";
+import {
+  clearOperationJournal,
+  createOperationJournalRecord,
+  writeOperationJournal,
+} from "../journal/operation-journal";
+import {
+  tryReadManifest,
+  writeManifest,
+  type InstalledPacksManifest,
+} from "../manifest/manifest-store";
 import { acquireMutationLock } from "../mutation-lock";
 import { SqliteStateError, StoreRecoveryRequiredError } from "../errors";
 
@@ -17,6 +27,8 @@ import { writeDerivedState } from "./state-writer";
 const DRIZZLE_MIGRATIONS_TABLE = "__drizzle_migrations";
 
 function hasTable(database: Database, name: string): boolean {
+  // SQLite's catalog is the only reliable way to distinguish a legacy file
+  // from a Drizzle-managed LocalStore before attempting any migration.
   const row = database
     .query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
     .get(name);
@@ -58,7 +70,25 @@ async function discardLegacyDerivedState(rootPath: string): Promise<void> {
   ]);
 }
 
-async function publishRebuiltDatabase(rootPath: string): Promise<void> {
+/** A baseline reset is a reindex-style recovery event, so it gets a fresh tuple. */
+function nextBaselineManifest(manifest: InstalledPacksManifest): InstalledPacksManifest {
+  if (
+    !Number.isSafeInteger(manifest.generation) ||
+    !Number.isSafeInteger(manifest.effectiveRevision) ||
+    manifest.generation === Number.MAX_SAFE_INTEGER ||
+    manifest.effectiveRevision === Number.MAX_SAFE_INTEGER
+  ) {
+    throw new StoreRecoveryRequiredError("Legacy LocalStore counters cannot advance safely");
+  }
+  return Object.freeze({
+    schemaVersion: manifest.schemaVersion,
+    generation: manifest.generation + 1,
+    effectiveRevision: manifest.effectiveRevision + 1,
+    packs: manifest.packs,
+  });
+}
+
+async function publishRebuiltDatabase(rootPath: string, fullRefresh: boolean): Promise<void> {
   const path = sqlitePath(rootPath);
   const stagingPath = `${path}.next-${crypto.randomUUID()}`;
   let database: Database | undefined;
@@ -70,21 +100,29 @@ async function publishRebuiltDatabase(rootPath: string): Promise<void> {
       );
     }
     const effectivePractices = await rebuildEffectivePracticesFromManifest(rootPath, manifest);
+    const targetManifest = fullRefresh ? nextBaselineManifest(manifest) : manifest;
+    const fullRefreshDelta = diffEffectivePractices([], effectivePractices);
 
     database = new Database(stagingPath);
     migrateDatabase(database);
     const connection = createSqliteConnection(database, localStoreDatabaseDefinition.schema);
     writeDerivedState(connection.orm, {
-      generation: manifest.generation,
-      effectiveRevision: manifest.effectiveRevision,
-      activePacks: manifest.packs,
+      generation: targetManifest.generation,
+      effectiveRevision: targetManifest.effectiveRevision,
+      activePacks: targetManifest.packs,
       effectivePractices,
+      ...(fullRefresh
+        ? {
+            revisionNotification: { delta: fullRefreshDelta, supersedesPending: true },
+            clearRevisionLog: true,
+          }
+        : {}),
     });
     const snapshot = readLocalStoreSnapshot(connection.orm);
     if (
       snapshot === undefined ||
-      snapshot.metadata.generation !== manifest.generation ||
-      snapshot.metadata.effectiveRevision !== manifest.effectiveRevision
+      snapshot.metadata.generation !== targetManifest.generation ||
+      snapshot.metadata.effectiveRevision !== targetManifest.effectiveRevision
     ) {
       throw new StoreRecoveryRequiredError(
         "Legacy LocalStore rebuild did not produce a valid snapshot",
@@ -94,8 +132,16 @@ async function publishRebuiltDatabase(rootPath: string): Promise<void> {
     database = undefined;
 
     await discardLegacyDerivedState(rootPath);
+    const journal = fullRefresh
+      ? createOperationJournalRecord("reindex", manifest, targetManifest)
+      : undefined;
+    if (journal !== undefined) {
+      await writeOperationJournal(rootPath, journal);
+      await writeManifest(rootPath, targetManifest);
+    }
     await Promise.all([rm(`${path}-wal`, { force: true }), rm(`${path}-shm`, { force: true })]);
     await rename(stagingPath, path);
+    if (journal !== undefined) await clearOperationJournal(rootPath, journal.operationId);
   } catch (error) {
     if (error instanceof StoreRecoveryRequiredError) throw error;
     throw new StoreRecoveryRequiredError(
@@ -108,9 +154,12 @@ async function publishRebuiltDatabase(rootPath: string): Promise<void> {
 }
 
 /** Reset a legacy manual SQLite projection while the Store mutation lock is already held. */
-export async function resetLegacyStoreUnderLock(rootPath: string): Promise<boolean> {
+export async function resetLegacyStoreUnderLock(
+  rootPath: string,
+  options: { readonly fullRefresh?: boolean } = {},
+): Promise<boolean> {
   if (!(await isLegacyStore(rootPath))) return false;
-  await publishRebuiltDatabase(rootPath);
+  await publishRebuiltDatabase(rootPath, options.fullRefresh !== false);
   return true;
 }
 

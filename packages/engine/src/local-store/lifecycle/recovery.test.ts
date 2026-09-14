@@ -570,6 +570,64 @@ test("legacy reset rebuilds the SQLite projection from retained Pack artifacts w
   });
 });
 
+test("legacy reset replaces pending notifications with a fresh durable full refresh", async () => {
+  await withRoot(async (root) => {
+    const store = createLocalStore();
+    await store.install(root, candidate("platform", platform));
+    const before = await readManifest(root.rootPath);
+    await replaceWithLegacyStoreDatabase(root.rootPath);
+
+    const legacy = new Database(sqlitePath(root.rootPath));
+    try {
+      legacy
+        .query(
+          "INSERT INTO effective_revision_outbox (revision, delta_json, created_at) VALUES (?, ?, ?)",
+        )
+        .run(
+          before.effectiveRevision,
+          JSON.stringify({ added: ["stale.practice"], changed: [], invalidated: [] }),
+          "2026-09-14T00:00:00.000Z",
+        );
+    } finally {
+      legacy.close();
+    }
+
+    await store.open(root);
+    const after = await readManifest(root.rootPath);
+    expect(after.generation).toBe(before.generation + 1);
+    expect(after.effectiveRevision).toBe(before.effectiveRevision + 1);
+
+    const rebuilt = new Database(sqlitePath(root.rootPath), { readonly: true });
+    try {
+      const row = rebuilt
+        .query("SELECT revision, delta_json FROM effective_revision_outbox")
+        .get() as { readonly revision: number; readonly delta_json: string };
+      expect(row.revision).toBe(after.effectiveRevision);
+      expect(JSON.parse(row.delta_json)).toEqual({
+        added: ["platform.api", "platform.auth"],
+        changed: [],
+        invalidated: [],
+      });
+    } finally {
+      rebuilt.close();
+    }
+  });
+});
+
+test("reindex owns the only full-refresh revision when it first hydrates a legacy Store", async () => {
+  await withRoot(async (root) => {
+    const store = createLocalStore();
+    await store.install(root, candidate("platform", platform));
+    const before = await readManifest(root.rootPath);
+    await replaceWithLegacyStoreDatabase(root.rootPath);
+
+    const reindexed = await store.reindex(root);
+    expect(reindexed.generation).toBe(before.generation + 1);
+    expect(reindexed.effectiveRevision).toBe(before.effectiveRevision + 1);
+    expect(reindexed.delta.added).toEqual(["platform.api", "platform.auth"]);
+  });
+});
+
 test("legacy reset retains its SQLite projection when a referenced Pack artifact is missing", async () => {
   await withRoot(async (root) => {
     const store = createLocalStore();

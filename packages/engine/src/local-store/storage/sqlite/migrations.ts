@@ -11,6 +11,8 @@ import { SqliteStateError } from "../errors";
 export const LOCAL_STORE_SCHEMA_VERSION = 1;
 
 function assertNoUnknownAppliedMigration(database: Database): void {
+  // Drizzle does not model its own migration-history table; SQLite's catalog
+  // and applied hashes are required to reject an unsupported future baseline.
   const table = database
     .query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = '__drizzle_migrations'")
     .get();

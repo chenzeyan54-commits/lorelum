@@ -96,7 +96,9 @@ export async function reindexStore(
     const lock = await acquireMutationLock(rootPath);
     let repository: LocalStoreRepository | undefined;
     try {
-      await resetLegacyStoreUnderLock(rootPath);
+      // Reindex writes its own fresh full-refresh notification below, so a
+      // baseline reset here only hydrates the new SQLite projection.
+      await resetLegacyStoreUnderLock(rootPath, { fullRefresh: false });
       const priorJournalIds = await listOperationJournals(rootPath);
       repository = await openDatabaseForReindex(rootPath);
       try {

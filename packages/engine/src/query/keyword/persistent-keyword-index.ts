@@ -186,6 +186,7 @@ export async function openPersistentKeywordIndex(
   try {
     connection = openSqliteConnection(active, keywordIndexDatabaseDefinition.schema);
     migrateSqlite(connection, keywordIndexDatabaseDefinition);
+    // WAL is a SQLite file-mode setting, outside Drizzle's relational schema API.
     connection.client.exec("PRAGMA journal_mode = WAL");
     return wrap(connection, readCheckpoint(connection));
   } catch (error) {

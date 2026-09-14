@@ -2,7 +2,7 @@
 
 - 日期：2026-09-14
 - 关联：[Issue #58](https://github.com/lorelum/lorelum/issues/58)
-- 状态：设计已根据“以代码管理和分层为主目标”的方向重写；尚未安装依赖或修改生产代码。
+- 状态：设计已根据“以代码管理和分层为主目标”的方向重写并实施。现行开发约束见 [Engine persistence and Drizzle](../development/persistence.md)。
 
 ## 结论
 
@@ -414,10 +414,10 @@ Store 的文件 mutation lock 倒是另一个值得单独评估的对象：它�
 - **保留的权威数据**：sealed Pack artifact 保存 Practice 内容，manifest 决定当前哪些 artifact 生效；两者的格式不变，必须原样保留。它们是新 LocalStore 的重建输入。
 - **检测与预检**：发现旧 `store.sqlite`、但没有当前 Drizzle baseline 标记时，判定为 legacy Store。在 Store mutation lock 下只核对 manifest 引用的每个 artifact 与 sealed projection；不读取旧 SQLite，也不解析或重放 legacy operation journal。manifest 与 artifact 能构成完整输入就重建；任一引用缺失或校验失败则返回 recovery required，不删除任何 Pack 数据。
 - **清理范围**：确认权威数据完整后，只清理旧 `store.sqlite`（及 WAL/SHM）、旧 keyword / semantic index、旧 SQLite 内的 revision log/outbox，以及 legacy journal、staging/lock 残留。它们不再是新 Store 的输入。用户 config、模型缓存、Backend runtime 与 `control.sqlite` 不在此范围。
-- **重建**：创建 `store.sqlite.next`，运行唯一的 Drizzle init migration，从保留的 manifest 和 sealed projection 写入 active packs、effective practices、sources 和匹配的 Store metadata；完整校验后原子替换旧 SQLite 文件。keyword 和 semantic index 按新版本重新建立。
+- **重建**：创建 `store.sqlite.next`，运行唯一的 Drizzle init migration，从保留的 manifest 和 sealed projection 写入 active packs、effective practices 和 sources。切换作为一次 reindex-style recovery：推进 manifest 的 generation/effectiveRevision，在同一新 SQLite 事务里写入覆盖旧 pending 状态的 full-refresh outbox notification；完整校验后以 journal 保护 manifest 更新并原子替换旧 SQLite 文件。keyword 和 semantic index 按新版本重新建立。
 - **失败语义**：清理或初始化中断时，旧 Pack artifact/manifest 仍在；下次打开再次从它们重建。新的 SQLite 投影完整初始化前，不允许把 Store 当成可读取状态。
 
-这意味着本次切换不承诺保留旧 **SQLite projection 或 index**，但保留已安装 Pack。`effective_revision_log` 和 `effective_revision_outbox` 不转移：前者没有可继续消费的历史，后者不重放；新 Store 从保留 manifest 对应的当前 revision 开始，所有新 index 从完整 build 建立 checkpoint。
+这意味着本次切换不承诺保留旧 **SQLite projection 或 index**，但保留已安装 Pack。`effective_revision_log` 不转移；旧 `effective_revision_outbox` 不逐条重放，而由推进后 revision 的 full-refresh notification 原子覆盖。这样消费者不必信任旧 SQLite 行，也不会漏掉重建后的当前 corpus。
 
 未来若表结构再改，仍维持这项 alpha 政策：要么 bump persistence baseline 并 reset LocalStore-owned 数据，要么在产品进入需要保留本地状态的阶段后，单独设计真正的 version-to-version migration。不能在两者之间悄悄补一段旧 SQL 升级逻辑。
 
