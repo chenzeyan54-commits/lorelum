@@ -1,67 +1,33 @@
 import { Database } from "bun:sqlite";
+import { eq } from "drizzle-orm";
 
+import {
+  createSqliteConnection,
+  migrateSqlite,
+  semanticIndexDatabaseDefinition,
+} from "../../../persistence";
+import { semanticIndexMetadata } from "../../../persistence/schemas/semantic-index";
 import { SemanticIndexError } from "../errors";
 import type { SemanticDocument } from "../projection";
 import type { SemanticIndexMetadata } from "./metadata";
-
-const CREATE_METADATA_TABLE = `
-  CREATE TABLE semantic_index_metadata (
-    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-    index_version INTEGER NOT NULL,
-    root_binding TEXT NOT NULL,
-    generation INTEGER NOT NULL,
-    effective_revision INTEGER NOT NULL,
-    manifest_digest TEXT NOT NULL,
-    profile_id TEXT NOT NULL,
-    encoding_id TEXT NOT NULL,
-    dimensions INTEGER NOT NULL,
-    document_projection_version INTEGER NOT NULL,
-    normalization TEXT NOT NULL,
-    vector_count INTEGER NOT NULL
-  )
-`;
-
-const CREATE_VECTORS_TABLE = `
-  CREATE TABLE semantic_vectors (
-    practice_id TEXT PRIMARY KEY,
-    content_digest TEXT NOT NULL,
-    projection_digest TEXT NOT NULL,
-    vector BLOB NOT NULL
-  )
-`;
-
-const INSERT_METADATA = `
-  INSERT INTO semantic_index_metadata (
-    singleton, index_version, root_binding, generation, effective_revision, manifest_digest,
-    profile_id, encoding_id, dimensions, document_projection_version, normalization, vector_count
-  ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`;
 
 const INSERT_VECTOR = `
   INSERT INTO semantic_vectors (practice_id, content_digest, projection_digest, vector)
   VALUES (?, ?, ?, ?)
 `;
 
-const UPDATE_METADATA = `
-  UPDATE semantic_index_metadata
-  SET index_version = ?, root_binding = ?, generation = ?, effective_revision = ?,
-      manifest_digest = ?, profile_id = ?, encoding_id = ?, dimensions = ?,
-      document_projection_version = ?, normalization = ?, vector_count = ?
-  WHERE singleton = 1
-`;
-
 interface MetadataRow extends Record<string, unknown> {
-  readonly index_version: number;
-  readonly root_binding: string;
+  readonly indexVersion: number;
+  readonly rootBinding: string;
   readonly generation: number;
-  readonly effective_revision: number;
-  readonly manifest_digest: string;
-  readonly profile_id: string;
-  readonly encoding_id: string;
+  readonly effectiveRevision: number;
+  readonly manifestDigest: string;
+  readonly profileId: string;
+  readonly encodingId: string;
   readonly dimensions: number;
-  readonly document_projection_version: number;
+  readonly documentProjectionVersion: number;
   readonly normalization: string;
-  readonly vector_count: number;
+  readonly vectorCount: number;
 }
 
 export interface SemanticIndexVector {
@@ -80,34 +46,34 @@ function metadataFromRow(row: unknown): SemanticIndexMetadata {
   }
   const value = row as Partial<MetadataRow>;
   if (
-    !positiveInteger(value.index_version) ||
-    typeof value.root_binding !== "string" ||
+    !positiveInteger(value.indexVersion) ||
+    typeof value.rootBinding !== "string" ||
     !positiveInteger(value.generation) ||
-    !positiveInteger(value.effective_revision) ||
-    typeof value.manifest_digest !== "string" ||
-    !/^[a-f0-9]{64}$/.test(value.profile_id ?? "") ||
-    !/^[a-f0-9]{64}$/.test(value.encoding_id ?? "") ||
+    !positiveInteger(value.effectiveRevision) ||
+    typeof value.manifestDigest !== "string" ||
+    !/^[a-f0-9]{64}$/.test(value.profileId ?? "") ||
+    !/^[a-f0-9]{64}$/.test(value.encodingId ?? "") ||
     !positiveInteger(value.dimensions) ||
     value.dimensions === 0 ||
-    !positiveInteger(value.document_projection_version) ||
-    value.document_projection_version === 0 ||
+    !positiveInteger(value.documentProjectionVersion) ||
+    value.documentProjectionVersion === 0 ||
     value.normalization !== "l2" ||
-    !positiveInteger(value.vector_count)
+    !positiveInteger(value.vectorCount)
   ) {
     throw new SemanticIndexError("Semantic index metadata is invalid");
   }
   return Object.freeze({
-    indexVersion: value.index_version,
-    rootBinding: value.root_binding,
+    indexVersion: value.indexVersion,
+    rootBinding: value.rootBinding,
     generation: value.generation,
-    effectiveRevision: value.effective_revision,
-    manifestDigest: value.manifest_digest,
-    profileId: value.profile_id!,
-    encodingId: value.encoding_id!,
+    effectiveRevision: value.effectiveRevision,
+    manifestDigest: value.manifestDigest,
+    profileId: value.profileId!,
+    encodingId: value.encodingId!,
     dimensions: value.dimensions,
-    documentProjectionVersion: value.document_projection_version,
+    documentProjectionVersion: value.documentProjectionVersion,
     normalization: value.normalization,
-    vectorCount: value.vector_count,
+    vectorCount: value.vectorCount,
   });
 }
 
@@ -143,41 +109,46 @@ function vectorFromBlob(value: unknown, dimensions: number): Float32Array {
   return new Float32Array(copy);
 }
 
+function connectionFor(database: Database) {
+  return createSqliteConnection(database, semanticIndexDatabaseDefinition.schema);
+}
+
+function metadataRow(database: Database): MetadataRow | undefined {
+  return connectionFor(database)
+    .orm.select({
+      indexVersion: semanticIndexMetadata.indexVersion,
+      rootBinding: semanticIndexMetadata.rootBinding,
+      generation: semanticIndexMetadata.generation,
+      effectiveRevision: semanticIndexMetadata.effectiveRevision,
+      manifestDigest: semanticIndexMetadata.manifestDigest,
+      profileId: semanticIndexMetadata.profileId,
+      encodingId: semanticIndexMetadata.encodingId,
+      dimensions: semanticIndexMetadata.dimensions,
+      documentProjectionVersion: semanticIndexMetadata.documentProjectionVersion,
+      normalization: semanticIndexMetadata.normalization,
+      vectorCount: semanticIndexMetadata.vectorCount,
+    })
+    .from(semanticIndexMetadata)
+    .where(eq(semanticIndexMetadata.singleton, 1))
+    .get();
+}
+
 function insertMetadata(database: Database, metadata: SemanticIndexMetadata): void {
-  database
-    .query(INSERT_METADATA)
-    .run(
-      metadata.indexVersion,
-      metadata.rootBinding,
-      metadata.generation,
-      metadata.effectiveRevision,
-      metadata.manifestDigest,
-      metadata.profileId,
-      metadata.encodingId,
-      metadata.dimensions,
-      metadata.documentProjectionVersion,
-      metadata.normalization,
-      metadata.vectorCount,
-    );
+  connectionFor(database)
+    .orm.insert(semanticIndexMetadata)
+    .values({ singleton: 1, ...metadata })
+    .run();
 }
 
 function updateMetadata(database: Database, metadata: SemanticIndexMetadata): void {
-  const result = database
-    .query(UPDATE_METADATA)
-    .run(
-      metadata.indexVersion,
-      metadata.rootBinding,
-      metadata.generation,
-      metadata.effectiveRevision,
-      metadata.manifestDigest,
-      metadata.profileId,
-      metadata.encodingId,
-      metadata.dimensions,
-      metadata.documentProjectionVersion,
-      metadata.normalization,
-      metadata.vectorCount,
-    );
-  if (result.changes !== 1) throw new SemanticIndexError("Semantic index metadata is missing");
+  connectionFor(database)
+    .orm.update(semanticIndexMetadata)
+    .set(metadata)
+    .where(eq(semanticIndexMetadata.singleton, 1))
+    .run();
+  if (metadataRow(database) === undefined) {
+    throw new SemanticIndexError("Semantic index metadata is missing");
+  }
 }
 
 function finalMetadata(
@@ -202,10 +173,9 @@ export function initializeSemanticIndex(
   if (documents.length !== vectors.length || metadata.vectorCount !== documents.length) {
     throw new SemanticIndexError("Semantic index document and vector counts differ");
   }
-  database.exec(CREATE_METADATA_TABLE);
-  database.exec(CREATE_VECTORS_TABLE);
   try {
-    database.transaction(() => {
+    migrateSqlite(connectionFor(database), semanticIndexDatabaseDefinition);
+    connectionFor(database).orm.transaction(() => {
       insertMetadata(database, metadata);
       const insert = database.query(INSERT_VECTOR);
       for (let index = 0; index < documents.length; index += 1) {
@@ -219,7 +189,7 @@ export function initializeSemanticIndex(
           vectorBlob(vector),
         );
       }
-    })();
+    });
   } catch (error) {
     if (error instanceof SemanticIndexError) throw error;
     throw new SemanticIndexError("Cannot initialize semantic SQLite index", { cause: error });
@@ -317,9 +287,7 @@ export function applySemanticIndexChanges(
 
 export function readSemanticIndexMetadata(database: Database): SemanticIndexMetadata {
   try {
-    const metadata = metadataFromRow(
-      database.query("SELECT * FROM semantic_index_metadata WHERE singleton = 1").get(),
-    );
+    const metadata = metadataFromRow(metadataRow(database));
     const count = database.query("SELECT COUNT(*) AS count FROM semantic_vectors").get() as unknown;
     if (
       typeof count !== "object" ||

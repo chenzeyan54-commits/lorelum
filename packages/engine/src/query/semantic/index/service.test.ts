@@ -21,6 +21,7 @@ import {
 import type { EmbeddingPort } from "../encoding";
 import { SemanticEmbeddingError, SemanticIndexSnapshotChangedError } from "../errors";
 import { createEmbeddingProfile } from "../profile";
+import { SEMANTIC_INDEX_VERSION } from "./metadata";
 import { createSemanticIndexService, type SemanticIndexDependencies } from "./service";
 
 const encodingId = "a".repeat(64);
@@ -42,7 +43,14 @@ function practice(
 }
 
 function activeIndexPath(rootPath: string, profileId: string): string {
-  return join(rootPath, "indexes", "semantic", "v1", profileId, "active.sqlite");
+  return join(
+    rootPath,
+    "indexes",
+    "semantic",
+    `v${SEMANTIC_INDEX_VERSION}`,
+    profileId,
+    "active.sqlite",
+  );
 }
 
 function candidate(
@@ -238,7 +246,7 @@ test.skipIf(process.platform === "win32")(
   async () => {
     await withRoot(async (rootPath) => {
       const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
-      const directory = join(rootPath, "indexes", "semantic", "v1");
+      const directory = join(rootPath, "indexes", "semantic", `v${SEMANTIC_INDEX_VERSION}`);
       await mkdir(directory, { recursive: true });
       await writeFile(join(directory, profile.profileId), "not a directory");
       const current = identity(rootPath);
@@ -429,6 +437,9 @@ test("reuses a vector when only non-projected canonical content changes", async 
     expect(vectorPort.calls).toHaveLength(1);
     const database = new Database(activeIndexPath(rootPath, profile.profileId), { readonly: true });
     try {
+      expect(database.query("SELECT COUNT(*) AS count FROM __drizzle_migrations").get()).toEqual({
+        count: 1,
+      });
       const row = database
         .query("SELECT content_digest FROM semantic_vectors WHERE practice_id = ?")
         .get("platform.original") as { readonly content_digest: string };
