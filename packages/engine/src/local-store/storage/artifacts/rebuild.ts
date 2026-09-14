@@ -10,13 +10,12 @@ import {
 } from "../../model";
 import { artifactPath, calculateArtifactDigest } from "./artifact-store";
 import { decodeSnapshot } from "./snapshot-codec";
-import {
-  parseProjection,
-  PROJECTION_RELATIVE_PATH,
-  type SnapshotProjection,
-} from "./projection";
+import { parseProjection, PROJECTION_RELATIVE_PATH, type SnapshotProjection } from "./projection";
 import { ArtifactIntegrityError, ManifestError } from "../errors";
-import type { InstalledPackManifestEntry, InstalledPacksManifest } from "../manifest/manifest-store";
+import type {
+  InstalledPackManifestEntry,
+  InstalledPacksManifest,
+} from "../manifest/manifest-store";
 
 function entryPath(rootPath: string, entry: InstalledPackManifestEntry): string {
   return artifactPath(rootPath, entry.storageKey, entry.artifactDigest);
@@ -67,7 +66,10 @@ function verifyProjectionMatches(
     }
   }
   if (JSON.stringify(projection.decisions) !== JSON.stringify(decisions)) {
-    throw new ManifestError(entry.storageKey, "projection decisions differ from re-parsed snapshot");
+    throw new ManifestError(
+      entry.storageKey,
+      "projection decisions differ from re-parsed snapshot",
+    );
   }
 }
 

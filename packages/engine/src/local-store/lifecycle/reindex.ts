@@ -1,13 +1,8 @@
 import { rm } from "node:fs/promises";
 
-import {
-  diffEffectivePractices,
-} from "../model";
+import { diffEffectivePractices } from "../model";
 import { rebuildEffectivePracticesFromManifest } from "../storage/artifacts/rebuild";
-import {
-  SqliteStateError,
-  StoreRecoveryRequiredError,
-} from "../storage/errors";
+import { SqliteStateError, StoreRecoveryRequiredError } from "../storage/errors";
 import {
   clearOperationJournal,
   createOperationJournalRecord,

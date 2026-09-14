@@ -83,7 +83,9 @@ async function publishRebuiltDatabase(rootPath: string): Promise<void> {
       snapshot.metadata.generation !== manifest.generation ||
       snapshot.metadata.effectiveRevision !== manifest.effectiveRevision
     ) {
-      throw new StoreRecoveryRequiredError("Legacy LocalStore rebuild did not produce a valid snapshot");
+      throw new StoreRecoveryRequiredError(
+        "Legacy LocalStore rebuild did not produce a valid snapshot",
+      );
     }
     database.close();
     database = undefined;

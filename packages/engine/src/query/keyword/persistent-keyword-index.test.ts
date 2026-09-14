@@ -53,13 +53,7 @@ test("persistent keyword indexes use the Drizzle baseline and retain atomic FTS/
       index.close();
     }
 
-    const path = join(
-      rootPath,
-      "indexes",
-      "keyword",
-      `v${KEYWORD_INDEX_VERSION}`,
-      "active.sqlite",
-    );
+    const path = join(rootPath, "indexes", "keyword", `v${KEYWORD_INDEX_VERSION}`, "active.sqlite");
     const database = new Database(path, { readonly: true });
     try {
       expect(database.query("SELECT COUNT(*) AS count FROM __drizzle_migrations").get()).toEqual({
@@ -75,9 +69,9 @@ test("persistent keyword indexes use the Drizzle baseline and retain atomic FTS/
     const reopened = await openPersistentKeywordIndex(rootPath);
     expect(reopened?.checkpoint).toEqual({ rootBinding: "root-a", effectiveRevision: 2 });
     try {
-      expect(reopened?.search("authentication", 5).map((candidate) => candidate.practiceId)).toEqual([
-        "platform.auth",
-      ]);
+      expect(
+        reopened?.search("authentication", 5).map((candidate) => candidate.practiceId),
+      ).toEqual(["platform.auth"]);
     } finally {
       reopened?.close();
     }

@@ -94,7 +94,10 @@ function readCheckpoint(connection: KeywordIndexConnection): KeywordIndexCheckpo
   });
 }
 
-function writeCheckpoint(connection: KeywordIndexConnection, checkpoint: KeywordIndexCheckpoint): void {
+function writeCheckpoint(
+  connection: KeywordIndexConnection,
+  checkpoint: KeywordIndexCheckpoint,
+): void {
   connection.orm
     .update(keywordIndexMetadata)
     .set({

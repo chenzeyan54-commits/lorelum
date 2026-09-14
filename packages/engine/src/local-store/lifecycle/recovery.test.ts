@@ -45,7 +45,11 @@ async function withRoot(run: (root: StorageRoot) => Promise<void>): Promise<void
 
 async function replaceWithLegacyStoreDatabase(rootPath: string): Promise<void> {
   const path = sqlitePath(rootPath);
-  await Promise.all([rm(path, { force: true }), rm(`${path}-wal`, { force: true }), rm(`${path}-shm`, { force: true })]);
+  await Promise.all([
+    rm(path, { force: true }),
+    rm(`${path}-wal`, { force: true }),
+    rm(`${path}-shm`, { force: true }),
+  ]);
   const database = new Database(path);
   try {
     database.exec(
@@ -519,7 +523,9 @@ test("reindex preserves a SQLite file with unknown Drizzle migration history", a
     await expect(store.reindex(root)).rejects.toThrow("migration history is unsupported");
 
     const reopened = new Database(sqlitePath(root.rootPath));
-    expect(reopened.query("SELECT hash FROM __drizzle_migrations ORDER BY id DESC LIMIT 1").get()).toEqual({
+    expect(
+      reopened.query("SELECT hash FROM __drizzle_migrations ORDER BY id DESC LIMIT 1").get(),
+    ).toEqual({
       hash: "future-migration",
     });
     reopened.close();
@@ -581,12 +587,16 @@ test("legacy reset retains its SQLite projection when a referenced Pack artifact
     try {
       expect(
         database
-          .query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = '__drizzle_migrations'")
+          .query(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = '__drizzle_migrations'",
+          )
           .get(),
       ).toBeNull();
       expect(
         database
-          .query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'local_store_metadata'")
+          .query(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'local_store_metadata'",
+          )
           .get(),
       ).toEqual({ name: "local_store_metadata" });
     } finally {

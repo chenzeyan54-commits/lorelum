@@ -9,9 +9,9 @@ test("Drizzle init creates the LocalStore schema and records one applied baselin
     migrateDatabase(database);
     migrateDatabase(database);
 
-    expect(
-      database.query("SELECT COUNT(*) AS count FROM __drizzle_migrations").get(),
-    ).toEqual({ count: 1 });
+    expect(database.query("SELECT COUNT(*) AS count FROM __drizzle_migrations").get()).toEqual({
+      count: 1,
+    });
     expect(
       database
         .prepare(
