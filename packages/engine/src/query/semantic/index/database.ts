@@ -152,14 +152,14 @@ function updateMetadata(
 
 function finalMetadata(
   metadata: SemanticIndexMetadata,
-  vectorCount: number,
+  nextVectorCount: number,
 ): SemanticIndexMetadata {
-  if (!Number.isSafeInteger(vectorCount) || vectorCount < 0) {
+  if (!Number.isSafeInteger(nextVectorCount) || nextVectorCount < 0) {
     throw new SemanticIndexError("Semantic index vector count is invalid");
   }
   return Object.freeze({
     ...metadata,
-    vectorCount,
+    vectorCount: nextVectorCount,
   });
 }
 

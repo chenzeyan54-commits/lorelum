@@ -1,4 +1,4 @@
-import { asc, desc, eq, gt, lt } from "drizzle-orm";
+import { asc, desc, gt, lt } from "drizzle-orm";
 
 import type { RevisionDelta } from "../../model";
 import { effectiveRevisionLog } from "../../../persistence/schemas/local-store";
