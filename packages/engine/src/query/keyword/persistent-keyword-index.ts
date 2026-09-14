@@ -5,12 +5,9 @@ import { eq } from "drizzle-orm";
 
 import { KeywordIndexError } from "../errors";
 import { acquireMutationLock } from "../../local-store/storage/mutation-lock";
-import {
-  keywordIndexDatabaseDefinition,
-  migrateSqlite,
-  openSqliteConnection,
-  type SqliteConnection,
-} from "../../persistence";
+import { openSqliteConnection, type SqliteConnection } from "../../persistence/database/connection";
+import { migrateSqlite } from "../../persistence/database/migrator";
+import { keywordIndexDatabaseDefinition } from "../../persistence/definitions";
 import { keywordIndexMetadata } from "../../persistence/schemas/keyword-index";
 import {
   KEYWORD_INDEX_VERSION,

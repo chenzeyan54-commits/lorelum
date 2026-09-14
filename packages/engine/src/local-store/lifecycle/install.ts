@@ -17,11 +17,6 @@ import {
   type InstalledPackManifestEntry,
   type InstalledPacksManifest,
 } from "../storage/manifest/manifest-store";
-import {
-  materializeEffectivePracticesByIds,
-  readPracticeIdsForPack,
-} from "../storage/sqlite/snapshot-reader";
-import { applyIncrementalDerivedState } from "../storage/sqlite/state-writer";
 
 import { UpgradeRequiredError, PackNotInstalledError } from "./errors";
 import { nextStoreCounter } from "./counters";
@@ -87,7 +82,7 @@ export async function installOrUpgrade(
 ): Promise<InstallResult> {
   const committed = await withStoreMutation(
     rootPath,
-    async ({ database, recovery }) => {
+    async ({ repository, recovery }) => {
       // `recovery.manifest` is the converged, tuple-validated manifest (fresh
       // store → empty manifest), so install never re-reads or re-guesses it.
       const active = recovery.manifest;
@@ -143,7 +138,7 @@ export async function installOrUpgrade(
       }
 
       const previousPackPracticeIds =
-        mode === "upgrade" ? readPracticeIdsForPack(database, candidate.pack.name) : [];
+        mode === "upgrade" ? repository.readPracticeIdsForPack(candidate.pack.name) : [];
       const affectedPracticeIds = [
         ...new Set([
           ...candidate.sources.map((source) => source.practiceId),
@@ -153,7 +148,7 @@ export async function installOrUpgrade(
       const effectivePractices =
         recovery.metadata === undefined
           ? []
-          : materializeEffectivePracticesByIds(database, recovery.metadata, affectedPracticeIds);
+          : repository.materializeEffectivePracticesByIds(recovery.metadata, affectedPracticeIds);
       if (metrics !== undefined) {
         metrics.recordRead("effective_practices", effectivePractices.length);
         const sourceRows = effectivePractices.reduce(
@@ -218,8 +213,7 @@ export async function installOrUpgrade(
           await rm(stagingPath, { recursive: true, force: true });
         }
         await writeManifest(rootPath, targetManifest);
-        applyIncrementalDerivedState(
-          database,
+        repository.applyIncrementalDerivedState(
           {
             generation: targetManifest.generation,
             effectiveRevision: targetManifest.effectiveRevision,

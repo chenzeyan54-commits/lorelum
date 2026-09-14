@@ -12,7 +12,7 @@ test("database-open failure always releases the acquired mutation lock", async (
   try {
     await expect(
       withStoreMutation(rootPath, async () => undefined, {
-        openDatabase: async () => {
+        openRepository: async () => {
           throw new Error("injected database open failure");
         },
       }),

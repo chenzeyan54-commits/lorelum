@@ -3,6 +3,10 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
 import { SqliteStateError } from "../errors";
+import {
+  createLocalStoreRepository,
+  type LocalStoreRepository,
+} from "../../../persistence/repositories/local-store";
 
 import { migrateDatabase } from "./migrations";
 
@@ -25,4 +29,9 @@ export async function openStoreDatabase(rootPath: string): Promise<Database> {
     if (error instanceof SqliteStateError) throw error;
     throw new SqliteStateError("cannot open LocalStore database", error);
   }
+}
+
+/** Open a migrated LocalStore persistence boundary for lifecycle use cases. */
+export async function openLocalStoreRepository(rootPath: string): Promise<LocalStoreRepository> {
+  return createLocalStoreRepository(await openStoreDatabase(rootPath));
 }

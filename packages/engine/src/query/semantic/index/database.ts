@@ -1,11 +1,9 @@
 import { Database } from "bun:sqlite";
 import { eq } from "drizzle-orm";
 
-import {
-  createSqliteConnection,
-  migrateSqlite,
-  semanticIndexDatabaseDefinition,
-} from "../../../persistence";
+import { createSqliteConnection } from "../../../persistence/database/connection";
+import { migrateSqlite } from "../../../persistence/database/migrator";
+import { semanticIndexDatabaseDefinition } from "../../../persistence/definitions";
 import { semanticIndexMetadata } from "../../../persistence/schemas/semantic-index";
 import { SemanticIndexError } from "../errors";
 import type { SemanticDocument } from "../projection";

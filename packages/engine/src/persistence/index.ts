@@ -16,3 +16,5 @@ export {
   type SqliteReadSession,
   type SqliteWriteSession,
 } from "./database/session";
+export { createLocalStoreRepository, type LocalStoreRepository } from "./repositories/local-store";
+export type { LocalStoreSnapshot, StoreMetadataSnapshot } from "./repositories/local-store";

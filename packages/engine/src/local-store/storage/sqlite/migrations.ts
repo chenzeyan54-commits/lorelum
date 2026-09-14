@@ -1,11 +1,9 @@
 import type { Database } from "bun:sqlite";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 
-import {
-  createSqliteConnection,
-  localStoreDatabaseDefinition,
-  migrateSqlite,
-} from "../../../persistence";
+import { createSqliteConnection } from "../../../persistence/database/connection";
+import { migrateSqlite } from "../../../persistence/database/migrator";
+import { localStoreDatabaseDefinition } from "../../../persistence/definitions";
 
 import { SqliteStateError } from "../errors";
 

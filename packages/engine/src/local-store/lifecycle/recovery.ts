@@ -1,5 +1,7 @@
-import type { Database } from "bun:sqlite";
-
+import type {
+  LocalStoreRepository,
+  StoreMetadataSnapshot,
+} from "../../persistence/repositories/local-store";
 import { StoreRecoveryRequiredError } from "../storage/errors";
 import {
   clearOperationJournal,
@@ -14,7 +16,6 @@ import {
   writeManifest,
   type InstalledPacksManifest,
 } from "../storage/manifest/manifest-store";
-import { readStoreMetadata, type StoreMetadataSnapshot } from "../storage/sqlite/snapshot-reader";
 
 export interface RecoveryResult {
   manifest: InstalledPacksManifest;
@@ -43,13 +44,13 @@ function isManifestEqual(left: InstalledPacksManifest, right: InstalledPacksMani
  */
 async function reconcileJournal(
   rootPath: string,
-  database: Database,
+  repository: LocalStoreRepository,
   operationId: string,
 ): Promise<void> {
   const record = await readOperationJournal(rootPath, operationId);
   const oldManifest = parseManifest(record.oldManifest, operationId);
   const targetManifest = parseManifest(record.targetManifest, operationId);
-  const sqliteTuple = readStoreMetadata(database);
+  const sqliteTuple = repository.readStoreMetadata();
 
   if (sqliteTuple === undefined) {
     // SQLite was never written. The only consistent journal state is the old
@@ -98,21 +99,21 @@ async function reconcileJournal(
  * tuple equals SQLite's derived tuple. Throws `StoreRecoveryRequiredError` on
  * any inconsistency; returns the converged manifest and SQLite metadata.
  *
- * The caller owns the database handle (it was opened and migrated before this
+ * The caller owns the persistence repository (it was opened and migrated before this
  * call). Mutation entries run this under the mutation lock; cold open runs it
  * on the lock-free path.
  */
 export async function runStoreRecovery(
   rootPath: string,
-  database: Database,
+  repository: LocalStoreRepository,
 ): Promise<RecoveryResult> {
   for (const operationId of await listOperationJournals(rootPath)) {
     // eslint-disable-next-line no-await-in-loop -- each journal converges the shared store state
-    await reconcileJournal(rootPath, database, operationId);
+    await reconcileJournal(rootPath, repository, operationId);
   }
 
   const manifest = await tryReadManifest(rootPath);
-  const metadata = readStoreMetadata(database);
+  const metadata = repository.readStoreMetadata();
   if (manifest === undefined) {
     if (metadata === undefined) {
       // Fresh store: nothing was ever committed. Treat as consistent empty.

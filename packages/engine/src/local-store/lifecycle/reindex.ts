@@ -1,5 +1,6 @@
 import { rm } from "node:fs/promises";
 
+import type { LocalStoreRepository } from "../../persistence/repositories/local-store";
 import { diffEffectivePractices } from "../model";
 import { rebuildEffectivePracticesFromManifest } from "../storage/artifacts/rebuild";
 import { SqliteStateError, StoreRecoveryRequiredError } from "../storage/errors";
@@ -15,11 +16,8 @@ import {
   type InstalledPacksManifest,
 } from "../storage/manifest/manifest-store";
 import { acquireMutationLock } from "../storage/mutation-lock";
-import { openStoreDatabase, sqlitePath } from "../storage/sqlite/database";
+import { openLocalStoreRepository, sqlitePath } from "../storage/sqlite/database";
 import { resetLegacyStoreUnderLock } from "../storage/sqlite/legacy-reset";
-import { readPendingRevisionNotifications } from "../storage/sqlite/revision-outbox";
-import { readLocalStoreSnapshot } from "../storage/sqlite/snapshot-reader";
-import { writeDerivedState } from "../storage/sqlite/state-writer";
 
 import { deliverRevisionNotifications } from "./mutation";
 import { nextStoreCounter } from "./counters";
@@ -68,12 +66,12 @@ async function recreateDatabase(rootPath: string) {
   await Promise.all(
     ["", "-wal", "-shm"].map((suffix) => rm(sqlitePath(rootPath) + suffix, { force: true })),
   );
-  return openStoreDatabase(rootPath);
+  return openLocalStoreRepository(rootPath);
 }
 
 async function openDatabaseForReindex(rootPath: string) {
   try {
-    return await openStoreDatabase(rootPath);
+    return await openLocalStoreRepository(rootPath);
   } catch (error) {
     if (!isRebuildableStructuralError(error)) throw error;
     // Only positively identified corruption is destructive. Unsupported newer
@@ -96,18 +94,18 @@ export async function reindexStore(
 ): Promise<ReindexResult> {
   const committed = await (async () => {
     const lock = await acquireMutationLock(rootPath);
-    let database: Awaited<ReturnType<typeof openStoreDatabase>> | undefined;
+    let repository: LocalStoreRepository | undefined;
     try {
       await resetLegacyStoreUnderLock(rootPath);
       const priorJournalIds = await listOperationJournals(rootPath);
-      database = await openDatabaseForReindex(rootPath);
+      repository = await openDatabaseForReindex(rootPath);
       try {
-        readLocalStoreSnapshot(database);
+        repository.readLocalStoreSnapshot();
       } catch (error) {
         if (isRebuildableStructuralError(error)) {
-          database.close();
-          database = undefined;
-          database = await recreateDatabase(rootPath);
+          repository.close();
+          repository = undefined;
+          repository = await recreateDatabase(rootPath);
         } else if (!(error instanceof SqliteStateError)) {
           throw error;
         }
@@ -121,7 +119,7 @@ export async function reindexStore(
       // commits successfully.
       let manifest: InstalledPacksManifest;
       try {
-        manifest = (await runStoreRecovery(rootPath, database)).manifest;
+        manifest = (await runStoreRecovery(rootPath, repository)).manifest;
       } catch (error) {
         if (
           !(error instanceof StoreRecoveryRequiredError) &&
@@ -143,7 +141,7 @@ export async function reindexStore(
       const delta = diffEffectivePractices([], effectivePractices);
       const targetManifest = withFreshRevision(manifest);
       const shouldQueueNotification =
-        hook !== undefined || readPendingRevisionNotifications(database).length > 0;
+        hook !== undefined || repository.readPendingRevisionNotifications().length > 0;
       const journal = createOperationJournalRecord("reindex", manifest, targetManifest);
       await writeOperationJournal(rootPath, journal);
       await writeManifest(rootPath, targetManifest);
@@ -158,13 +156,13 @@ export async function reindexStore(
         clearRevisionLog: true,
       } as const;
       try {
-        writeDerivedState(database, derivedState);
+        repository.writeDerivedState(derivedState);
       } catch (error) {
         if (!isRebuildableStructuralError(error)) throw error;
-        database.close();
-        database = undefined;
-        database = await recreateDatabase(rootPath);
-        writeDerivedState(database, derivedState);
+        repository.close();
+        repository = undefined;
+        repository = await recreateDatabase(rootPath);
+        repository.writeDerivedState(derivedState);
       }
       await clearOperationJournal(rootPath, journal.operationId);
       for (const priorJournalId of priorJournalIds) {
@@ -179,7 +177,7 @@ export async function reindexStore(
         cleanupPending: false,
       });
     } finally {
-      database?.close();
+      repository?.close();
       await lock.release();
     }
   })();

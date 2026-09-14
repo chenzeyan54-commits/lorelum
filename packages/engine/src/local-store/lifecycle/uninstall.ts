@@ -8,11 +8,6 @@ import {
   writeOperationJournal,
 } from "../storage/journal/operation-journal";
 import { writeManifest, type InstalledPacksManifest } from "../storage/manifest/manifest-store";
-import {
-  materializeEffectivePracticesByIds,
-  readPracticeIdsForPack,
-} from "../storage/sqlite/snapshot-reader";
-import { applyIncrementalDerivedState } from "../storage/sqlite/state-writer";
 
 import { PackNotInstalledError } from "./errors";
 import { nextStoreCounter } from "./counters";
@@ -47,16 +42,16 @@ export async function uninstallPack(
 ): Promise<UninstallResult> {
   const committed = await withStoreMutation(
     rootPath,
-    async ({ database, recovery }) => {
+    async ({ repository, recovery }) => {
       const active = recovery.manifest;
       const entry = active.packs.find((pack) => pack.packName === packName);
       if (entry === undefined) throw new PackNotInstalledError(packName);
 
-      const affectedPracticeIds = readPracticeIdsForPack(database, packName);
+      const affectedPracticeIds = repository.readPracticeIdsForPack(packName);
       const effectivePractices =
         recovery.metadata === undefined
           ? []
-          : materializeEffectivePracticesByIds(database, recovery.metadata, affectedPracticeIds);
+          : repository.materializeEffectivePracticesByIds(recovery.metadata, affectedPracticeIds);
       metrics?.recordRead("practice_sources", affectedPracticeIds.length);
       metrics?.recordRead("effective_practices", effectivePractices.length);
       const sourceRows = effectivePractices.reduce(
@@ -79,8 +74,7 @@ export async function uninstallPack(
       const journal = createOperationJournalRecord("uninstall", active, targetManifest);
       await writeOperationJournal(rootPath, journal);
       await writeManifest(rootPath, targetManifest);
-      applyIncrementalDerivedState(
-        database,
+      repository.applyIncrementalDerivedState(
         {
           generation: targetManifest.generation,
           effectiveRevision: targetManifest.effectiveRevision,

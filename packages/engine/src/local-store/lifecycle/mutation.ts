@@ -1,32 +1,27 @@
-import type { Database } from "bun:sqlite";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
+import type { LocalStoreRepository } from "../../persistence/repositories/local-store";
 import type { EffectivePractice, PracticeSource } from "../model";
 import { installedPackEntriesEqual } from "../storage/manifest/manifest-store";
 import { acquireMutationLock } from "../storage/mutation-lock";
-import { openStoreDatabase } from "../storage/sqlite/database";
+import { openLocalStoreRepository } from "../storage/sqlite/database";
 import { resetLegacyStoreUnderLock } from "../storage/sqlite/legacy-reset";
-import { readActivePackEntries } from "../storage/sqlite/snapshot-reader";
 import { SqliteStateError, StoreBusyError, StoreRecoveryRequiredError } from "../storage/errors";
 import { runStoreRecovery, type RecoveryResult } from "./recovery";
-import {
-  deletePendingRevisionNotification,
-  readPendingRevisionNotifications,
-} from "../storage/sqlite/revision-outbox";
 import type { EffectiveRevisionHook } from "./types";
 import type { MutationMetricsObserver } from "../storage/sqlite/mutation-metrics";
 
 export interface MutationContext {
-  database: Database;
+  repository: LocalStoreRepository;
   recovery: RecoveryResult;
 }
 
 export interface MutationLockOptions {
   /** Bounded wait for a held lock before StoreBusyError (default 5s). */
   waitMs?: number;
-  /** Test seam for proving the lock is released when database open fails. */
-  openDatabase?: ((rootPath: string) => Promise<Database>) | undefined;
+  /** Test seam for proving the lock is released when persistence open fails. */
+  openRepository?: ((rootPath: string) => Promise<LocalStoreRepository>) | undefined;
   /** Internal benchmark/test observer; never serialized or returned. */
   metrics?: MutationMetricsObserver | undefined;
 }
@@ -53,7 +48,7 @@ export function activeSources(
  * manifest tuple and active-Pack rows here; `open()` retains the full artifact
  * and projection audit (ADR 0013).
  *
- * The lock and the database handle are always released, even when `run`
+ * The lock and persistence repository are always released, even when `run`
  * throws.
  */
 export async function withStoreMutation<T>(
@@ -68,20 +63,20 @@ export async function withStoreMutation<T>(
   const lock = await acquireMutationLock(rootPath, {
     ...(options.waitMs === undefined ? {} : { waitMs: options.waitMs }),
   });
-  let database: Database | undefined;
+  let repository: LocalStoreRepository | undefined;
   try {
     await resetLegacyStoreUnderLock(rootPath);
     try {
-      database = await (options.openDatabase ?? openStoreDatabase)(rootPath);
+      repository = await (options.openRepository ?? openLocalStoreRepository)(rootPath);
     } catch (error) {
       if (error instanceof SqliteStateError) {
         throw new StoreRecoveryRequiredError(`SQLite is missing or corrupt: ${error.message}`);
       }
       throw error;
     }
-    const recovery = await runStoreRecovery(rootPath, database);
+    const recovery = await runStoreRecovery(rootPath, repository);
     if (recovery.metadata !== undefined) {
-      const activePacks = readActivePackEntries(database);
+      const activePacks = repository.readActivePackEntries();
       options.metrics?.recordRead("active_packs", activePacks.length);
       if (!installedPackEntriesEqual(activePacks, recovery.manifest.packs)) {
         throw new StoreRecoveryRequiredError(
@@ -90,9 +85,9 @@ export async function withStoreMutation<T>(
       }
     }
     options.metrics?.recordRead("local_store_metadata", recovery.metadata === undefined ? 0 : 1);
-    return await run({ database, recovery });
+    return await run({ repository, recovery });
   } finally {
-    database?.close();
+    repository?.close();
     await lock.release();
   }
 }
@@ -104,11 +99,11 @@ export async function withStoreMutation<T>(
  * before the SQLite acknowledgement may replay the same revision.
  */
 async function drainRevisionNotifications(
-  database: Database,
+  repository: LocalStoreRepository,
   hook: EffectiveRevisionHook | undefined,
 ): Promise<{ revision: number; error: unknown } | undefined> {
   for (;;) {
-    const pending = readPendingRevisionNotifications(database)[0];
+    const pending = repository.readPendingRevisionNotifications()[0];
     if (pending === undefined) return undefined;
     if (hook === undefined) {
       return {
@@ -119,7 +114,7 @@ async function drainRevisionNotifications(
     try {
       // eslint-disable-next-line no-await-in-loop -- outbox delivery must remain revision-serial
       await hook(pending.revision, pending.delta);
-      deletePendingRevisionNotification(database, pending.revision);
+      repository.deletePendingRevisionNotification(pending.revision);
     } catch (error) {
       return { revision: pending.revision, error };
     }
@@ -146,28 +141,28 @@ export async function deliverRevisionNotifications(
     lock = await acquireMutationLock(deliveryRoot, { waitMs: 0, pollIntervalMs: 1 });
   } catch (error) {
     if (error instanceof StoreBusyError) {
-      let database: Database | undefined;
+      let repository: LocalStoreRepository | undefined;
       try {
-        database = await openStoreDatabase(rootPath);
-        const oldest = readPendingRevisionNotifications(database)[0];
+        repository = await openLocalStoreRepository(rootPath);
+        const oldest = repository.readPendingRevisionNotifications()[0];
         return { revision: oldest?.revision ?? fallbackRevision, error };
       } catch {
         return { revision: fallbackRevision, error };
       } finally {
-        database?.close();
+        repository?.close();
       }
     }
     throw error;
   }
 
-  let database: Database | undefined;
+  let repository: LocalStoreRepository | undefined;
   try {
-    database = await openStoreDatabase(rootPath);
-    return await drainRevisionNotifications(database, hook);
+    repository = await openLocalStoreRepository(rootPath);
+    return await drainRevisionNotifications(repository, hook);
   } catch (error) {
     return { revision: fallbackRevision, error };
   } finally {
-    database?.close();
+    repository?.close();
     await lock.release();
   }
 }
