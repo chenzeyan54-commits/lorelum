@@ -1,6 +1,6 @@
 ---
 title: 安装与管理 Pack
-description: 选择工程知识，安装指定版本，并维护本地知识集合。
+description: 选择工程知识，安装最新发行版，并维护本地知识集合。
 icon: BookOpen
 ---
 
@@ -12,15 +12,15 @@ Knowledge Pack 是一组带版本的 Practice。安装与你的工作相关的 P
 
 | Pack             | 版本    | 内容                                     |
 | ---------------- | ------- | ---------------------------------------- |
-| `agentic-coding` | `0.3.0` | 规划、实施、验证、恢复和交付中的工程决策 |
+| `agentic-coding` | `0.3.1` | 规划、实施、验证、恢复和交付中的工程决策 |
 | `pack-creator`   | `0.1.0` | Pack 的编写、审查和发布                  |
 
 ```sh
-lore pack install agentic-coding@0.3.0
-lore pack install pack-creator@0.1.0
+lore pack install agentic-coding
+lore pack install pack-creator
 ```
 
-需要稳定复现时安装固定版本。浏览本地安装内容：
+默认安装会解析 Registry 中最新发行版；只有在需要稳定复现时才指定固定版本。浏览本地安装内容：
 
 ```sh
 lore pack list --details

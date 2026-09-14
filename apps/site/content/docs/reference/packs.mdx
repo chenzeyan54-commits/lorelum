@@ -6,7 +6,7 @@ description: Install, browse, update, remove, and validate Packs.
 ## Install
 
 ```sh
-lore pack install agentic-coding@0.3.0
+lore pack install agentic-coding
 ```
 
 Global `--store-root <path>` selects the LocalStore and `--log-level <level>` controls stderr logs. `--registry <owner/repository>` is specific to install and update.
@@ -47,7 +47,7 @@ Validation checks the Pack and reports localization state. Use it while [creatin
 ## Choose the Store
 
 ```sh
-lore --store-root /path/to/store pack install agentic-coding@0.3.0
+lore --store-root /path/to/store pack install agentic-coding
 ```
 
 All Pack operations use the selected Store. Command schemas and errors are available through `lore describe`.

@@ -1,6 +1,6 @@
 ---
 title: Install and manage Packs
-description: Choose engineering knowledge, install a version, and maintain your local collection.
+description: Choose engineering knowledge, install the latest releases, and maintain your local collection.
 icon: BookOpen
 ---
 
@@ -12,15 +12,15 @@ The ecosystem is still small. Lorelum currently maintains two official Packs:
 
 | Pack | Version | What it covers |
 | --- | --- | --- |
-| `agentic-coding` | `0.3.0` | Planning, implementation, verification, recovery, and delivery decisions |
+| `agentic-coding` | `0.3.1` | Planning, implementation, verification, recovery, and delivery decisions |
 | `pack-creator` | `0.1.0` | Writing, reviewing, and publishing Packs |
 
 ```sh
-lore pack install agentic-coding@0.3.0
-lore pack install pack-creator@0.1.0
+lore pack install agentic-coding
+lore pack install pack-creator
 ```
 
-Install exact releases when repeatability matters. Browse the local installation:
+By default, installation resolves the latest Registry release. Install an exact release only when repeatability matters. Browse the local installation:
 
 ```sh
 lore pack list --details

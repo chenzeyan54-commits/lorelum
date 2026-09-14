@@ -6,7 +6,7 @@ description: 安装、浏览、更新、移除和校验 Pack。
 ## 安装
 
 ```sh
-lore pack install agentic-coding@0.3.0
+lore pack install agentic-coding
 ```
 
 全局 `--store-root <path>` 选择 LocalStore，`--log-level <level>` 控制 stderr 日志；`--registry <owner/repository>` 仅用于 install 和 update。
@@ -47,7 +47,7 @@ lore validate /path/to/pack
 ## 选择 Store
 
 ```sh
-lore --store-root /path/to/store pack install agentic-coding@0.3.0
+lore --store-root /path/to/store pack install agentic-coding
 ```
 
 所有 Pack 操作都使用选中的 Store。完整命令 schema 与错误见 `lore describe`。

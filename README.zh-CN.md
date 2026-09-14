@@ -121,7 +121,7 @@ lore --version
 ### 2. 安装 Pack
 
 ```sh
-lore pack install agentic-coding@0.3.0
+lore pack install agentic-coding
 ```
 
 安装保存 Pack，并启动所需的 semantic index 工作。响应中的 `data.indexSync` 表示索引已就绪、尚未完成或失败。索引失败不会撤销 Pack 安装。
@@ -163,7 +163,7 @@ codex plugin add lorelum@lorelum
 
 | 官方 Pack        | 版本    | 重点                                     |
 | ---------------- | ------- | ---------------------------------------- |
-| `agentic-coding` | `0.3.0` | 规划、实现、验证、恢复和交付中的工程判断 |
+| `agentic-coding` | `0.3.1` | 规划、实现、验证、恢复和交付中的工程判断 |
 | `pack-creator`   | `0.1.0` | Practice 与 Pack 的编写、评审和发布      |
 
 浏览已经安装的内容：

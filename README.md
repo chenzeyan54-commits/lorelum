@@ -122,7 +122,7 @@ For manual installation, source builds, and updates, see [Installation](https://
 ### 2. Install a Pack
 
 ```sh
-lore pack install agentic-coding@0.3.0
+lore pack install agentic-coding
 ```
 
 Installation saves the Pack and starts the required semantic index work. The response's `data.indexSync` indicates whether that work is ready, pending, or failed. Pack installation is preserved if indexing fails.
@@ -164,7 +164,7 @@ See [Agent integration](https://lorelum.com/en/docs/agent-setup) and [Codex setu
 
 | Official Pack | Version | Focus |
 | --- | --- | --- |
-| `agentic-coding` | `0.3.0` | Planning, implementation, verification, recovery, and delivery decisions |
+| `agentic-coding` | `0.3.1` | Planning, implementation, verification, recovery, and delivery decisions |
 | `pack-creator` | `0.1.0` | Writing, reviewing, and publishing Practices and Packs |
 
 Browse what you have installed:
