@@ -1,4 +1,4 @@
-import type { Database } from "bun:sqlite";
+import { eq, inArray } from "drizzle-orm";
 
 import {
   canonicalizePractice,
@@ -7,6 +7,15 @@ import {
   type RevisionDelta,
 } from "../../model";
 import type { InstalledPackManifestEntry } from "../manifest/manifest-store";
+import {
+  activePacks,
+  effectivePractices,
+  effectiveRevisionLog,
+  effectiveRevisionOutbox,
+  localStoreMetadata,
+  practiceSources,
+} from "../../../persistence/schemas/local-store";
+import type { LocalStoreDatabase } from "../../../persistence/schemas/database-types";
 import { SqliteStateError } from "../errors";
 import type { MutationMetricsObserver } from "./mutation-metrics";
 import { LOCAL_STORE_SCHEMA_VERSION } from "./migrations";
@@ -77,66 +86,72 @@ function assertStateIsCoherent(state: DerivedStoreState): void {
 }
 
 function insertEffectivePracticeRows(
-  database: Database,
+  database: LocalStoreDatabase,
   practices: readonly EffectivePractice[],
   revisionFor: (practice: EffectivePractice) => number,
   metrics?: MutationMetricsObserver,
 ): void {
-  const insertEffective = database.query(
-    "INSERT INTO effective_practices (practice_id, content_digest, canonical_content, title, stage, tech_stack_json, applies_when, severity, effective_revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-  );
-  const insertSource = database.query(
-    "INSERT INTO practice_sources (pack_name, practice_id, content_digest, source_path) VALUES (?, ?, ?, ?)",
-  );
   for (const effective of practices) {
     const practice = effective.practice;
-    const effectiveResult = insertEffective.run(
-      effective.practiceId,
-      effective.contentDigest,
-      effective.canonicalContent,
-      practice.title,
-      practice.stage,
-      JSON.stringify(practice.tech_stack),
-      practice.applies_when,
-      practice.severity ?? "warn",
-      revisionFor(effective),
-    );
-    metrics?.recordWrite("effective_practices", effectiveResult.changes);
+    database
+      .insert(effectivePractices)
+      .values({
+        practiceId: effective.practiceId,
+        contentDigest: effective.contentDigest,
+        canonicalContent: effective.canonicalContent,
+        title: practice.title,
+        stage: practice.stage,
+        techStackJson: JSON.stringify(practice.tech_stack),
+        appliesWhen: practice.applies_when,
+        severity: practice.severity ?? "warn",
+        effectiveRevision: revisionFor(effective),
+      })
+      .run();
+    metrics?.recordWrite("effective_practices", 1);
     for (const source of effective.sources) {
-      const sourceResult = insertSource.run(
-        source.packName,
-        source.practiceId,
-        source.contentDigest,
-        source.sourcePath,
-      );
-      metrics?.recordWrite("practice_sources", sourceResult.changes);
+      database
+        .insert(practiceSources)
+        .values({
+          packName: source.packName,
+          practiceId: source.practiceId,
+          contentDigest: source.contentDigest,
+          sourcePath: source.sourcePath,
+        })
+        .run();
+      metrics?.recordWrite("practice_sources", 1);
     }
   }
 }
 
 function writeRevisionRecords(
-  database: Database,
+  database: LocalStoreDatabase,
   state: DerivedStoreState,
   metrics?: MutationMetricsObserver,
 ): void {
   if (state.clearRevisionLog === true) {
-    const result = database.query("DELETE FROM effective_revision_log").run();
-    metrics?.recordWrite("effective_revision_log", result.changes);
+    const deleted = database.delete(effectiveRevisionLog).returning().all();
+    metrics?.recordWrite("effective_revision_log", deleted.length);
   }
   if (state.revisionNotification?.supersedesPending === true) {
-    database.exec("DELETE FROM effective_revision_outbox");
+    database.delete(effectiveRevisionOutbox).run();
   }
   if (state.revisionNotification !== undefined) {
-    const outboxResult = database
-      .query(
-        "INSERT OR REPLACE INTO effective_revision_outbox (revision, delta_json, created_at) VALUES (?, ?, ?)",
-      )
-      .run(
-        state.effectiveRevision,
-        serializeRevisionDelta(state.revisionNotification.delta),
-        new Date().toISOString(),
-      );
-    metrics?.recordWrite("effective_revision_outbox", outboxResult.changes);
+    database
+      .insert(effectiveRevisionOutbox)
+      .values({
+        revision: state.effectiveRevision,
+        deltaJson: serializeRevisionDelta(state.revisionNotification.delta),
+        createdAt: new Date().toISOString(),
+      })
+      .onConflictDoUpdate({
+        target: effectiveRevisionOutbox.revision,
+        set: {
+          deltaJson: serializeRevisionDelta(state.revisionNotification.delta),
+          createdAt: new Date().toISOString(),
+        },
+      })
+      .run();
+    metrics?.recordWrite("effective_revision_outbox", 1);
   }
   if (state.revisionLogDelta !== undefined) {
     appendEffectiveRevisionLog(database, state.effectiveRevision, state.revisionLogDelta);
@@ -145,26 +160,26 @@ function writeRevisionRecords(
 }
 
 /** Replaces SQLite's fully-derived LocalStore state in one write transaction. */
-export function writeDerivedState(database: Database, state: DerivedStoreState): void {
+export function writeDerivedState(database: LocalStoreDatabase, state: DerivedStoreState): void {
   assertStateIsCoherent(state);
   try {
     database.transaction(() => {
-      database.exec("DELETE FROM practice_sources");
-      database.exec("DELETE FROM effective_practices");
-      database.exec("DELETE FROM active_packs");
-      database.exec("DELETE FROM local_store_metadata");
+      database.delete(practiceSources).run();
+      database.delete(effectivePractices).run();
+      database.delete(activePacks).run();
+      database.delete(localStoreMetadata).run();
 
-      const insertPack = database.query(
-        "INSERT INTO active_packs (pack_name, pack_version, artifact_digest, storage_key, installed_at) VALUES (?, ?, ?, ?, ?)",
-      );
       for (const pack of state.activePacks) {
-        insertPack.run(
-          pack.packName,
-          pack.packVersion,
-          pack.artifactDigest,
-          pack.storageKey,
-          pack.installedAt,
-        );
+        database
+          .insert(activePacks)
+          .values({
+            packName: pack.packName,
+            packVersion: pack.packVersion,
+            artifactDigest: pack.artifactDigest,
+            storageKey: pack.storageKey,
+            installedAt: pack.installedAt,
+          })
+          .run();
       }
 
       insertEffectivePracticeRows(
@@ -174,13 +189,17 @@ export function writeDerivedState(database: Database, state: DerivedStoreState):
       );
 
       database
-        .query(
-          "INSERT INTO local_store_metadata (singleton, schema_version, installed_packs_generation, effective_revision) VALUES (1, ?, ?, ?)",
-        )
-        .run(LOCAL_STORE_SCHEMA_VERSION, state.generation, state.effectiveRevision);
+        .insert(localStoreMetadata)
+        .values({
+          singleton: 1,
+          schemaVersion: LOCAL_STORE_SCHEMA_VERSION,
+          installedPacksGeneration: state.generation,
+          effectiveRevision: state.effectiveRevision,
+        })
+        .run();
 
       writeRevisionRecords(database, state);
-    })();
+    });
   } catch (error) {
     if (error instanceof SqliteStateError) throw error;
     throw new SqliteStateError("cannot write LocalStore derived state", error);
@@ -196,28 +215,31 @@ function uniqueSortedIds(ids: readonly string[]): readonly string[] {
 }
 
 function rowRevisions(
-  database: Database,
+  database: LocalStoreDatabase,
   ids: readonly string[],
   metrics?: MutationMetricsObserver,
 ): ReadonlyMap<string, number> {
   if (ids.length === 0) return new Map();
   const rows = database
-    .query(
-      `SELECT practice_id, effective_revision FROM effective_practices WHERE practice_id IN (${ids.map(() => "?").join(", ")})`,
-    )
-    .all(...ids) as readonly Record<string, unknown>[];
+    .select({
+      practiceId: effectivePractices.practiceId,
+      effectiveRevision: effectivePractices.effectiveRevision,
+    })
+    .from(effectivePractices)
+    .where(inArray(effectivePractices.practiceId, ids))
+    .all();
   metrics?.recordRead("effective_practices", rows.length);
   const revisions = new Map<string, number>();
   for (const row of rows) {
     if (
-      typeof row.practice_id !== "string" ||
-      typeof row.effective_revision !== "number" ||
-      !Number.isSafeInteger(row.effective_revision) ||
-      row.effective_revision < 0
+      typeof row.practiceId !== "string" ||
+      typeof row.effectiveRevision !== "number" ||
+      !Number.isSafeInteger(row.effectiveRevision) ||
+      row.effectiveRevision < 0
     ) {
       throw new SqliteStateError("stored Effective Practice revision is malformed");
     }
-    revisions.set(row.practice_id, row.effective_revision);
+    revisions.set(row.practiceId, row.effectiveRevision);
   }
   return revisions;
 }
@@ -233,7 +255,7 @@ function changedPracticeIds(delta: RevisionDelta | undefined): ReadonlySet<strin
  * the full-rebuild path for reindex.
  */
 export function applyIncrementalDerivedState(
-  database: Database,
+  database: LocalStoreDatabase,
   state: IncrementalDerivedStoreState,
   metrics?: MutationMetricsObserver,
 ): void {
@@ -250,40 +272,50 @@ export function applyIncrementalDerivedState(
       const priorRevisions = rowRevisions(database, affectedIds, metrics);
       if (state.activePackMutation.kind === "upsert") {
         const entry = state.activePackMutation.entry;
-        const packResult = database
-          .query(
-            "INSERT INTO active_packs (pack_name, pack_version, artifact_digest, storage_key, installed_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(pack_name) DO UPDATE SET pack_version = excluded.pack_version, artifact_digest = excluded.artifact_digest, storage_key = excluded.storage_key, installed_at = excluded.installed_at",
-          )
-          .run(
-            entry.packName,
-            entry.packVersion,
-            entry.artifactDigest,
-            entry.storageKey,
-            entry.installedAt,
-          );
-        metrics?.recordWrite("active_packs", packResult.changes);
+        database
+          .insert(activePacks)
+          .values({
+            packName: entry.packName,
+            packVersion: entry.packVersion,
+            artifactDigest: entry.artifactDigest,
+            storageKey: entry.storageKey,
+            installedAt: entry.installedAt,
+          })
+          .onConflictDoUpdate({
+            target: activePacks.packName,
+            set: {
+              packVersion: entry.packVersion,
+              artifactDigest: entry.artifactDigest,
+              storageKey: entry.storageKey,
+              installedAt: entry.installedAt,
+            },
+          })
+          .run();
+        metrics?.recordWrite("active_packs", 1);
       }
 
       if (affectedIds.length > 0) {
         const sourceDelete = database
-          .query(
-            `DELETE FROM practice_sources WHERE practice_id IN (${affectedIds.map(() => "?").join(", ")})`,
-          )
-          .run(...affectedIds);
-        metrics?.recordWrite("practice_sources", sourceDelete.changes);
+          .delete(practiceSources)
+          .where(inArray(practiceSources.practiceId, affectedIds))
+          .returning()
+          .all();
+        metrics?.recordWrite("practice_sources", sourceDelete.length);
         const effectiveDelete = database
-          .query(
-            `DELETE FROM effective_practices WHERE practice_id IN (${affectedIds.map(() => "?").join(", ")})`,
-          )
-          .run(...affectedIds);
-        metrics?.recordWrite("effective_practices", effectiveDelete.changes);
+          .delete(effectivePractices)
+          .where(inArray(effectivePractices.practiceId, affectedIds))
+          .returning()
+          .all();
+        metrics?.recordWrite("effective_practices", effectiveDelete.length);
       }
 
       if (state.activePackMutation.kind === "remove") {
         const packDelete = database
-          .query("DELETE FROM active_packs WHERE pack_name = ?")
-          .run(state.activePackMutation.packName);
-        metrics?.recordWrite("active_packs", packDelete.changes);
+          .delete(activePacks)
+          .where(eq(activePacks.packName, state.activePackMutation.packName))
+          .returning()
+          .all();
+        metrics?.recordWrite("active_packs", packDelete.length);
       }
 
       const changedIds = changedPracticeIds(state.revisionLogDelta);
@@ -303,15 +335,27 @@ export function applyIncrementalDerivedState(
         metrics,
       );
 
-      const metadataResult = database
-        .query(
-          "INSERT INTO local_store_metadata (singleton, schema_version, installed_packs_generation, effective_revision) VALUES (1, ?, ?, ?) ON CONFLICT(singleton) DO UPDATE SET schema_version = excluded.schema_version, installed_packs_generation = excluded.installed_packs_generation, effective_revision = excluded.effective_revision",
-        )
-        .run(LOCAL_STORE_SCHEMA_VERSION, state.generation, state.effectiveRevision);
-      metrics?.recordWrite("local_store_metadata", metadataResult.changes);
+      database
+        .insert(localStoreMetadata)
+        .values({
+          singleton: 1,
+          schemaVersion: LOCAL_STORE_SCHEMA_VERSION,
+          installedPacksGeneration: state.generation,
+          effectiveRevision: state.effectiveRevision,
+        })
+        .onConflictDoUpdate({
+          target: localStoreMetadata.singleton,
+          set: {
+            schemaVersion: LOCAL_STORE_SCHEMA_VERSION,
+            installedPacksGeneration: state.generation,
+            effectiveRevision: state.effectiveRevision,
+          },
+        })
+        .run();
+      metrics?.recordWrite("local_store_metadata", 1);
 
       writeRevisionRecords(database, state, metrics);
-    })();
+    });
   } catch (error) {
     if (error instanceof SqliteStateError) throw error;
     throw new SqliteStateError("cannot incrementally write LocalStore derived state", error);

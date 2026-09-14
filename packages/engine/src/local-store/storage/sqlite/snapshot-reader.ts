@@ -1,6 +1,13 @@
-import type { Database } from "bun:sqlite";
+import { asc, eq, inArray } from "drizzle-orm";
 
 import type { EffectivePractice } from "../../model";
+import {
+  activePacks,
+  effectivePractices,
+  localStoreMetadata,
+  practiceSources,
+} from "../../../persistence/schemas/local-store";
+import type { LocalStoreDatabase } from "../../../persistence/schemas/database-types";
 import { materializePracticeRows } from "./row-materializer";
 
 import { SqliteStateError } from "../errors";
@@ -30,26 +37,29 @@ export interface LocalStoreSnapshot extends EffectivePracticeSnapshot {
  * "empty store" from "corrupt store" use this instead of the throwing
  * materializer.
  */
-export function readStoreMetadata(database: Database): StoreMetadataSnapshot | undefined {
+export function readStoreMetadata(database: LocalStoreDatabase): StoreMetadataSnapshot | undefined {
   try {
     const row = database
-      .query(
-        "SELECT schema_version, installed_packs_generation, effective_revision FROM local_store_metadata WHERE singleton = 1",
-      )
-      .get() as Record<string, unknown> | null | undefined;
-    // bun:sqlite returns `null` for a missing row; treat both as "never written".
-    if (row === undefined || row === null) return undefined;
+      .select({
+        schemaVersion: localStoreMetadata.schemaVersion,
+        generation: localStoreMetadata.installedPacksGeneration,
+        effectiveRevision: localStoreMetadata.effectiveRevision,
+      })
+      .from(localStoreMetadata)
+      .where(eq(localStoreMetadata.singleton, 1))
+      .get();
+    if (row === undefined) return undefined;
     if (
-      row.schema_version !== LOCAL_STORE_SCHEMA_VERSION ||
-      typeof row.installed_packs_generation !== "number" ||
-      typeof row.effective_revision !== "number"
+      row.schemaVersion !== LOCAL_STORE_SCHEMA_VERSION ||
+      typeof row.generation !== "number" ||
+      typeof row.effectiveRevision !== "number"
     ) {
       throw new SqliteStateError("LocalStore metadata row is missing or malformed");
     }
     return Object.freeze({
-      schemaVersion: row.schema_version,
-      generation: row.installed_packs_generation,
-      effectiveRevision: row.effective_revision,
+      schemaVersion: row.schemaVersion,
+      generation: row.generation,
+      effectiveRevision: row.effectiveRevision,
     });
   } catch (error) {
     if (error instanceof SqliteStateError) throw error;
@@ -58,12 +68,30 @@ export function readStoreMetadata(database: Database): StoreMetadataSnapshot | u
 }
 
 export function materializeEffectivePractices(
-  database: Database,
+  database: LocalStoreDatabase,
   metadata: StoreMetadataSnapshot,
 ): readonly EffectivePractice[] {
   const rows = database
-    .query(
-      "SELECT e.practice_id, e.content_digest, e.canonical_content, e.title, e.stage, e.tech_stack_json, e.applies_when, e.severity, e.effective_revision, s.pack_name, s.source_path, s.content_digest AS source_digest FROM effective_practices e LEFT JOIN practice_sources s ON s.practice_id = e.practice_id ORDER BY e.practice_id ASC, s.pack_name ASC, s.source_path ASC",
+    .select({
+      practice_id: effectivePractices.practiceId,
+      content_digest: effectivePractices.contentDigest,
+      canonical_content: effectivePractices.canonicalContent,
+      title: effectivePractices.title,
+      stage: effectivePractices.stage,
+      tech_stack_json: effectivePractices.techStackJson,
+      applies_when: effectivePractices.appliesWhen,
+      severity: effectivePractices.severity,
+      effective_revision: effectivePractices.effectiveRevision,
+      pack_name: practiceSources.packName,
+      source_path: practiceSources.sourcePath,
+      source_digest: practiceSources.contentDigest,
+    })
+    .from(effectivePractices)
+    .leftJoin(practiceSources, eq(practiceSources.practiceId, effectivePractices.practiceId))
+    .orderBy(
+      asc(effectivePractices.practiceId),
+      asc(practiceSources.packName),
+      asc(practiceSources.sourcePath),
     )
     .all();
 
@@ -72,7 +100,7 @@ export function materializeEffectivePractices(
 
 /** Materializes a bounded subset while retaining the same row validation as full reads. */
 export function materializeEffectivePracticesByIds(
-  database: Database,
+  database: LocalStoreDatabase,
   metadata: StoreMetadataSnapshot,
   ids: readonly string[],
 ): readonly EffectivePractice[] {
@@ -80,10 +108,29 @@ export function materializeEffectivePracticesByIds(
   const uniqueIds = [...new Set(ids)].sort();
   try {
     const rows = database
-      .query(
-        `SELECT e.practice_id, e.content_digest, e.canonical_content, e.title, e.stage, e.tech_stack_json, e.applies_when, e.severity, e.effective_revision, s.pack_name, s.source_path, s.content_digest AS source_digest FROM effective_practices e LEFT JOIN practice_sources s ON s.practice_id = e.practice_id WHERE e.practice_id IN (${uniqueIds.map(() => "?").join(", ")}) ORDER BY e.practice_id ASC, s.pack_name ASC, s.source_path ASC`,
+      .select({
+        practice_id: effectivePractices.practiceId,
+        content_digest: effectivePractices.contentDigest,
+        canonical_content: effectivePractices.canonicalContent,
+        title: effectivePractices.title,
+        stage: effectivePractices.stage,
+        tech_stack_json: effectivePractices.techStackJson,
+        applies_when: effectivePractices.appliesWhen,
+        severity: effectivePractices.severity,
+        effective_revision: effectivePractices.effectiveRevision,
+        pack_name: practiceSources.packName,
+        source_path: practiceSources.sourcePath,
+        source_digest: practiceSources.contentDigest,
+      })
+      .from(effectivePractices)
+      .leftJoin(practiceSources, eq(practiceSources.practiceId, effectivePractices.practiceId))
+      .where(inArray(effectivePractices.practiceId, uniqueIds))
+      .orderBy(
+        asc(effectivePractices.practiceId),
+        asc(practiceSources.packName),
+        asc(practiceSources.sourcePath),
       )
-      .all(...uniqueIds);
+      .all();
     return materializePracticeRows(rows, metadata);
   } catch (error) {
     if (error instanceof SqliteStateError) throw error;
@@ -92,7 +139,9 @@ export function materializeEffectivePracticesByIds(
 }
 
 /** Materializes Effective Practices and sources from one deterministically ordered SQL statement. */
-export function readEffectivePracticeSnapshot(database: Database): EffectivePracticeSnapshot {
+export function readEffectivePracticeSnapshot(
+  database: LocalStoreDatabase,
+): EffectivePracticeSnapshot {
   try {
     return database.transaction(() => {
       const metadata = readStoreMetadata(database);
@@ -103,7 +152,7 @@ export function readEffectivePracticeSnapshot(database: Database): EffectivePrac
         metadata,
         effectivePractices: materializeEffectivePractices(database, metadata),
       });
-    })();
+    });
   } catch (error) {
     if (error instanceof SqliteStateError) throw error;
     throw new SqliteStateError("cannot materialize Effective Practices", error);
@@ -111,31 +160,38 @@ export function readEffectivePracticeSnapshot(database: Database): EffectivePrac
 }
 
 /** Read the Active Pack rows deterministically ordered by pack name. */
-export function readActivePackEntries(database: Database): readonly InstalledPackManifestEntry[] {
+export function readActivePackEntries(
+  database: LocalStoreDatabase,
+): readonly InstalledPackManifestEntry[] {
   try {
     const rows = database
-      .query(
-        "SELECT pack_name, pack_version, artifact_digest, storage_key, installed_at FROM active_packs ORDER BY pack_name ASC",
-      )
+      .select({
+        packName: activePacks.packName,
+        packVersion: activePacks.packVersion,
+        artifactDigest: activePacks.artifactDigest,
+        storageKey: activePacks.storageKey,
+        installedAt: activePacks.installedAt,
+      })
+      .from(activePacks)
+      .orderBy(asc(activePacks.packName))
       .all();
     return Object.freeze(
       rows.map((row) => {
-        const value = row as Record<string, unknown>;
         if (
-          typeof value.pack_name !== "string" ||
-          typeof value.pack_version !== "string" ||
-          typeof value.artifact_digest !== "string" ||
-          typeof value.storage_key !== "string" ||
-          typeof value.installed_at !== "string"
+          typeof row.packName !== "string" ||
+          typeof row.packVersion !== "string" ||
+          typeof row.artifactDigest !== "string" ||
+          typeof row.storageKey !== "string" ||
+          typeof row.installedAt !== "string"
         ) {
           throw new SqliteStateError("active Pack row is malformed");
         }
         return Object.freeze({
-          packName: value.pack_name,
-          packVersion: value.pack_version,
-          artifactDigest: value.artifact_digest,
-          storageKey: value.storage_key,
-          installedAt: value.installed_at,
+          packName: row.packName,
+          packVersion: row.packVersion,
+          artifactDigest: row.artifactDigest,
+          storageKey: row.storageKey,
+          installedAt: row.installedAt,
         });
       }),
     );
@@ -146,14 +202,18 @@ export function readActivePackEntries(database: Database): readonly InstalledPac
 }
 
 /** Read the bounded Practice-ID set owned by one active Pack. */
-export function readPracticeIdsForPack(database: Database, packName: string): readonly string[] {
+export function readPracticeIdsForPack(
+  database: LocalStoreDatabase,
+  packName: string,
+): readonly string[] {
   try {
     const rows = database
-      .query(
-        "SELECT practice_id FROM practice_sources WHERE pack_name = ? ORDER BY practice_id ASC",
-      )
-      .all(packName) as readonly Record<string, unknown>[];
-    const ids = rows.map((row) => row.practice_id);
+      .select({ practiceId: practiceSources.practiceId })
+      .from(practiceSources)
+      .where(eq(practiceSources.packName, packName))
+      .orderBy(asc(practiceSources.practiceId))
+      .all();
+    const ids = rows.map((row) => row.practiceId);
     if (ids.some((id) => typeof id !== "string")) {
       throw new SqliteStateError("Practice source ID is malformed");
     }
@@ -169,7 +229,9 @@ export function readPracticeIdsForPack(database: Database, packName: string): re
  * SQLite snapshot. Cold open pairs this with manifest A/B reads so it never
  * compares different committed generations.
  */
-export function readLocalStoreSnapshot(database: Database): LocalStoreSnapshot | undefined {
+export function readLocalStoreSnapshot(
+  database: LocalStoreDatabase,
+): LocalStoreSnapshot | undefined {
   try {
     return database.transaction(() => {
       const metadata = readStoreMetadata(database);
@@ -179,7 +241,7 @@ export function readLocalStoreSnapshot(database: Database): LocalStoreSnapshot |
         activePacks: readActivePackEntries(database),
         effectivePractices: materializeEffectivePractices(database, metadata),
       });
-    })();
+    });
   } catch (error) {
     if (error instanceof SqliteStateError) throw error;
     throw new SqliteStateError("cannot read a consistent LocalStore snapshot", error);

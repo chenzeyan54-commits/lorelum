@@ -9,6 +9,7 @@ import { migrateDatabase } from "./migrations";
 import { LOCAL_STORE_SCHEMA_VERSION } from "./migrations";
 import { readEffectivePracticeSnapshot } from "./snapshot-reader";
 import { writeDerivedState } from "./state-writer";
+import { testLocalStoreDatabase } from "./test-utils";
 
 function candidate(name: string) {
   const input = reactPack();
@@ -34,16 +35,17 @@ test("writer and reader round-trip derived state with deterministic source order
   const database = new Database(":memory:");
   try {
     migrateDatabase(database);
+    const orm = testLocalStoreDatabase(database);
     const first = reconcileEffectivePractices([], candidate("react-core"));
     const reconciled = reconcileEffectivePractices(first.sources, candidate("react-fullstack"));
-    writeDerivedState(database, {
+    writeDerivedState(orm, {
       generation: 3,
       effectiveRevision: 7,
       activePacks: [activePack("react-core"), activePack("react-fullstack")],
       effectivePractices: reconciled.effectivePractices,
     });
 
-    const snapshot = readEffectivePracticeSnapshot(database);
+    const snapshot = readEffectivePracticeSnapshot(orm);
     expect(snapshot.metadata).toEqual({
       schemaVersion: LOCAL_STORE_SCHEMA_VERSION,
       generation: 3,
@@ -67,8 +69,9 @@ test("reader rejects an Effective Practice whose stored metadata was tampered", 
   const database = new Database(":memory:");
   try {
     migrateDatabase(database);
+    const orm = testLocalStoreDatabase(database);
     const reconciled = reconcileEffectivePractices([], candidate("react-core"));
-    writeDerivedState(database, {
+    writeDerivedState(orm, {
       generation: 1,
       effectiveRevision: 1,
       activePacks: [activePack("react-core")],
@@ -78,9 +81,7 @@ test("reader rejects an Effective Practice whose stored metadata was tampered", 
       .prepare("UPDATE effective_practices SET title = 'tampered' WHERE practice_id = ?")
       .run("react.api.layered-design");
 
-    expect(() => readEffectivePracticeSnapshot(database)).toThrow(
-      "materialization is inconsistent",
-    );
+    expect(() => readEffectivePracticeSnapshot(orm)).toThrow("materialization is inconsistent");
   } finally {
     database.close();
   }
@@ -90,10 +91,11 @@ test("writer rejects an Effective Practice whose source data was tampered", () =
   const database = new Database(":memory:");
   try {
     migrateDatabase(database);
+    const orm = testLocalStoreDatabase(database);
     const reconciled = reconcileEffectivePractices([], candidate("react-core"));
     const effective = reconciled.effectivePractices[0]!;
     expect(() =>
-      writeDerivedState(database, {
+      writeDerivedState(orm, {
         generation: 1,
         effectiveRevision: 1,
         activePacks: [activePack("react-core")],

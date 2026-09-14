@@ -5,6 +5,7 @@ import { createPackCandidate, reconcileEffectivePractices } from "../../model";
 import { migrateDatabase } from "./migrations";
 import { readEffectivePracticeSnapshot } from "./snapshot-reader";
 import { writeDerivedState } from "./state-writer";
+import { testLocalStoreDatabase } from "./test-utils";
 
 /**
  * Baseline fixtures for the single-statement materializer. ADR 0007 §3 freezes
@@ -40,7 +41,7 @@ function buildScaleCandidate(count: number, packName: string) {
 function seedState(database: Database, count: number, packName = "scale-pack"): void {
   const candidate = buildScaleCandidate(count, packName);
   const reconciled = reconcileEffectivePractices([], candidate);
-  writeDerivedState(database, {
+  writeDerivedState(testLocalStoreDatabase(database), {
     generation: 1,
     effectiveRevision: 1,
     activePacks: [
@@ -60,19 +61,20 @@ test("materializes Effective Practices and sources with one joined query", () =>
   const database = new Database(":memory:");
   try {
     migrateDatabase(database);
+    const orm = testLocalStoreDatabase(database);
     seedState(database, 25);
 
     let queryCalls = 0;
-    const originalQuery = database.query.bind(database);
-    // Count the public query calls issued by the reader: one for metadata and
-    // one joined materialization query. An N+1 reader would call query once
-    // per practice, blowing past this bound.
-    database.query = ((sql: string) => {
+    const originalPrepare = database.prepare.bind(database);
+    // Drizzle prepares one statement for metadata and one joined
+    // materialization statement. An N+1 reader would prepare a statement for
+    // every Practice, blowing past this bound.
+    database.prepare = ((sql: string) => {
       queryCalls += 1;
-      return originalQuery(sql);
-    }) as typeof database.query;
+      return originalPrepare(sql);
+    }) as typeof database.prepare;
 
-    const snapshot = readEffectivePracticeSnapshot(database);
+    const snapshot = readEffectivePracticeSnapshot(orm);
     expect(snapshot.effectivePractices).toHaveLength(25);
     expect(queryCalls).toBe(2);
   } finally {
@@ -84,11 +86,12 @@ test("cold open and full read baseline with 1k practices", () => {
   const database = new Database(":memory:");
   try {
     migrateDatabase(database);
+    const orm = testLocalStoreDatabase(database);
     seedState(database, 1_000);
 
     const heapBefore = process.memoryUsage().heapUsed;
     const startedAt = performance.now();
-    const snapshot = readEffectivePracticeSnapshot(database);
+    const snapshot = readEffectivePracticeSnapshot(orm);
     const elapsedMs = performance.now() - startedAt;
     const heapDelta = process.memoryUsage().heapUsed - heapBefore;
 
@@ -106,11 +109,12 @@ test("cold open and full read baseline with 5k practices", () => {
   const database = new Database(":memory:");
   try {
     migrateDatabase(database);
+    const orm = testLocalStoreDatabase(database);
     seedState(database, 5_000);
 
     const heapBefore = process.memoryUsage().heapUsed;
     const startedAt = performance.now();
-    const snapshot = readEffectivePracticeSnapshot(database);
+    const snapshot = readEffectivePracticeSnapshot(orm);
     const elapsedMs = performance.now() - startedAt;
     const heapDelta = process.memoryUsage().heapUsed - heapBefore;
 

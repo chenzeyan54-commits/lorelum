@@ -26,6 +26,7 @@ import {
 import { acquireMutationLock } from "../storage/mutation-lock";
 import { openStoreDatabase } from "../storage/sqlite/database";
 import { writeDerivedState } from "../storage/sqlite/state-writer";
+import { testLocalStoreDatabase } from "../storage/sqlite/test-utils";
 
 async function removeStoreRoot(rootPath: string): Promise<void> {
   for (let attempt = 0; attempt < 10; attempt++) {
@@ -271,7 +272,7 @@ test("point read waits for a live journal-owning writer rather than reading its 
     expect(await listOperationJournals(root.rootPath)).toEqual([journal.operationId]);
 
     await withDatabase(root.rootPath, (database) => {
-      writeDerivedState(database, {
+      writeDerivedState(testLocalStoreDatabase(database), {
         generation: target.generation,
         effectiveRevision: target.effectiveRevision,
         activePacks: target.packs,

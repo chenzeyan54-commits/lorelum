@@ -71,40 +71,40 @@ export function createLocalStoreRepository(database: Database): LocalStoreReposi
       return connection.orm.transaction(run);
     },
     readStoreMetadata() {
-      return readStoreMetadata(database);
+      return readStoreMetadata(connection.orm);
     },
     readLocalStoreSnapshot() {
-      return readLocalStoreSnapshot(database);
+      return readLocalStoreSnapshot(connection.orm);
     },
     readActivePackEntries() {
-      return readActivePackEntries(database);
+      return readActivePackEntries(connection.orm);
     },
     readPracticeIdsForPack(packName) {
-      return readPracticeIdsForPack(database, packName);
+      return readPracticeIdsForPack(connection.orm, packName);
     },
     materializeEffectivePractices(metadata) {
-      return materializeEffectivePractices(database, metadata);
+      return materializeEffectivePractices(connection.orm, metadata);
     },
     materializeEffectivePracticesByIds(metadata, ids) {
-      return materializeEffectivePracticesByIds(database, metadata, ids);
+      return materializeEffectivePracticesByIds(connection.orm, metadata, ids);
     },
     readPractice(metadata, practiceId) {
-      return readPractice(database, metadata, practiceId);
+      return readPractice(connection.orm, metadata, practiceId);
     },
     readEffectiveRevisionLog(afterRevision) {
-      return readEffectiveRevisionLog(database, afterRevision);
+      return readEffectiveRevisionLog(connection.orm, afterRevision);
     },
     readPendingRevisionNotifications() {
-      return readPendingRevisionNotifications(database);
+      return readPendingRevisionNotifications(connection.orm);
     },
     deletePendingRevisionNotification(revision) {
-      deletePendingRevisionNotification(database, revision);
+      deletePendingRevisionNotification(connection.orm, revision);
     },
     writeDerivedState(state) {
-      writeDerivedState(database, state);
+      writeDerivedState(connection.orm, state);
     },
     applyIncrementalDerivedState(state, metrics) {
-      applyIncrementalDerivedState(database, state, metrics);
+      applyIncrementalDerivedState(connection.orm, state, metrics);
     },
   } satisfies LocalStoreRepository);
 }

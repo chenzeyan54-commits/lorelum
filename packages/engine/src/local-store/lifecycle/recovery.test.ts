@@ -19,6 +19,7 @@ import {
 import { readManifest, writeManifest } from "../storage/manifest/manifest-store";
 import { sqlitePath, openStoreDatabase } from "../storage/sqlite/database";
 import { writeDerivedState } from "../storage/sqlite/state-writer";
+import { testLocalStoreDatabase } from "../storage/sqlite/test-utils";
 
 async function removeStoreRoot(rootPath: string): Promise<void> {
   for (let attempt = 0; attempt < 10; attempt++) {
@@ -349,7 +350,7 @@ test("cold open never converges a journal while its writer still owns the lock",
     expect((await readManifest(root.rootPath)).generation).toBe(targetManifest.generation);
 
     const database = await openStoreDatabase(root.rootPath);
-    writeDerivedState(database, {
+    writeDerivedState(testLocalStoreDatabase(database), {
       generation: targetManifest.generation,
       effectiveRevision: targetManifest.effectiveRevision,
       activePacks: targetManifest.packs,

@@ -4,6 +4,7 @@ import { Database } from "bun:sqlite";
 import { migrateDatabase } from "./migrations";
 import { EFFECTIVE_REVISION_LOG_RETENTION, readEffectiveRevisionLog } from "./revision-log";
 import { writeDerivedState } from "./state-writer";
+import { testLocalStoreDatabase } from "./test-utils";
 
 const emptyDelta = Object.freeze({
   added: Object.freeze([] as string[]),
@@ -15,21 +16,22 @@ test("revision log persists mutation deltas independently from the consumable ou
   const database = new Database(":memory:");
   try {
     migrateDatabase(database);
-    writeDerivedState(database, {
+    const orm = testLocalStoreDatabase(database);
+    writeDerivedState(orm, {
       generation: 1,
       effectiveRevision: 1,
       activePacks: [],
       effectivePractices: [],
       revisionLogDelta: { ...emptyDelta, added: ["platform.api"] },
     });
-    writeDerivedState(database, {
+    writeDerivedState(orm, {
       generation: 2,
       effectiveRevision: 2,
       activePacks: [],
       effectivePractices: [],
       revisionLogDelta: { ...emptyDelta, invalidated: ["platform.api"] },
     });
-    expect(readEffectiveRevisionLog(database, 0)).toEqual([
+    expect(readEffectiveRevisionLog(orm, 0)).toEqual([
       { revision: 1, delta: { added: ["platform.api"], changed: [], invalidated: [] } },
       { revision: 2, delta: { added: [], changed: [], invalidated: ["platform.api"] } },
     ]);
@@ -42,20 +44,21 @@ test("revision log does not fabricate a duplicate record for a generation-only w
   const database = new Database(":memory:");
   try {
     migrateDatabase(database);
-    writeDerivedState(database, {
+    const orm = testLocalStoreDatabase(database);
+    writeDerivedState(orm, {
       generation: 1,
       effectiveRevision: 1,
       activePacks: [],
       effectivePractices: [],
       revisionLogDelta: emptyDelta,
     });
-    writeDerivedState(database, {
+    writeDerivedState(orm, {
       generation: 2,
       effectiveRevision: 1,
       activePacks: [],
       effectivePractices: [],
     });
-    expect(readEffectiveRevisionLog(database, 0)).toEqual([{ revision: 1, delta: emptyDelta }]);
+    expect(readEffectiveRevisionLog(orm, 0)).toEqual([{ revision: 1, delta: emptyDelta }]);
   } finally {
     database.close();
   }
@@ -65,8 +68,9 @@ test("revision log retains a bounded contiguous tail for index catch-up", () => 
   const database = new Database(":memory:");
   try {
     migrateDatabase(database);
+    const orm = testLocalStoreDatabase(database);
     for (let revision = 1; revision <= EFFECTIVE_REVISION_LOG_RETENTION + 1; revision++) {
-      writeDerivedState(database, {
+      writeDerivedState(orm, {
         generation: revision,
         effectiveRevision: revision,
         activePacks: [],
@@ -74,7 +78,7 @@ test("revision log retains a bounded contiguous tail for index catch-up", () => 
         revisionLogDelta: emptyDelta,
       });
     }
-    const retained = readEffectiveRevisionLog(database, 0);
+    const retained = readEffectiveRevisionLog(orm, 0);
     expect(retained).toHaveLength(EFFECTIVE_REVISION_LOG_RETENTION);
     expect(retained[0]?.revision).toBe(2);
     expect(retained.at(-1)?.revision).toBe(EFFECTIVE_REVISION_LOG_RETENTION + 1);

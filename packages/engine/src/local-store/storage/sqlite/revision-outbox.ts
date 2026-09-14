@@ -1,6 +1,8 @@
-import type { Database } from "bun:sqlite";
+import { asc, eq } from "drizzle-orm";
 
 import type { RevisionDelta } from "../../model";
+import { effectiveRevisionOutbox } from "../../../persistence/schemas/local-store";
+import type { LocalStoreDatabase } from "../../../persistence/schemas/database-types";
 import { SqliteStateError } from "../errors";
 import { parseRevisionDelta } from "./revision-delta";
 
@@ -11,25 +13,30 @@ export interface PendingRevisionNotification {
 
 /** Read durable notifications in revision order. */
 export function readPendingRevisionNotifications(
-  database: Database,
+  database: LocalStoreDatabase,
 ): readonly PendingRevisionNotification[] {
   try {
     const rows = database
-      .query("SELECT revision, delta_json FROM effective_revision_outbox ORDER BY revision ASC")
-      .all() as readonly Record<string, unknown>[];
+      .select({
+        revision: effectiveRevisionOutbox.revision,
+        deltaJson: effectiveRevisionOutbox.deltaJson,
+      })
+      .from(effectiveRevisionOutbox)
+      .orderBy(asc(effectiveRevisionOutbox.revision))
+      .all();
     return Object.freeze(
       rows.map((row) => {
         if (
           typeof row.revision !== "number" ||
           !Number.isSafeInteger(row.revision) ||
           row.revision < 0 ||
-          typeof row.delta_json !== "string"
+          typeof row.deltaJson !== "string"
         ) {
           throw new SqliteStateError("revision outbox row is malformed");
         }
         return Object.freeze({
           revision: row.revision,
-          delta: parseRevisionDelta(row.delta_json),
+          delta: parseRevisionDelta(row.deltaJson),
         });
       }),
     );
@@ -39,9 +46,15 @@ export function readPendingRevisionNotifications(
   }
 }
 
-export function deletePendingRevisionNotification(database: Database, revision: number): void {
+export function deletePendingRevisionNotification(
+  database: LocalStoreDatabase,
+  revision: number,
+): void {
   try {
-    database.query("DELETE FROM effective_revision_outbox WHERE revision = ?").run(revision);
+    database
+      .delete(effectiveRevisionOutbox)
+      .where(eq(effectiveRevisionOutbox.revision, revision))
+      .run();
   } catch (error) {
     throw new SqliteStateError("cannot acknowledge revision notification", error);
   }

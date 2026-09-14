@@ -9,6 +9,8 @@ import { SqliteStateError, StoreRecoveryRequiredError } from "../errors";
 
 import { sqlitePath } from "./database";
 import { migrateDatabase } from "./migrations";
+import { createSqliteConnection } from "../../../persistence/database/connection";
+import { localStoreDatabaseDefinition } from "../../../persistence/definitions";
 import { readLocalStoreSnapshot } from "./snapshot-reader";
 import { writeDerivedState } from "./state-writer";
 
@@ -71,13 +73,14 @@ async function publishRebuiltDatabase(rootPath: string): Promise<void> {
 
     database = new Database(stagingPath);
     migrateDatabase(database);
-    writeDerivedState(database, {
+    const connection = createSqliteConnection(database, localStoreDatabaseDefinition.schema);
+    writeDerivedState(connection.orm, {
       generation: manifest.generation,
       effectiveRevision: manifest.effectiveRevision,
       activePacks: manifest.packs,
       effectivePractices,
     });
-    const snapshot = readLocalStoreSnapshot(database);
+    const snapshot = readLocalStoreSnapshot(connection.orm);
     if (
       snapshot === undefined ||
       snapshot.metadata.generation !== manifest.generation ||
