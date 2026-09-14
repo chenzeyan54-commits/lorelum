@@ -22,6 +22,14 @@ The shared pieces are deliberately centralized:
 
 Do not create a package-local migration runner, a second connection factory, or a generic database selected by arbitrary strings. Domain modules own their own repository or index adapter; the shared layer owns the common SQLite/Drizzle mechanics.
 
+## Drizzle is the default
+
+For new relational persistence code, start with Drizzle. Use its schema and query APIs for ordinary CRUD, joins, aggregates, counts, and batch writes. A long or complicated query is not, by itself, a reason to switch to handwritten SQL.
+
+Native SQL needs a specific SQLite-only reason that Drizzle cannot model adequately. Every new raw SQL call must stay in its owning persistence or index adapter, bind values rather than interpolate them into SQL text, explain that reason in a nearby comment, and have SQLite integration coverage.
+
+Lifecycle services, CLI commands, and Backend controllers do not issue SQL directly. They call an Engine repository or index adapter.
+
 ## What belongs in a Drizzle schema
 
 Use `sqliteTable()` for ordinary relational tables, columns, foreign keys, checks, and indexes. Keep the TypeScript table definition next to the database kind that owns the data.
@@ -30,9 +38,9 @@ Use native parameterized SQL when SQLite has a feature that is not a normal tabl
 
 - FTS5 virtual-table DDL, `MATCH`, and `bm25` belong in the keyword-index implementation.
 - `PRAGMA` calls and integrity checks stay with the SQLite adapter that needs them.
-- vector BLOB encoding, validation, and exact vector scans stay in the semantic-index implementation.
+- vector BLOB encoding and validation stay in the semantic-index codec; ordinary vector-row reads and writes still use the semantic-index Drizzle schema.
 
-Drizzle is still responsible for schema, migration history, ordinary metadata rows, and transactional CRUD around these operations. Native SQL is an escape hatch inside the owning Engine module, not a reason for lifecycle code, CLI code, or Backend controllers to open SQLite directly.
+Drizzle remains responsible for schema, migration history, ordinary metadata rows, and transactional CRUD around these operations. Native SQL is a narrow escape hatch inside the owning Engine module, not a reason for lifecycle code, CLI code, or Backend controllers to open SQLite directly.
 
 ## Changing a schema
 
@@ -99,3 +107,4 @@ For every migration, verify all of the following:
 - reopening the same database is idempotent;
 - the owning use case still preserves its transaction, snapshot, and error semantics;
 - FTS5, vector, and `PRAGMA` behavior remains covered by SQLite integration tests rather than TypeScript types alone.
+- every new native SQL call states its SQLite-specific reason and binds its parameters safely.

@@ -18,6 +18,14 @@
 - Treat retained revision deltas as normal synchronization input. A full derived-index rebuild is recovery for initial state, corruption, unavailable history, or continuity failure—not the routine response to every Store mutation.
 - Put LocalStore lifecycle, storage, schema, and query rules beside their existing functional modules. Do not move domain rules into generic `shared` merely because several Engine modules call them.
 
+### Drizzle and SQLite policy
+
+- Before changing SQLite schemas, Drizzle migrations, repositories, or index persistence, read [Engine persistence and Drizzle](../../docs/development/persistence.md).
+- Default to Drizzle for relational schema definitions and database reads/writes. Do not add `Database.query()` or `Database.exec()` for ordinary CRUD, joins, aggregates, counts, or batch writes merely because handwritten SQL is shorter.
+- Native SQL is an exception for a named SQLite-specific capability that Drizzle does not model adequately, such as FTS5 virtual-table DDL, `MATCH`/`bm25`, or a required `PRAGMA`/integrity operation. Vector BLOB encoding and validation belong in TypeScript codecs; they do not by themselves justify bypassing Drizzle for row access.
+- Every new native SQL call must stay in its owning persistence/index adapter, use parameter binding rather than string interpolation, explain the SQLite-specific reason in a nearby comment, and have SQLite integration coverage. Lifecycle services, CLI commands, and Backend controllers must not issue SQL directly.
+- Do not use `drizzle-kit push`, execute ad-hoc schema DDL at runtime, or add a second public migration-generation command.
+
 ## Verification
 
 - Add colocated tests for every Engine behavior. Use temporary Store roots and mocked filesystem/network boundaries; never access a developer Store in unit tests.
@@ -27,6 +35,7 @@
 
 ## Canonical references
 
+- [Engine persistence and Drizzle](../../docs/development/persistence.md)
 - [LocalStore ADR](../../docs/adr/0007-engine-local-store.md)
 - [Query CLI contract](../../docs/cli/query.md)
 - [Semantic Query dependency boundaries](../../docs/plans/semantic-query-v1-dependency-boundaries.md)
