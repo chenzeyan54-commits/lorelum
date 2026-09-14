@@ -24,7 +24,9 @@ test("SQLite exclusive lock rejects a concurrent zero-wait owner and releases af
     });
     await acquired;
 
-    await expect(sqliteExclusiveLock.withLock(directory, 0, async () => undefined)).rejects.toMatchObject({
+    await expect(
+      sqliteExclusiveLock.withLock(directory, 0, async () => undefined),
+    ).rejects.toMatchObject({
       code: "backend.deadline-exceeded",
     } satisfies Partial<BackendError>);
 
