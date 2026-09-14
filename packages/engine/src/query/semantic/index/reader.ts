@@ -1,6 +1,8 @@
 import { access } from "node:fs/promises";
-import { Database } from "bun:sqlite";
 
+import { openSqliteConnection } from "../../../persistence/database/connection";
+import { semanticIndexDatabaseDefinition } from "../../../persistence/definitions";
+import { semanticVectors } from "../../../persistence/schemas/semantic-index";
 import { SemanticIndexError } from "../errors";
 import {
   SemanticIndexIncompatibleError,
@@ -12,6 +14,7 @@ import { isCompatibleMetadata, type SemanticIndexMetadata } from "./metadata";
 import {
   readSemanticIndexMetadata,
   readSemanticIndexVector,
+  type SemanticIndexConnection,
   verifySemanticIndexIntegrity,
 } from "./database";
 import { semanticIndexPaths } from "./paths";
@@ -51,20 +54,18 @@ function cosine(left: Float32Array, right: Float32Array): number {
   return score;
 }
 
-function readPracticeIds(database: Database): readonly string[] {
+function readPracticeIds(connection: SemanticIndexConnection): readonly string[] {
   try {
-    const rows = database.query("SELECT practice_id FROM semantic_vectors").all() as unknown[];
+    const rows = connection.orm
+      .select({ practiceId: semanticVectors.practiceId })
+      .from(semanticVectors)
+      .all();
     return Object.freeze(
       rows.map((row) => {
-        if (
-          typeof row !== "object" ||
-          row === null ||
-          !("practice_id" in row) ||
-          typeof row.practice_id !== "string"
-        ) {
+        if (typeof row.practiceId !== "string") {
           throw new SemanticIndexQueryError("Semantic index Practice ID is invalid");
         }
-        return row.practice_id;
+        return row.practiceId;
       }),
     );
   } catch (error) {
@@ -74,15 +75,15 @@ function readPracticeIds(database: Database): readonly string[] {
 }
 
 function readCandidateRows(
-  database: Database,
+  connection: SemanticIndexConnection,
   metadata: SemanticIndexMetadata,
   queryVector: Float32Array,
   excludedPracticeIds: ReadonlySet<string>,
 ): SemanticCandidate[] {
   const candidates: SemanticCandidate[] = [];
-  for (const practiceId of readPracticeIds(database)) {
+  for (const practiceId of readPracticeIds(connection)) {
     if (excludedPracticeIds.has(practiceId)) continue;
-    const row = readSemanticIndexVector(database, practiceId, metadata.dimensions);
+    const row = readSemanticIndexVector(connection, practiceId, metadata.dimensions);
     if (row === undefined) {
       throw new SemanticIndexQueryError("Semantic index vector row disappeared during query");
     }
@@ -114,19 +115,21 @@ export async function openSemanticIndexReader(
     throw new SemanticIndexQueryError("Cannot access semantic SQLite index", { cause: error });
   }
 
-  let database: Database | undefined;
+  let connection: SemanticIndexConnection | undefined;
   try {
-    database = new Database(path, { readonly: true });
-    verifySemanticIndexIntegrity(database);
-    const metadata = readSemanticIndexMetadata(database);
+    connection = openSqliteConnection(path, semanticIndexDatabaseDefinition.schema, {
+      readonly: true,
+    });
+    verifySemanticIndexIntegrity(connection);
+    const metadata = readSemanticIndexMetadata(connection);
     if (!isCompatibleMetadata(metadata, profile, metadata.rootBinding)) {
       throw new SemanticIndexIncompatibleError("Semantic index does not match the active Profile");
     }
-    const connection = database;
+    const activeConnection = connection;
     return Object.freeze({
       metadata,
       hasEligibleVectors(excludedPracticeIds: ReadonlySet<string>) {
-        return readPracticeIds(connection).some(
+        return readPracticeIds(activeConnection).some(
           (practiceId) => !excludedPracticeIds.has(practiceId),
         );
       },
@@ -135,7 +138,7 @@ export async function openSemanticIndexReader(
           throw new SemanticIndexQueryError("Semantic query vector dimensions are invalid");
         }
         const candidates = readCandidateRows(
-          connection,
+          activeConnection,
           metadata,
           queryVector,
           excludedPracticeIds,
@@ -143,12 +146,12 @@ export async function openSemanticIndexReader(
         return Object.freeze(candidates.slice(0, limit));
       },
       close() {
-        connection.close();
+        activeConnection.close();
       },
     } satisfies SemanticIndexReader);
   } catch (error) {
     try {
-      database?.close();
+      connection?.close();
     } catch {
       // Preserve the original index failure.
     }

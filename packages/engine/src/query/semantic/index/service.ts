@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { access, copyFile, mkdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { Database } from "bun:sqlite";
 
 import {
   StoreBusyError,
@@ -12,6 +11,8 @@ import {
   type StoreSnapshotIdentity,
 } from "../../../local-store";
 import { acquireMutationLock } from "../../../local-store/storage/mutation-lock";
+import { openSqliteConnection } from "../../../persistence/database/connection";
+import { semanticIndexDatabaseDefinition } from "../../../persistence/definitions";
 import type { EmbeddingPort } from "../encoding";
 import { validateEmbeddingBatch } from "../encoding";
 import {
@@ -34,6 +35,7 @@ import {
   initializeSemanticIndex,
   readSemanticIndexMetadata,
   readSemanticIndexVector,
+  type SemanticIndexConnection,
   verifySemanticIndexIntegrity,
 } from "./database";
 import { planIncrementalSemanticIndex } from "./incremental";
@@ -71,17 +73,19 @@ async function activeMetadata(path: string): Promise<SemanticIndexMetadata | und
     }
     throw new SemanticIndexError("Cannot access semantic SQLite index", { cause: error });
   }
-  let database: Database | undefined;
+  let connection: SemanticIndexConnection | undefined;
   try {
-    database = new Database(path, { readonly: true });
-    verifySemanticIndexIntegrity(database);
-    return readSemanticIndexMetadata(database);
+    connection = openSqliteConnection(path, semanticIndexDatabaseDefinition.schema, {
+      readonly: true,
+    });
+    verifySemanticIndexIntegrity(connection);
+    return readSemanticIndexMetadata(connection);
   } catch (error) {
     if (error instanceof SemanticIndexError) throw error;
     throw new SemanticIndexError("Cannot open semantic SQLite index", { cause: error });
   } finally {
     try {
-      database?.close();
+      connection?.close();
     } catch {
       // The metadata/open error is more useful than cleanup failure.
     }
@@ -152,27 +156,27 @@ export function createSemanticIndexService(
     const metadata = metadataFor(snapshot.identity, profile, vectors.length);
     await mkdir(indexPaths.directory, { recursive: true });
     const staging = join(indexPaths.directory, `build-${randomUUID()}.sqlite`);
-    let database: Database | undefined;
+    let connection: SemanticIndexConnection | undefined;
     let published = false;
     try {
-      database = new Database(staging);
-      initializeSemanticIndex(database, metadata, documents, vectors);
-      verifySemanticIndexIntegrity(database);
-      const written = readSemanticIndexMetadata(database);
+      connection = openSqliteConnection(staging, semanticIndexDatabaseDefinition.schema);
+      initializeSemanticIndex(connection, metadata, documents, vectors);
+      verifySemanticIndexIntegrity(connection);
+      const written = readSemanticIndexMetadata(connection);
       if (
         written.profileId !== metadata.profileId ||
         written.vectorCount !== metadata.vectorCount
       ) {
         throw new SemanticIndexError("Staged semantic index metadata differs from build metadata");
       }
-      database.close();
-      database = undefined;
+      connection.close();
+      connection = undefined;
       const result = await publish(root, indexPaths, staging, snapshot.identity, written);
       published = true;
       return result;
     } finally {
       try {
-        database?.close();
+        connection?.close();
       } catch {
         // Preserve the primary build or publication failure.
       }
@@ -195,13 +199,13 @@ export function createSemanticIndexService(
     }
     await mkdir(indexPaths.directory, { recursive: true });
     const staging = join(indexPaths.directory, `build-${randomUUID()}.sqlite`);
-    let database: Database | undefined;
+    let connection: SemanticIndexConnection | undefined;
     let published = false;
     try {
       await copyFile(indexPaths.active, staging);
-      database = new Database(staging);
-      verifySemanticIndexIntegrity(database);
-      const stagedMetadata = readSemanticIndexMetadata(database);
+      connection = openSqliteConnection(staging, semanticIndexDatabaseDefinition.schema);
+      verifySemanticIndexIntegrity(connection);
+      const stagedMetadata = readSemanticIndexMetadata(connection);
       if (
         stagedMetadata.effectiveRevision !== existing.effectiveRevision ||
         !isCompatibleMetadata(stagedMetadata, profile, changes.identity.rootBinding)
@@ -213,7 +217,7 @@ export function createSemanticIndexService(
       const plan = planIncrementalSemanticIndex(
         changes.deltas.map((change) => change.delta),
         changes.currentPractices,
-        (practiceId) => readSemanticIndexVector(database!, practiceId, profile.dimensions),
+        (practiceId) => readSemanticIndexVector(connection!, practiceId, profile.dimensions),
       );
       const embedded = await embedDocuments(embedding, profile, plan.documentsToEmbed);
       const embeddedByPracticeId = new Map(
@@ -229,14 +233,14 @@ export function createSemanticIndexService(
         throw new SemanticIndexError("Incremental semantic index vector is missing");
       });
       const written = applySemanticIndexChanges(
-        database,
+        connection,
         metadataFor(changes.identity, profile, 0),
         plan.removedPracticeIds,
         plan.documents,
         vectors,
       );
-      verifySemanticIndexIntegrity(database);
-      const verified = readSemanticIndexMetadata(database);
+      verifySemanticIndexIntegrity(connection);
+      const verified = readSemanticIndexMetadata(connection);
       if (
         verified.effectiveRevision !== written.effectiveRevision ||
         verified.vectorCount !== written.vectorCount
@@ -245,14 +249,14 @@ export function createSemanticIndexService(
           "Staged semantic index metadata differs from incremental target",
         );
       }
-      database.close();
-      database = undefined;
+      connection.close();
+      connection = undefined;
       const result = await publish(root, indexPaths, staging, changes.identity, verified);
       published = true;
       return result;
     } finally {
       try {
-        database?.close();
+        connection?.close();
       } catch {
         // Preserve the primary build or publication failure.
       }
