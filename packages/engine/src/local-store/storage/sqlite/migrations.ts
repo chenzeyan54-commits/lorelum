@@ -1,63 +1,51 @@
 import type { Database } from "bun:sqlite";
+import { readMigrationFiles } from "drizzle-orm/migrator";
+
+import {
+  createSqliteConnection,
+  localStoreDatabaseDefinition,
+  migrateSqlite,
+} from "../../../persistence";
 
 import { SqliteStateError } from "../errors";
 
-export const LOCAL_STORE_SCHEMA_VERSION = 3;
+/** The first Drizzle baseline; legacy SQLite files are rebuilt, never upgraded in place. */
+export const LOCAL_STORE_SCHEMA_VERSION = 1;
 
-const INITIAL_SCHEMA = [
-  "CREATE TABLE IF NOT EXISTS local_store_metadata (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), schema_version INTEGER NOT NULL, installed_packs_generation INTEGER NOT NULL, effective_revision INTEGER NOT NULL)",
-  "CREATE TABLE IF NOT EXISTS active_packs (pack_name TEXT PRIMARY KEY, pack_version TEXT NOT NULL, artifact_digest TEXT NOT NULL, storage_key TEXT NOT NULL, installed_at TEXT NOT NULL)",
-  "CREATE TABLE IF NOT EXISTS practice_sources (pack_name TEXT NOT NULL, practice_id TEXT NOT NULL, content_digest TEXT NOT NULL, source_path TEXT NOT NULL, PRIMARY KEY (pack_name, practice_id), FOREIGN KEY (pack_name) REFERENCES active_packs(pack_name) ON DELETE CASCADE, FOREIGN KEY (practice_id) REFERENCES effective_practices(practice_id) ON DELETE CASCADE)",
-  "CREATE TABLE IF NOT EXISTS effective_practices (practice_id TEXT PRIMARY KEY, content_digest TEXT NOT NULL, canonical_content TEXT NOT NULL, title TEXT NOT NULL, stage TEXT NOT NULL, tech_stack_json TEXT NOT NULL, applies_when TEXT NOT NULL, severity TEXT NOT NULL, effective_revision INTEGER NOT NULL)",
-  "CREATE INDEX IF NOT EXISTS practice_sources_by_practice ON practice_sources(practice_id, pack_name, source_path)",
-  "CREATE TABLE IF NOT EXISTS effective_revision_outbox (revision INTEGER PRIMARY KEY, delta_json TEXT NOT NULL, created_at TEXT NOT NULL)",
-  "CREATE TABLE IF NOT EXISTS effective_revision_log (revision INTEGER PRIMARY KEY, delta_json TEXT NOT NULL, created_at TEXT NOT NULL)",
-].join(";");
+function assertNoUnknownAppliedMigration(database: Database): void {
+  const table = database
+    .query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = '__drizzle_migrations'")
+    .get();
+  if (table === null || table === undefined) return;
 
-const ADD_REVISION_OUTBOX = [
-  "CREATE TABLE effective_revision_outbox (revision INTEGER PRIMARY KEY, delta_json TEXT NOT NULL, created_at TEXT NOT NULL)",
-  "UPDATE local_store_metadata SET schema_version = 2 WHERE singleton = 1",
-].join(";");
-
-const ADD_EFFECTIVE_REVISION_LOG = [
-  "CREATE TABLE effective_revision_log (revision INTEGER PRIMARY KEY, delta_json TEXT NOT NULL, created_at TEXT NOT NULL)",
-  `UPDATE local_store_metadata SET schema_version = ${LOCAL_STORE_SCHEMA_VERSION} WHERE singleton = 1`,
-].join(";");
-
-function userVersion(database: Database): number {
-  const row = database.query("PRAGMA user_version").get() as Record<string, unknown> | undefined;
-  if (
-    row === undefined ||
-    typeof row.user_version !== "number" ||
-    !Number.isSafeInteger(row.user_version)
-  ) {
-    throw new SqliteStateError("SQLite user_version is malformed");
+  const expectedHashes = new Set(
+    readMigrationFiles({ migrationsFolder: localStoreDatabaseDefinition.migrationsFolder }).map(
+      (migration) => migration.hash,
+    ),
+  );
+  const rows = database.query("SELECT hash FROM __drizzle_migrations").all() as unknown[];
+  for (const row of rows) {
+    if (
+      typeof row !== "object" ||
+      row === null ||
+      !("hash" in row) ||
+      typeof row.hash !== "string" ||
+      !expectedHashes.has(row.hash)
+    ) {
+      throw new SqliteStateError("SQLite migration history is unsupported");
+    }
   }
-  return row.user_version;
 }
 
-/** Applies LocalStore-owned schema migrations in one SQLite transaction. */
+/** Apply checked-in Drizzle migrations to a new/current LocalStore SQLite file. */
 export function migrateDatabase(database: Database): void {
   try {
     database.exec("PRAGMA foreign_keys = ON");
-    database.transaction(() => {
-      const currentVersion = userVersion(database);
-      if (currentVersion < 0 || currentVersion > LOCAL_STORE_SCHEMA_VERSION) {
-        throw new SqliteStateError("SQLite schema version is unsupported");
-      }
-      if (currentVersion === 0) {
-        database.exec(INITIAL_SCHEMA);
-        database.exec("PRAGMA user_version = " + LOCAL_STORE_SCHEMA_VERSION);
-      } else if (currentVersion === 1) {
-        database.exec(ADD_REVISION_OUTBOX);
-        database.exec("PRAGMA user_version = 2");
-        database.exec(ADD_EFFECTIVE_REVISION_LOG);
-        database.exec("PRAGMA user_version = " + LOCAL_STORE_SCHEMA_VERSION);
-      } else if (currentVersion === 2) {
-        database.exec(ADD_EFFECTIVE_REVISION_LOG);
-        database.exec("PRAGMA user_version = " + LOCAL_STORE_SCHEMA_VERSION);
-      }
-    })();
+    assertNoUnknownAppliedMigration(database);
+    migrateSqlite(
+      createSqliteConnection(database, localStoreDatabaseDefinition.schema),
+      localStoreDatabaseDefinition,
+    );
   } catch (error) {
     if (error instanceof SqliteStateError) throw error;
     throw new SqliteStateError("SQLite migration failed", error);

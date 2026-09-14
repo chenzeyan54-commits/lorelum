@@ -4,7 +4,11 @@ export {
   semanticIndexDatabaseDefinition,
   type SqliteDatabaseDefinition,
 } from "./definitions";
-export { openSqliteConnection, type SqliteConnection } from "./database/connection";
+export {
+  createSqliteConnection,
+  openSqliteConnection,
+  type SqliteConnection,
+} from "./database/connection";
 export { migrateSqlite } from "./database/migrator";
 export {
   createReadSession,

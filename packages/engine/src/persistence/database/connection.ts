@@ -11,6 +11,21 @@ export interface OpenSqliteConnectionOptions {
   readonly readonly?: boolean;
 }
 
+/** Wrap a caller-owned bun:sqlite client without changing its lifecycle. */
+export function createSqliteConnection<Schema extends Record<string, unknown>>(
+  client: Database,
+  schema: Schema,
+): SqliteConnection<Schema> {
+  const orm = drizzle({ client, schema });
+  return Object.freeze({
+    client,
+    orm,
+    close() {
+      client.close();
+    },
+  });
+}
+
 /** The only Engine persistence entrypoint that creates a bun:sqlite handle. */
 export function openSqliteConnection<Schema extends Record<string, unknown>>(
   path: string,
@@ -22,14 +37,7 @@ export function openSqliteConnection<Schema extends Record<string, unknown>>(
     const opened =
       options.readonly === true ? new Database(path, { readonly: true }) : new Database(path);
     client = opened;
-    const orm = drizzle({ client: opened, schema });
-    return Object.freeze({
-      client: opened,
-      orm,
-      close() {
-        opened.close();
-      },
-    });
+    return createSqliteConnection(opened, schema);
   } catch (error) {
     client?.close();
     throw error;

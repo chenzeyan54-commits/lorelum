@@ -125,7 +125,7 @@ factory、session、migrator 与 index-file publisher 都只有一份实现。�
 这不是“应用启动时把一组 SQL 从头跑一遍”，也不使用对真实用户文件直接 diff 的 `drizzle-kit push`。
 
 1. `persistence/schemas/*.ts` 是普通关系表的 source of truth。
-2. 每个 database definition 用独立 Drizzle Kit config 执行一次 `generate --name init`，把生成的 SQL、snapshot 和 journal metadata 提交到仓库。
+2. `bun run db:generate` 按固定顺序调用三个独立 Drizzle Kit config，生成各自的 SQL、snapshot 和 journal metadata 并提交到仓库。开发者只使用这一条命令，不分别运行数据库级脚本。
 3. keyword 的 FTS5 virtual table 不伪装成 `sqliteTable()`；在**首次提交且尚未执行**的 keyword init SQL 中追加经审查的静态 `CREATE VIRTUAL TABLE ... USING fts5`。之后不修改这条 migration；FTS schema、`MATCH` 和 `bm25` 由 keyword repository 和 SQLite 集成测试拥有。
 4. `persistence/database/migrator.ts` 是唯一运行入口：它把新建的 LocalStore `.next` 文件或 index staging 文件交给 Drizzle `migrate()`。迁移完成后才进入业务 transaction 写 projection 或 index rows；不把 migration 嵌套进业务 transaction。
 5. read-only active index 不运行 migration，只验证它已处于当前 baseline。legacy 文件先走本节定义的 reset，而不是交给 Drizzle 接管。

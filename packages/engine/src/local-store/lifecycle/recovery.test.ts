@@ -18,7 +18,6 @@ import {
 } from "../storage/journal/operation-journal";
 import { readManifest, writeManifest } from "../storage/manifest/manifest-store";
 import { sqlitePath, openStoreDatabase } from "../storage/sqlite/database";
-import { LOCAL_STORE_SCHEMA_VERSION } from "../storage/sqlite/migrations";
 import { writeDerivedState } from "../storage/sqlite/state-writer";
 
 async function removeStoreRoot(rootPath: string): Promise<void> {
@@ -486,19 +485,21 @@ test("journal recovery maps a missing metadata table to recovery-required", asyn
   });
 });
 
-test("reindex preserves a newer unsupported SQLite database", async () => {
+test("reindex preserves a SQLite file with unknown Drizzle migration history", async () => {
   await withRoot(async (root) => {
     const store = createLocalStore();
     await store.install(root, candidate("platform", platform));
     const raw = new Database(sqlitePath(root.rootPath));
-    raw.exec("PRAGMA user_version = " + (LOCAL_STORE_SCHEMA_VERSION + 1));
+    raw
+      .query("INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)")
+      .run("future-migration", Date.now());
     raw.close();
 
-    await expect(store.reindex(root)).rejects.toThrow("schema version is unsupported");
+    await expect(store.reindex(root)).rejects.toThrow("migration history is unsupported");
 
     const reopened = new Database(sqlitePath(root.rootPath));
-    expect(reopened.query("PRAGMA user_version").get()).toEqual({
-      user_version: LOCAL_STORE_SCHEMA_VERSION + 1,
+    expect(reopened.query("SELECT hash FROM __drizzle_migrations ORDER BY id DESC LIMIT 1").get()).toEqual({
+      hash: "future-migration",
     });
     reopened.close();
   });
