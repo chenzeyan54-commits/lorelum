@@ -1,14 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { access, mkdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { Database } from "bun:sqlite";
+import { eq } from "drizzle-orm";
 
 import { KeywordIndexError } from "../errors";
 import { acquireMutationLock } from "../../local-store/storage/mutation-lock";
 import {
+  keywordIndexDatabaseDefinition,
+  migrateSqlite,
+  openSqliteConnection,
+  type SqliteConnection,
+} from "../../persistence";
+import { keywordIndexMetadata } from "../../persistence/schemas/keyword-index";
+import {
   KEYWORD_INDEX_VERSION,
   deleteKeywordDocuments,
-  initializeKeywordIndex,
   insertKeywordDocuments,
   openKeywordIndex,
   toKeywordIndexError,
@@ -33,13 +39,7 @@ export interface PersistentKeywordIndex extends KeywordIndex {
 const INDEX_FILE_NAME = "active.sqlite";
 const INDEX_WRITER_DIRECTORY = "writer";
 
-const CREATE_METADATA_TABLE = `
-  CREATE TABLE keyword_index_metadata (
-    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-    root_binding TEXT NOT NULL,
-    effective_revision INTEGER NOT NULL
-  )
-`;
+type KeywordIndexConnection = SqliteConnection<typeof keywordIndexDatabaseDefinition.schema>;
 
 function paths(rootPath: string): { readonly directory: string; readonly active: string } {
   const directory = join(rootPath, "indexes", "keyword", `v${KEYWORD_INDEX_VERSION}`);
@@ -63,36 +63,63 @@ export async function withPersistentKeywordIndexWriter<T>(
 }
 
 interface KeywordIndexMetadataRow extends Record<string, unknown> {
-  readonly root_binding: string;
-  readonly effective_revision: number;
+  readonly rootBinding: string;
+  readonly effectiveRevision: number;
 }
 
 function isValidCheckpoint(value: unknown): value is KeywordIndexMetadataRow {
   if (typeof value !== "object" || value === null) return false;
   const row = value as Record<string, unknown>;
   return (
-    typeof row.root_binding === "string" &&
-    typeof row.effective_revision === "number" &&
-    Number.isSafeInteger(row.effective_revision) &&
-    row.effective_revision >= 0
+    typeof row.rootBinding === "string" &&
+    typeof row.effectiveRevision === "number" &&
+    Number.isSafeInteger(row.effectiveRevision) &&
+    row.effectiveRevision >= 0
   );
 }
 
-function readCheckpoint(database: Database): KeywordIndexCheckpoint {
-  const row = database.query("SELECT * FROM keyword_index_metadata WHERE singleton = 1").get();
+function readCheckpoint(connection: KeywordIndexConnection): KeywordIndexCheckpoint {
+  const row = connection.orm
+    .select({
+      rootBinding: keywordIndexMetadata.rootBinding,
+      effectiveRevision: keywordIndexMetadata.effectiveRevision,
+    })
+    .from(keywordIndexMetadata)
+    .where(eq(keywordIndexMetadata.singleton, 1))
+    .get();
   if (!isValidCheckpoint(row)) throw new KeywordIndexError("Keyword index metadata is invalid");
   return Object.freeze({
-    rootBinding: row.root_binding,
-    effectiveRevision: row.effective_revision,
+    rootBinding: row.rootBinding,
+    effectiveRevision: row.effectiveRevision,
   });
 }
 
-function writeCheckpoint(database: Database, checkpoint: KeywordIndexCheckpoint): void {
-  database
-    .query(
-      "UPDATE keyword_index_metadata SET root_binding = ?, effective_revision = ? WHERE singleton = 1",
-    )
-    .run(checkpoint.rootBinding, checkpoint.effectiveRevision);
+function writeCheckpoint(connection: KeywordIndexConnection, checkpoint: KeywordIndexCheckpoint): void {
+  connection.orm
+    .update(keywordIndexMetadata)
+    .set({
+      rootBinding: checkpoint.rootBinding,
+      effectiveRevision: checkpoint.effectiveRevision,
+    })
+    .where(eq(keywordIndexMetadata.singleton, 1))
+    .run();
+  if (!checkpointEquals(readCheckpoint(connection), checkpoint)) {
+    throw new KeywordIndexError("Keyword index metadata is invalid");
+  }
+}
+
+function writeInitialCheckpoint(
+  connection: KeywordIndexConnection,
+  checkpoint: KeywordIndexCheckpoint,
+): void {
+  connection.orm
+    .insert(keywordIndexMetadata)
+    .values({
+      singleton: 1,
+      rootBinding: checkpoint.rootBinding,
+      effectiveRevision: checkpoint.effectiveRevision,
+    })
+    .run();
 }
 
 function checkpointEquals(left: KeywordIndexCheckpoint, right: KeywordIndexCheckpoint): boolean {
@@ -105,9 +132,12 @@ function uniqueIds(ids: readonly string[]): readonly string[] {
   return [...new Set(ids)];
 }
 
-function wrap(database: Database, initial: KeywordIndexCheckpoint): PersistentKeywordIndex {
+function wrap(
+  connection: KeywordIndexConnection,
+  initial: KeywordIndexCheckpoint,
+): PersistentKeywordIndex {
   let checkpoint = initial;
-  const keywordIndex = openKeywordIndex(database);
+  const keywordIndex = openKeywordIndex(connection.client);
   return Object.freeze({
     get checkpoint() {
       return checkpoint;
@@ -123,11 +153,13 @@ function wrap(database: Database, initial: KeywordIndexCheckpoint): PersistentKe
         throw new KeywordIndexError("Keyword index revision moved backwards");
       }
       try {
-        database.transaction(() => {
-          deleteKeywordDocuments(database, uniqueIds(removedPracticeIds));
-          insertKeywordDocuments(database, documents);
-          writeCheckpoint(database, nextCheckpoint);
-        })();
+        connection.orm.transaction(() => {
+          // FTS5 document mutation remains native SQL because virtual-table
+          // MATCH/bm25 semantics are outside Drizzle's table abstraction.
+          deleteKeywordDocuments(connection.client, uniqueIds(removedPracticeIds));
+          insertKeywordDocuments(connection.client, documents);
+          writeCheckpoint(connection, nextCheckpoint);
+        });
         checkpoint = nextCheckpoint;
       } catch (error) {
         if (error instanceof KeywordIndexError) throw error;
@@ -150,14 +182,15 @@ export async function openPersistentKeywordIndex(
   } catch {
     return undefined;
   }
-  let database: Database | undefined;
+  let connection: KeywordIndexConnection | undefined;
   try {
-    database = new Database(active);
-    database.exec("PRAGMA journal_mode = WAL");
-    return wrap(database, readCheckpoint(database));
+    connection = openSqliteConnection(active, keywordIndexDatabaseDefinition.schema);
+    migrateSqlite(connection, keywordIndexDatabaseDefinition);
+    connection.client.exec("PRAGMA journal_mode = WAL");
+    return wrap(connection, readCheckpoint(connection));
   } catch (error) {
     try {
-      database?.close();
+      connection?.close();
     } catch {
       // Keep the original corruption/open error.
     }
@@ -174,18 +207,20 @@ export async function createPersistentKeywordIndex(
   const { directory, active } = paths(rootPath);
   await mkdir(directory, { recursive: true });
   const temporary = join(directory, `build-${randomUUID()}.sqlite`);
-  let database: Database | undefined;
+  let connection: KeywordIndexConnection | undefined;
   try {
-    database = new Database(temporary);
-    initializeKeywordIndex(database, documents);
-    database.exec(CREATE_METADATA_TABLE);
-    database
-      .query(
-        "INSERT INTO keyword_index_metadata (singleton, root_binding, effective_revision) VALUES (1, ?, ?)",
-      )
-      .run(checkpoint.rootBinding, checkpoint.effectiveRevision);
-    database.close();
-    database = undefined;
+    const stagingConnection = openSqliteConnection(
+      temporary,
+      keywordIndexDatabaseDefinition.schema,
+    );
+    connection = stagingConnection;
+    migrateSqlite(stagingConnection, keywordIndexDatabaseDefinition);
+    stagingConnection.orm.transaction(() => {
+      insertKeywordDocuments(stagingConnection.client, documents);
+      writeInitialCheckpoint(stagingConnection, checkpoint);
+    });
+    stagingConnection.close();
+    connection = undefined;
     await rename(temporary, active);
     const opened = await openPersistentKeywordIndex(rootPath);
     if (opened === undefined || !checkpointEquals(opened.checkpoint, checkpoint)) {
@@ -195,7 +230,7 @@ export async function createPersistentKeywordIndex(
     return opened;
   } catch (error) {
     try {
-      database?.close();
+      connection?.close();
     } catch {
       // Preserve the useful failure below.
     }

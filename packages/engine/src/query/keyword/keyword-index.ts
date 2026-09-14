@@ -16,8 +16,8 @@ export interface KeywordIndex {
   close(): void;
 }
 
-/** Bump when any persistent keyword-index behavior can change query results. */
-export const KEYWORD_INDEX_VERSION = 1;
+/** Drizzle-managed index baseline; v1 derived files are rebuilt under v2. */
+export const KEYWORD_INDEX_VERSION = 2;
 
 export const CREATE_KEYWORD_TABLE = `
   CREATE VIRTUAL TABLE keyword_documents USING fts5(
