@@ -13,6 +13,9 @@
     "lint": "oxlint .",
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check . '!**/*.md' '!**/*.mdx'",
+    "db:generate:local-store": "drizzle-kit generate --config packages/engine/drizzle.local-store.config.ts",
+    "db:generate:keyword-index": "drizzle-kit generate --config packages/engine/drizzle.keyword-index.config.ts",
+    "db:generate:semantic-index": "drizzle-kit generate --config packages/engine/drizzle.semantic-index.config.ts",
     "design:lint": "designmd lint DESIGN.md",
     "typecheck": "bun run --filter '*' typecheck && tsc --noEmit -p scripts/release/tsconfig.json",
     "build:native": "bun scripts/native/build-embedding.ts",
@@ -26,6 +29,7 @@
   "devDependencies": {
     "@google/design.md": "0.4.0",
     "@types/bun": "1.4.2",
+    "drizzle-kit": "0.31.10",
     "oxfmt": "0.59.0",
     "oxlint": "1.74.0",
     "typescript": "5.7.2"

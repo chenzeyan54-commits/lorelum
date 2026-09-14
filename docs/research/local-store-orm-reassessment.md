@@ -59,7 +59,7 @@ packages/engine/src/
       keyword-index.ts
       semantic-index.ts
     migrations/
-      local-store/                 # Drizzle Kit 输出：metadata + <timestamp>_init SQL
+      local-store/                 # Drizzle Kit 输出：meta journal + 0000_<tag>.sql
       keyword-index/               # 同上；唯一 init SQL 含 FTS5 custom DDL
       semantic-index/              # 同上
     definitions.ts                 # 三个 typed database definition
