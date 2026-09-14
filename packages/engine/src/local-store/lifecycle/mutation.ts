@@ -6,6 +6,7 @@ import type { EffectivePractice, PracticeSource } from "../model";
 import { installedPackEntriesEqual } from "../storage/manifest/manifest-store";
 import { acquireMutationLock } from "../storage/mutation-lock";
 import { openStoreDatabase } from "../storage/sqlite/database";
+import { resetLegacyStoreUnderLock } from "../storage/sqlite/legacy-reset";
 import { readActivePackEntries } from "../storage/sqlite/snapshot-reader";
 import { SqliteStateError, StoreBusyError, StoreRecoveryRequiredError } from "../storage/errors";
 import { runStoreRecovery, type RecoveryResult } from "./recovery";
@@ -69,6 +70,7 @@ export async function withStoreMutation<T>(
   });
   let database: Database | undefined;
   try {
+    await resetLegacyStoreUnderLock(rootPath);
     try {
       database = await (options.openDatabase ?? openStoreDatabase)(rootPath);
     } catch (error) {

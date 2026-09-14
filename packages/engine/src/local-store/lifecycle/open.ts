@@ -36,6 +36,7 @@ import {
 } from "../storage/mutation-lock";
 import { listOperationJournals } from "../storage/journal/operation-journal";
 import { openStoreDatabase } from "../storage/sqlite/database";
+import { ensureCurrentStoreBaseline } from "../storage/sqlite/legacy-reset";
 import {
   readLocalStoreSnapshot,
   readStoreMetadata,
@@ -113,6 +114,7 @@ async function openStoreForLifecycle(
   rootPath: string,
 ): Promise<Awaited<ReturnType<typeof openStoreDatabase>>> {
   try {
+    await ensureCurrentStoreBaseline(rootPath);
     return await openStoreDatabase(rootPath);
   } catch (error) {
     return translateStoreErrors(error);
@@ -304,6 +306,11 @@ async function verifyColdOpenSnapshot(rootPath: string): Promise<ColdOpenResult>
  * §12).
  */
 export async function openLocalStore(rootPath: string): Promise<ColdOpenResult> {
+  try {
+    await ensureCurrentStoreBaseline(rootPath);
+  } catch (error) {
+    return translateStoreErrors(error);
+  }
   return readWithJournalRecovery(rootPath, () => verifyColdOpenSnapshot(rootPath));
 }
 

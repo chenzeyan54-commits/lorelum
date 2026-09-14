@@ -13,6 +13,7 @@ for (const config of configs) {
     stdout: "inherit",
     stderr: "inherit",
   });
+  // eslint-disable-next-line no-await-in-loop -- generation is serialized so shared package output stays deterministic.
   const exitCode = await process.exited;
   if (exitCode !== 0) process.exit(exitCode);
 }
