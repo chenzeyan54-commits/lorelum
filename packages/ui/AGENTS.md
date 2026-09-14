@@ -1,6 +1,6 @@
 # AGENTS.md - packages/ui
 
-The root instructions apply. This package owns reusable Web UI and production design tokens; it does not own routes, locale copy, data fetching, theme state, or page animation.
+This package owns reusable Web UI and production design tokens; it does not own routes, locale copy, data fetching, theme state, or page animation.
 
 - Read the root `DESIGN.md` and `docs/plans/design-infrastructure.md` before changing public package exports or token roles.
 - Use `bunx --bun shadcn@latest` from this directory. Check `info`, upstream docs, `add --dry-run`, and diffs before adding or updating an explicit `@shadcn` item.

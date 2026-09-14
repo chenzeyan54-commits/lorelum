@@ -1,6 +1,6 @@
 # AGENTS.md — apps/site
 
-The [root AGENTS.md](../../AGENTS.md) applies here. This file only adds rules specific to Lorelum's public landing and bilingual docs site.
+This directory owns Lorelum's public landing and bilingual docs site.
 
 ## Stack and commands
 
