@@ -44,7 +44,7 @@ Semantic Query v1 使用固定本地 default Profile，用户显式构建 index 
 - reranking、ANN、多向量/chunk、query rewrite 和受控翻译。
 - 持久任务队列、外部向量数据库，以及 Pack mutation 的可靠后台追赶；分别见 [Issue #115](https://github.com/lorelum/lorelum/issues/115) 和后续独立设计。
 - 持久任务队列、CLI 退出后的自动补偿、upgrade/uninstall 同步。当前 install 只同步等待一次普通增量 build；更广泛的自动同步仍需独立设计。
-- MCP 适配。长驻进程的 config 刷新、连接复用和请求隔离是单独设计问题。
+- MCP 适配，包括本地 MCP。它不属于 Semantic Query 后续阶段，也不能作为本地 CLI 的便利封装；只有未来平台化、需要远程检索服务时，才可以在新的批准设计中重新评估。见[Agent 集成范围](./agent-integration-scope.md)。
 
 ## 固定 default Profile 与本地服务
 

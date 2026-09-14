@@ -1,7 +1,7 @@
 import { InvalidQueryRequestError } from "./errors";
 import type { QueryRequest } from "./types";
 
-// Query-domain defaults live here, not in CLI/MCP adapters.
+// Query-domain defaults live here, not in CLI parsing or other protocol adapters.
 const DEFAULT_QUERY_LIMIT = 5;
 const MAX_QUERY_LIMIT = 50;
 const MAX_QUERY_CODE_POINTS = 4_096;

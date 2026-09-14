@@ -4,7 +4,7 @@
 
 ## Project
 
-Lorelum is an engineering-knowledge infrastructure for AI coding agents. It retrieves team "Practices" (discrete engineering guidelines) and injects them into AI context on demand. This repo will hold the core engine, CLI (`lore`), local MCP server, and format spec.
+Lorelum is an engineering-knowledge infrastructure for AI coding agents. It retrieves team "Practices" (discrete engineering guidelines) and injects them into AI context on demand. This repo holds the core engine, CLI (`lore`), and format spec. The `packages/mcp` workspace is a non-product scaffold, not an active local integration surface.
 
 The codebase is **Bun + TypeScript**, organized as a Bun workspace monorepo (`packages/*`). The exact commands are in [Commands](#commands) below; conventions in [Code style](#code-style) and [Testing](#testing).
 
@@ -14,12 +14,13 @@ For local CLI work, including isolated Store roots and multi-worktree usage, see
 
 ## Layout
 
-The source tree is a Bun workspace monorepo (`packages/backend`, `packages/cli`, `packages/config`, `packages/engine`, `packages/format`, `packages/mcp`, `packages/shared`). Repo-root `package.json` declares `workspaces: ["packages/*"]`. `backend` hosts long-lived local capabilities; `config` is the shared configuration foundation.
+The source tree is a Bun workspace monorepo (`packages/backend`, `packages/cli`, `packages/config`, `packages/engine`, `packages/format`, `packages/mcp`, `packages/shared`). Repo-root `package.json` declares `workspaces: ["packages/*"]`. `backend` hosts long-lived local capabilities; `config` is the shared configuration foundation. `packages/mcp` does not authorize a local MCP runtime, tool surface, or Plugin integration.
 
 **The product contract to be aware of:**
 
 - **Practice / pack format** — the public schema that packs and users depend on. Changes are high-impact; see CONTRIBUTING.md.
 - **Retrieval engine** — performance-sensitive; benchmark before changing.
+- **Agent integrations** — current local integrations use the compiled CLI plus host Skills and Hooks. Do not introduce local MCP, stdio servers, MCP tools, or MCP-backed Plugin behavior. MCP may be reconsidered only for a separately approved, future platform remote-retrieval service; see [`docs/plans/agent-integration-scope.md`](./docs/plans/agent-integration-scope.md).
 
 ### UI and design system
 
@@ -31,6 +32,8 @@ The source tree is a Bun workspace monorepo (`packages/backend`, `packages/cli`,
 ### Service boundaries and dependency direction
 
 Keep package dependencies and runtime routes distinct when designing or changing retrieval.
+
+Current product scope is CLI-first. A local MCP adapter is explicitly out of scope, including as a convenience wrapper around `lore`. Do not retain a local MCP abstraction "for later". A future platform remote-retrieval service requires a new approved design before it introduces an MCP boundary.
 
 - **Engine owns retrieval semantics and Store-derived data.** LocalStore snapshots, canonical Practice reads, keyword and semantic indexes, ranking, candidate validation, and result assembly belong in `@lorelum/engine`. Engine must not import `@lorelum/backend`, Elysia, CLI code, or a model runtime.
 - **Backend is the local, long-lived host for cold-start-expensive capabilities.** It owns model download/load/unload, process lifecycle, authentication, and the execution lifetime of Backend-hosted Engine use cases. It may depend on Engine and compose an Engine service with an in-process runtime adapter, but its controllers must not reimplement retrieval, Store, index, or ranking rules.
@@ -73,7 +76,7 @@ TypeScript is the language; Bun runs it. These rules apply from day one.
 - **Naming.** TypeScript community norms: `PascalCase` for types/interfaces/classes, `camelCase` for functions/variables. Apply uniformly.
 
 - **Small, composable modules.** Prefer pure functions. Avoid deep class hierarchies unless modeling genuine state.
-- **Typed errors over bare strings.** Throw specific error types; let the CLI/MCP boundary translate them into user-facing messages. Never throw a bare string.
+- **Typed errors over bare strings.** Throw specific error types; let the CLI or a future approved external boundary translate them into user-facing messages. Never throw a bare string.
 - **No silent failures.** A function that can fail should signal it explicitly (typed error, Result, or similar) — not return `null` and hope.
 - **Naming:** consistent with the chosen language's prevailing conventions. Whatever they are, apply them uniformly.
 
@@ -102,7 +105,7 @@ Keep the tree navigable and each file independently understandable. These are pr
 - **Every PR links to an issue** (`Closes #123`).
 - **Use the repository PR template.** Before opening or editing a PR, read [`.github/PULL_REQUEST_TEMPLATE.md`](./.github/PULL_REQUEST_TEMPLATE.md) and keep every section, including the linked issue, change type, verification, checklist, AI assistance, and reviewer notes.
 - **Review the full diff before opening a PR.** Read every changed line, verify the change is intentional and in scope, and record the result in the PR's AI assistance section.
-- **Public-contract changes need design alignment first.** Changes to the Practice/pack format, retrieval model, CLI surface, or MCP tool interface require an issue or Discussion with design alignment before implementation. Reuse existing agreed design and acceptance criteria when they cover the requested change; do not require a new discussion for the same decision.
+- **Public-contract changes need design alignment first.** Changes to the Practice/pack format, retrieval model, CLI surface, or a future approved remote MCP tool interface require an issue or Discussion with design alignment before implementation. Reuse existing agreed design and acceptance criteria when they cover the requested change; do not require a new discussion for the same decision.
 - **Work that preserves the existing public contract does not need upfront design discussion.** This includes pure bug fixes restoring documented behavior, internal refactors, performance improvements, and docs. Issue and PR requirements, applicable tests and benchmarks, and the approval boundaries below still apply.
 
 ## Boundaries
@@ -126,6 +129,7 @@ Keep the tree navigable and each file independently understandable. These are pr
 ## Where to look
 
 - **Product understanding:** `README.md` (overview) and `CONTRIBUTING.md` (workflow).
+- **Agent-integration scope:** [`docs/plans/agent-integration-scope.md`](./docs/plans/agent-integration-scope.md) is the current authority for CLI, Skill, Hook, and MCP boundaries.
 - **Planning a feature?** Check existing issues, Specs, and agreed designs, then apply the design-alignment rule in [Git workflow](#git-workflow).
 
 ## When in doubt

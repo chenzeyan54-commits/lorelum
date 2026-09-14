@@ -4,6 +4,8 @@
 >
 > 相关文档：[LocalStore ADR](../adr/0007-engine-local-store.md)、[精确读取与 QueryService ADR（Proposed）](../adr/0011-local-store-point-read-and-query-boundary.md)、[点查实现 issue #59](https://github.com/lorelum/lorelum/issues/59)、[QueryService 实现 issue #60](https://github.com/lorelum/lorelum/issues/60)、[关键词检索研究 issue #57](https://github.com/lorelum/lorelum/issues/57)、[ORM 研究 issue #58](https://github.com/lorelum/lorelum/issues/58)、[`get` 当前合同](../cli/get.md)、[Query roadmap](./query-roadmap.md)。
 
+> **范围更新（2026-09-14）：** 本文保留早期 Query 基础设计的背景，其中关于 CLI 与 MCP 双入口、local MCP adapter 或常驻 MCP 的描述不再是有效规划，也不授权实现。当前 Agent 集成只走 CLI、Skill 和 Hook；本地 MCP 已明确排除。以[Agent 集成范围](./agent-integration-scope.md)为准。
+
 此前 PR #54 中的 Keyword Query ADR 已由 PR #56 完整撤回，未经过维护者设计评审。本文重新给出当前关键词实现的合同；撤回的 ADR 不作为依据。
 
 现在的 `get` 会调用 `LocalStore.open()`，得到全部 Effective Practice，然后在 CLI 里用 `.find()` 找 ID。这条路径让第一个精确读取命令快速落了地，但不适合继续成为 Query 的读取底座。

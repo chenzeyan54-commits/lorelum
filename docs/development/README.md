@@ -183,7 +183,7 @@ See [ADR 0011](../adr/0011-local-store-point-read-and-query-boundary.md) for the
 
 ## QueryService Engine API
 
-`QueryService` owns the query use case in Engine so CLI and future MCP callers do not duplicate validation, snapshot reads, ranking, or result assembly. Create it at the composition root and inject a LocalStore facade:
+`QueryService` owns the query use case in Engine so CLI paths do not duplicate validation, snapshot reads, ranking, or result assembly. Create it at the composition root and inject a LocalStore facade:
 
 ```ts
 import { createLocalStore, createQueryService } from "@lorelum/engine";

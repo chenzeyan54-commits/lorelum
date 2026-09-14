@@ -11,6 +11,10 @@ The bundled runtime integration calls `lore hook codex`, the versioned Codex Hoo
 
 The integration requests Pack metadata only. It does not install or update Packs, or proactively run `lore query` or `lore get`; opening the LocalStore still follows its normal lifecycle. If the CLI is unavailable or returns malformed data, the integration writes a diagnostic to stderr and lets the host continue without additional context.
 
+## Integration scope
+
+This Plugin is deliberately CLI-first: it uses the compiled `lore` executable together with the Lorelum Skill and Codex Hook. It does not bundle, configure, or call a local MCP server, and a local MCP wrapper is not a planned Plugin optimization. MCP is reserved for a separately approved future platform remote-retrieval service.
+
 ## Retrieval availability
 
 `lore query` defaults to local semantic retrieval, which requires a running Backend, a loaded model, and an index for the selected Store. An unavailable semantic query does not mean no relevant Practice exists, and the Plugin does not start, configure, or download those dependencies automatically. Use `--mode keyword` only when the explicit offline keyword path is appropriate.

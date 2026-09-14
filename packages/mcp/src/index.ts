@@ -1,8 +1,10 @@
 /**
- * @lorelum/mcp — local MCP server exposing Lorelum to AI agents.
+ * @lorelum/mcp — reserved package name for a possible future platform service.
  *
- * P0 scaffold: only a presence marker. Tool registration (query/get/check)
- * lands with the MCP task.
+ * It is not an active local MCP server and must not receive local tools,
+ * stdio wiring, or Plugin integration. Current agent integrations use CLI,
+ * Skills, and Hooks. Any future remote MCP service requires a separately
+ * approved platform design.
  */
 
 export const PACKAGE_NAME = "@lorelum/mcp";

@@ -11,7 +11,7 @@ export class LocalStoreStorageError extends Error {
 
 /**
  * An immutable snapshot is missing, altered, or cannot be promoted safely.
- * The path stays a structured field — the message stays generic so CLI/MCP
+ * The path stays a structured field — the message stays generic so external
  * boundaries decide what to surface (paths may contain sensitive names).
  */
 export class ArtifactIntegrityError extends LocalStoreStorageError {
