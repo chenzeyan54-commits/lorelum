@@ -36,6 +36,7 @@ test.skipIf(!windowsOnly)(
         "cli fixture\n",
       );
       expect(result.stdout).toContain(`Installed lore ${version}`);
+      expect(result.stdout).toContain(`Added ${join(root, "bin")} to the process PATH.`);
     } finally {
       server.stop(true);
       await rm(root, { recursive: true, force: true });
@@ -100,6 +101,45 @@ test.skipIf(!windowsOnly)("windows installer leaves an unmanaged command untouch
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test.skipIf(!windowsOnly)(
+  "windows installer throws without terminating an interactive caller",
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), "lore-install-win-throw-"));
+    try {
+      await mkdir(join(root, "temp"), { recursive: true });
+      const escapedInstaller = installer.replace(/'/g, "''");
+      const child = Bun.spawn(
+        [
+          "powershell.exe",
+          "-NoProfile",
+          "-NonInteractive",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          `try { & '${escapedInstaller}' -Version invalid } catch { Write-Output 'caller-survived' }`,
+        ],
+        {
+          cwd: root,
+          env: {
+            ...process.env,
+            LORELUM_INSTALL_PATH_TARGET: "Process",
+            LOCALAPPDATA: join(root, "localappdata"),
+            TEMP: join(root, "temp"),
+            TMP: join(root, "temp"),
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const stdout = await new Response(child.stdout).text();
+      expect(await child.exited).toBe(0);
+      expect(stdout).toContain("caller-survived");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
 
 async function createReleaseServer(root: string, options: { latestTag?: string } = {}) {
   const releaseTag = `v${version}`;
@@ -167,6 +207,7 @@ async function runInstaller(
         LORELUM_INSTALL_RELEASE_API_BASE_URL: `${releaseBase}/api/releases`,
         LORELUM_INSTALL_ROOT: join(root, "share"),
         LORELUM_INSTALL_BIN_DIR: join(root, "bin"),
+        LORELUM_INSTALL_PATH_TARGET: "Process",
         LOCALAPPDATA: join(root, "localappdata"),
         TEMP: temporary,
         TMP: temporary,

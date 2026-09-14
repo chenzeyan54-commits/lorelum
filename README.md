@@ -16,7 +16,7 @@
 
 ---
 
-> **Public alpha · `0.1.0-alpha.1`.** Prebuilt releases support macOS on Apple Silicon. Other platforms use a [source build](./docs/development/README.md). CLI contracts, Pack formats, and indexes may change between releases; automatic migration is not guaranteed.
+> **Public alpha · `0.1.0-alpha.1`.** Prebuilt archives are available for macOS on Apple Silicon, Linux x64, and Windows x64. macOS is Lorelum's priority platform and the most thoroughly validated release target. Linux and Windows are best-effort: compatibility and performance across all distributions, system builds, hardware, and local security policies are not guaranteed. CLI contracts, Pack formats, and indexes may change between releases; automatic migration is not guaranteed.
 
 > **Give your Agent this prompt.**
 >
@@ -95,15 +95,23 @@ Natural-language queries use a fixed local embedding model and a Store-specific 
 
 ### 1. Install the CLI
 
-Install the first public alpha directly:
+Choose the installer for the host that will run `lore`.
+
+#### macOS on Apple Silicon and Linux x64
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/lorelum/lorelum/main/install.sh | sh -s -- --version 0.1.0-alpha.1
 ```
 
-The installer verifies the archive and creates `~/.local/bin/lore`. Keep the complete release directory intact: semantic retrieval uses the native libraries and runtime assets shipped with the executable.
+#### Windows x64
 
-Make sure `~/.local/bin` is on `PATH`, then check:
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/lorelum/lorelum/main/install.ps1))) -Version 0.1.0-alpha.1
+```
+
+The macOS/Linux installer verifies the archive and creates `~/.local/bin/lore`. The Windows installer verifies the ZIP and creates `$env:LOCALAPPDATA\Lorelum\bin\lore.cmd`. Keep the complete release directory intact: semantic retrieval uses the native libraries and runtime assets shipped with the executable. Do not run `install.sh` or double-click the installer on Windows; run the command above from an already-open PowerShell session so errors stay visible.
+
+On macOS and Linux, make sure `~/.local/bin` is on `PATH`. The Windows installer adds `$env:LOCALAPPDATA\Lorelum\bin` to your user `Path` when needed; open a new terminal, then check:
 
 ```sh
 lore --version

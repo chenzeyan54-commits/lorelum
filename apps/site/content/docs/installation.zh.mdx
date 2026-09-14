@@ -4,25 +4,37 @@ description: 安装发行包、验证 CLI，并更新已有环境。
 icon: Download
 ---
 
-Public alpha 提供 macOS Apple Silicon 预编译发行包。Linux 和 Windows 用户可以按[开发指南](https://github.com/lorelum/lorelum/blob/main/docs/development/README.md)从源码构建。Lorelum 不通过 npm 分发。
+Public alpha 提供 macOS Apple Silicon、Linux x64 和 Windows x64 的预编译发行包。macOS 是 Lorelum 优先适配、验证更充分的发布平台；Linux x64 和 Windows x64 提供尽力支持，不保证在所有发行版、系统构建、硬件和本地安全策略下的兼容性与性能。Lorelum 不通过 npm 分发。
 
 ## 安装 CLI
 
-直接安装首个 public alpha：
+请选择运行 CLI 的宿主对应的安装器。public alpha 是 prerelease，需显式指定版本。
+
+### macOS Apple Silicon 和 Linux x64
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/lorelum/lorelum/main/install.sh | sh -s -- --version 0.1.0-alpha.1
 ```
 
-这会安装 `0.1.0-alpha.1`。省略 `--version` 时，安装器查找稳定发行版。
+### Windows x64
 
-安装器下载发行包和 `SHA256SUMS`，校验发行包的 SHA-256，并将完整文件安装到 `~/.local/share/lorelum/versions/`。命令入口位于 `~/.local/bin/lore`。
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/lorelum/lorelum/main/install.ps1))) -Version 0.1.0-alpha.1
+```
+
+Windows 不要运行 `install.sh`，也不要双击安装脚本。Windows 安装器仅通过 PowerShell 运行，并创建 `lore.cmd` shim；请在已经打开的 PowerShell 会话中运行，保留错误输出。
+
+这会安装 `0.1.0-alpha.1`。省略版本参数时，两种安装器都会查找稳定发行版。
+
+两种安装器都会下载当前宿主对应的发行包和 `SHA256SUMS`，并校验发行包的 SHA-256。macOS 和 Linux 将完整文件安装到 `~/.local/share/lorelum/versions/`，命令入口位于 `~/.local/bin/lore`；Windows 安装到 `$env:LOCALAPPDATA\Lorelum\versions\`，并创建 `$env:LOCALAPPDATA\Lorelum\bin\lore.cmd`。
 
 如果 shell 找不到 `lore`，请在 shell 配置中将 `~/.local/bin` 加入 `PATH`，然后打开新终端：
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
 ```
+
+Windows 安装器会在需要时将 `$env:LOCALAPPDATA\Lorelum\bin` 加入用户级 `Path`。运行 `lore` 前请重新打开 PowerShell。
 
 验证安装：
 
@@ -34,7 +46,7 @@ lore --version
 
 ## 手动安装发行包
 
-从同一个 release 下载 `darwin-arm64` 发行包及 `SHA256SUMS`。将发行包校验值与对应条目比较，确认一致后解压，再将解压目录加入 `PATH`。
+从同一个 release 下载当前宿主的发行包及 `SHA256SUMS`：`darwin-arm64` 和 `linux-x64` 使用 `.tar.gz`，`win32-x64` 使用 `.zip`。将发行包校验值与对应条目比较，确认一致后解压，再将解压目录加入 `PATH`。
 
 保留完整发行目录。可执行文件需要随包分发的原生库和运行时资源；只复制 `lore` 无法保证 semantic retrieval 可用。
 

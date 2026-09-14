@@ -109,11 +109,13 @@ draft 至少包含以下同一批构建输出：
 
 ```text
 lore-<version>-darwin-arm64.tar.gz
+lore-<version>-linux-x64.tar.gz
+lore-<version>-win32-x64.zip
+lore-<version>-<target>.metadata.json
 SHA256SUMS
-release-metadata.json
 ```
 
-`release-metadata.json` 记录版本、目标平台、源码 commit、Bun 版本、native `buildIdentity`、native manifest 摘要、CLI 摘要和 archive 摘要。它不是新的运行时配置，也不替代包内 manifest；它用于让发布者和验收者判断“这个 draft 究竟来自哪次构建”。构建日志和集成测试输出保留为 CI artifact，不混入用户安装包。
+每个 `lore-<version>-<target>.metadata.json` 记录版本、目标平台、Bun 版本、native `buildIdentity`、native manifest 摘要、CLI 摘要和 archive 摘要。`SHA256SUMS` 覆盖每个 archive 和 metadata 文件。它们不是新的运行时配置，也不替代包内 manifest；它们用于让发布者和验收者判断“这个 draft 究竟包含哪些可验证资产”。构建日志和集成测试输出保留为 CI artifact，不混入用户安装包。
 
 安装验收必须下载 draft 中的 archive，并记录 release id、target commit、三项资产名和 `SHA256SUMS` 的复算结果。Owner 在 GitHub 页面点击 Publish 前再次核对这些值；Publish 只改变 draft 状态，不重新编译或上传替代文件。这既避免“测试的是 A、发布的是 B”，也不需要在尚未发布的项目中虚构升级、迁移或回滚协议。
 
@@ -127,24 +129,24 @@ release-metadata.json
 | `scripts/release/build.ts` | 读取唯一版本和目标平台，编排 native 验证、清单绑定、CLI 编译 |
 | `scripts/release/package.ts` | 收集完整安装目录、许可证、打包并生成 archive 校验值 |
 | `install.sh` | 仓库根目录的公开 Unix 安装入口：无 Bun 前提下下载、校验、解压、设置用户命令入口 |
-| `.github/workflows/release-draft.yml` | 手动构建指定源码、做成品验收并创建可核验的 draft Release |
+| `.github/workflows/release.yml` | 只从已有 annotated tag 构建，验证 tag、版本和源码一致，做成品验收并创建可核验的 draft Release |
 | `packages/backend/src/runtime/embedding-resources.ts` | 按真实 CLI 路径定位配套文件，保留运行时完整性校验 |
 
-根目录的 `install.sh` 是用户发现和执行的稳定入口；构建、归档和 CI 专用逻辑继续放在 `scripts/release/`，不把下载实现复制到两个目录。`install.ps1` 在 Windows 运行链完成后同样放在仓库根目录；当前不增加无法兑现的 Windows 入口。config 层只管理用户设置，native 来源与版本由发布构建确定，不把可执行程序 URL 开放成普通 config。
+根目录的 `install.sh` 是 macOS Apple Silicon 和 Linux x64 的公开安装入口；Windows x64 使用同在仓库根目录的 `install.ps1`，必须通过 PowerShell 调用，不把 Unix 安装命令套用到 Windows。构建、归档和 CI 专用逻辑继续放在 `scripts/release/`，不把下载实现复制到两个目录。config 层只管理用户设置，native 来源与版本由发布构建确定，不把可执行程序 URL 开放成普通 config。
 
 ## 首批交付与验收
 
 | 工作项 | 可观察的完成标准 |
 | --- | --- |
 | 1. 绑定构建产物 | 干净构建目录产出 CLI 与 native；CLI 编入的 manifest 与包内一致。替换 native 或 manifest 后加载明确失败；native 的实际动态依赖只在审查过的 macOS 系统库允许范围内；CI 工具链变化能产生自洽的新产物 |
-| 2. 产出平台包 | 无 Bun、npm、CMake 和源码的受支持 macOS arm64 环境中，解压即可启动后端、下载模型并达到 ready；动态依赖只来自声明的系统范围，包内许可证齐全 |
-| 3. 提供安装入口 | 空安装目录、重复安装、路径含空格、PATH 未设置、已有同名入口、下载中断、摘要错误、解压失败均有明确结果；失败不留下半安装入口；通过符号链接仍能加载 native；调用目录的 `.env` 与 `bunfig.toml` 不能改变 Lorelum 配置 |
-| 4. 验证生命周期和分发体验 | 安装后的 CLI 可正常 start/status/stop；模型下载续传、摘要检查和 native 父进程退出回归通过；发行包安装本身不自动启动 daemon 或下载模型；浏览器下载的包在真实 macOS 安全策略下完成安装 |
-| 5. 建立手动发布流程 | 经单独授权后新增手动触发的 CI：固定源码和版本生成 draft Release，记录包大小、SHA、工具链、测试结果及支持范围。验收从 draft 下载并复核资产与 target commit；Owner 审查后在 GitHub 页面公开同一批已验证资产 |
+| 2. 产出平台包 | macOS Apple Silicon、Linux x64 和 Windows x64 各有一个完整 archive；Unix 使用 `.tar.gz`，Windows 使用 `.zip`，包内许可证齐全。macOS 是优先适配和验证更充分的平台；Linux 和 Windows 仅承诺尽力支持 |
+| 3. 提供安装入口 | Unix 安装器只处理 macOS Apple Silicon/Linux x64，Windows 只由 PowerShell `install.ps1` 处理；空安装目录、重复安装、路径含空格、PATH 未设置、已有同名入口、下载中断、摘要错误、解压失败均有明确结果，失败不留下半安装入口 |
+| 4. 验证生命周期和分发体验 | 每个目标 runner 解压对应 archive，校验 CLI 与 native runtime，检查 Backend start/status；发行包安装本身不自动启动 daemon 或下载模型。跨发行版、系统构建、硬件和本地安全策略的兼容性与性能不作为 Linux/Windows 的发布承诺 |
+| 5. 建立手动发布流程 | 经单独授权后，手动触发的 CI 只接受已有 annotated tag，验证 tag 与 CLI 版本和 checkout commit 一致，生成 draft Release；`SHA256SUMS` 和 target metadata 随资产发布，Owner 审查后公开同一批已验证资产 |
 
-当前交付完成 macOS arm64 的本地构建、归档和安装验收。Windows 后续沿用同一平台包责任划分，提供 ZIP 与 PowerShell 下载入口，但必须先完成 native 构建、进程身份与退出管理、文件校验及干净 Windows 环境验收；Linux 和 Intel Mac 也按同样证据要求决定是否发布，不因 Bun 能交叉编译而直接列入支持矩阵。
+当前发布标准覆盖 macOS Apple Silicon、Linux x64 和 Windows x64。macOS 是优先适配、验证更充分的平台；Linux 和 Windows 提供预编译资产，但只按尽力支持表述，不因单次 CI 成功而承诺所有发行版、系统构建、硬件或本地安全策略下的兼容性与性能。Intel Mac 和其他架构继续按独立证据决定是否发布。
 
-本设计对应已存在的 #105。本 PR 实现不触及 GitHub Release 的本地成品构建与安装验收；手动 draft workflow 和真正公开发布尚未单独规划或实现。修改 release workflow 和公开发布分别遵守仓库明确的授权边界。
+本设计起源于已关闭的 #105；当前的 #142 完成多平台资产命名、安装入口和手动 draft workflow 的收敛。workflow 只从已有 annotated tag 构建并创建 draft；真正公开发布仍由 Owner 在验收后单独决定。修改 release workflow 和公开发布分别遵守仓库明确的授权边界。
 
 ## 参考依据
 

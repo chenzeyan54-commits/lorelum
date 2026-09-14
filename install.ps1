@@ -6,7 +6,8 @@ Install the Lorelum CLI release for Windows x64.
 .DESCRIPTION
 Downloads a release archive and SHA256SUMS, verifies both before extracting,
 then atomically installs the package under the versions directory and creates
-a managed lore.cmd shim. Pass -Version to install one specific release.
+a managed lore.cmd shim. Adds the shim directory to the current user's Path
+when it is absent. Pass -Version to install one specific release.
 
 Environment overrides (matching install.sh):
   LORELUM_INSTALL_RELEASE_BASE_URL     release download base
@@ -27,13 +28,87 @@ $installRoot = if ($env:LORELUM_INSTALL_ROOT) { $env:LORELUM_INSTALL_ROOT } else
 $binDirectory = if ($env:LORELUM_INSTALL_BIN_DIR) { $env:LORELUM_INSTALL_BIN_DIR } else { Join-Path $installRoot 'bin' }
 
 function Fail([string]$Message) {
-  # Deterministic stderr + exit; Write-Error would throw under Stop preference.
-  [Console]::Error.WriteLine("lore install: $Message")
-  exit 1
+  # A terminating error preserves an interactive caller session; exit would close it.
+  throw "lore install: $Message"
 }
 
 function Get-Sha256([string]$Path) {
   (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
+}
+
+function Normalize-PathEntry([string]$Value) {
+  $trimmed = $Value.Trim().Trim('"')
+  if (-not $trimmed) { return '' }
+  $expanded = [Environment]::ExpandEnvironmentVariables($trimmed)
+  try {
+    return [System.IO.Path]::GetFullPath($expanded).TrimEnd('\')
+  } catch {
+    return $expanded.TrimEnd('\')
+  }
+}
+
+function Resolve-PathTarget {
+  # Process scope lets the Windows integration test exercise this path without
+  # writing a temporary test directory into the developer's actual user Path.
+  $name = if ($env:LORELUM_INSTALL_PATH_TARGET) { $env:LORELUM_INSTALL_PATH_TARGET } else { 'User' }
+  try {
+    $target = [System.Enum]::Parse([System.EnvironmentVariableTarget], $name, $true)
+  } catch {
+    Fail "invalid Path target: $name"
+  }
+  if ($target -notin @([System.EnvironmentVariableTarget]::User, [System.EnvironmentVariableTarget]::Process)) {
+    Fail "unsupported Path target: $name"
+  }
+  return $target
+}
+
+function Broadcast-UserEnvironmentChange {
+  if (-not ('Lorelum.Native.EnvironmentChange' -as [type])) {
+    Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+
+namespace Lorelum.Native {
+  public static class EnvironmentChange {
+    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    public static extern IntPtr SendMessageTimeout(
+      IntPtr hWnd,
+      uint msg,
+      UIntPtr wParam,
+      string lParam,
+      uint flags,
+      uint timeout,
+      out UIntPtr result);
+  }
+}
+'@
+  }
+  [UIntPtr]$result = [UIntPtr]0
+  [void][Lorelum.Native.EnvironmentChange]::SendMessageTimeout(
+    [IntPtr]0xffff,
+    0x001a,
+    [UIntPtr]0,
+    'Environment',
+    0x0002,
+    5000,
+    [ref]$result
+  )
+}
+
+function Add-LorelumBinToPath([string]$Directory, [System.EnvironmentVariableTarget]$Target) {
+  $normalizedDirectory = Normalize-PathEntry $Directory
+  $current = [Environment]::GetEnvironmentVariable('Path', $Target)
+  $entries = @(
+    ([string]$current -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+  )
+  foreach ($entry in $entries) {
+    if ([string]::Equals((Normalize-PathEntry $entry), $normalizedDirectory, [System.StringComparison]::OrdinalIgnoreCase)) {
+      return $false
+    }
+  }
+  [Environment]::SetEnvironmentVariable('Path', (@($entries + $Directory) -join ';'), $Target)
+  if ($Target -eq [System.EnvironmentVariableTarget]::User) { Broadcast-UserEnvironmentChange }
+  return $true
 }
 
 # PowerShell 5.1 defaults may not negotiate TLS 1.2 with GitHub.
@@ -73,6 +148,7 @@ function Resolve-LatestTag {
 
 $installRoot = [System.IO.Path]::GetFullPath($installRoot)
 $binDirectory = [System.IO.Path]::GetFullPath($binDirectory)
+$pathTarget = Resolve-PathTarget
 New-Item -ItemType Directory -Force -Path $installRoot, $binDirectory | Out-Null
 $temporary = Join-Path ([System.IO.Path]::GetTempPath()) ("lore-install-" + [System.IO.Path]::GetRandomFileName())
 New-Item -ItemType Directory -Path $temporary | Out-Null
@@ -169,9 +245,12 @@ try {
   Move-Item -LiteralPath $temporaryShim -Destination $commandPath -Force
 
   Write-Output "Installed lore $Version to $destination"
-  $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-  if ($userPath -notlike "*$binDirectory*") {
-    Write-Output "Add $binDirectory to PATH to run lore from a new shell."
+  if (Add-LorelumBinToPath $binDirectory $pathTarget) {
+    if ($pathTarget -eq [System.EnvironmentVariableTarget]::User) {
+      Write-Output "Added $binDirectory to the user PATH. Open a new terminal to run lore."
+    } else {
+      Write-Output "Added $binDirectory to the process PATH."
+    }
   }
 } finally {
   if (Test-Path -LiteralPath $temporary) {

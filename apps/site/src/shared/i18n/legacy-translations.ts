@@ -175,7 +175,7 @@ const en: LandingStrings = {
   faqHeading: "Using Lorelum",
   faq1q: "What is available in the alpha?",
   faq1a:
-    "Local semantic query, full Practice reads, Pack management, and CLI-based agent integration. Prebuilt releases support macOS on Apple Silicon; other platforms use a source build. Lorelum Core is Apache-2.0 open source.",
+    "Local semantic query, full Practice reads, Pack management, and CLI-based agent integration. Prebuilt releases support macOS on Apple Silicon, Linux x64, and Windows x64; macOS is the priority platform, while Linux and Windows are best-effort. Lorelum Core is Apache-2.0 open source.",
   faq2q: "How does Lorelum work with Skills and AGENTS.md?",
   faq2a:
     "Keep project instructions for repository rules and use Skills to guide agent behavior. Lorelum supplies versioned engineering knowledge they can retrieve for the current decision. Reinjection makes instructions available; it does not guarantee that a growing context receives equal attention.",
@@ -270,7 +270,7 @@ const zh: LandingStrings = {
   faqHeading: "了解 Lorelum 的使用方式",
   faq1q: "Alpha 提供哪些能力？",
   faq1a:
-    "本地 semantic query、Practice 全文读取、Pack 管理，以及通过 CLI 接入 Agent。预编译发行包支持 macOS Apple Silicon，其他平台从源码构建。Lorelum Core 采用 Apache-2.0 开源。",
+    "本地 semantic query、Practice 全文读取、Pack 管理，以及通过 CLI 接入 Agent。预编译发行包支持 macOS Apple Silicon、Linux x64 和 Windows x64；macOS 为优先适配平台，Linux 和 Windows 为尽力支持。Lorelum Core 采用 Apache-2.0 开源。",
   faq2q: "如何与 Skill、AGENTS.md 一起使用？",
   faq2a:
     "项目指令继续承载仓库规则，Skill 指导 Agent 行为。Lorelum 提供可版本化的工程知识，供它们围绕当前判断检索。重新注入让指令可用，但不保证变长的上下文中每条指令都获得同样的关注。",

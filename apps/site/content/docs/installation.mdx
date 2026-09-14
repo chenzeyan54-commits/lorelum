@@ -4,25 +4,37 @@ description: Install a release, verify the CLI, and update an existing setup.
 icon: Download
 ---
 
-The public alpha provides a prebuilt release for macOS on Apple Silicon. Linux and Windows users can follow the [source-build guide](https://github.com/lorelum/lorelum/blob/main/docs/development/README.md). Lorelum is not distributed through npm.
+The public alpha provides prebuilt archives for macOS on Apple Silicon, Linux x64, and Windows x64. macOS is Lorelum's priority platform and the most thoroughly validated release target. Linux x64 and Windows x64 are available on a best-effort basis; compatibility and performance across all distributions, system builds, hardware, and local security policies are not guaranteed. Lorelum is not distributed through npm.
 
 ## Install the CLI
 
-Install the first public alpha directly:
+Use the installer for the host that will run the CLI. The public alpha is a prerelease, so specify its version explicitly.
+
+### macOS on Apple Silicon and Linux x64
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/lorelum/lorelum/main/install.sh | sh -s -- --version 0.1.0-alpha.1
 ```
 
-This installs `0.1.0-alpha.1`. The installer looks for a stable release when `--version` is omitted.
+### Windows x64
 
-The installer downloads the release archive and `SHA256SUMS`, checks the archive's SHA-256, and installs the full release under `~/.local/share/lorelum/versions/`. The command entrypoint is `~/.local/bin/lore`.
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/lorelum/lorelum/main/install.ps1))) -Version 0.1.0-alpha.1
+```
+
+Do not run `install.sh` or double-click the installer on Windows. The Windows installer is PowerShell-only and creates a `lore.cmd` shim; run it from an already-open PowerShell session so an error remains visible.
+
+This installs `0.1.0-alpha.1`. Both installers look for a stable release when the version argument is omitted.
+
+Both installers download the matching release archive and `SHA256SUMS`, then verify the archive's SHA-256. macOS and Linux install the full release under `~/.local/share/lorelum/versions/`, with `~/.local/bin/lore` as the command entrypoint. Windows installs under `$env:LOCALAPPDATA\Lorelum\versions\` and creates `$env:LOCALAPPDATA\Lorelum\bin\lore.cmd`.
 
 If your shell cannot find `lore`, add `~/.local/bin` to `PATH` in your shell configuration, then open a new terminal:
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
 ```
+
+On Windows, the installer adds `$env:LOCALAPPDATA\Lorelum\bin` to your user `Path` when needed. Open a new PowerShell session before running `lore`.
 
 Verify the installation:
 
@@ -34,7 +46,7 @@ The output is a JSON response with the tool version. A desktop editor or agent m
 
 ## Install an archive manually
 
-Download the `darwin-arm64` archive and its `SHA256SUMS` from the same release. Compare the archive's checksum with the corresponding entry, extract it, and add the extracted directory to `PATH`.
+Download the archive for your host and its `SHA256SUMS` from the same release: `darwin-arm64` and `linux-x64` use `.tar.gz`; `win32-x64` uses `.zip`. Compare the archive's checksum with the corresponding entry, extract it, and add the extracted directory to `PATH`.
 
 Keep the release directory intact. The executable needs the native libraries and runtime assets distributed alongside it; copying only `lore` is insufficient for semantic retrieval.
 

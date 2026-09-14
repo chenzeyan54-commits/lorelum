@@ -1,5 +1,6 @@
 import { cp, mkdir, readFile, rm, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { releaseAssetNames } from "./assets";
 import { buildReleaseStaging } from "./build";
 import { renderThirdPartyNotices, collectBundledPackageNotices } from "./notices";
 import {
@@ -24,10 +25,9 @@ export async function buildReleaseArchive(): Promise<ReleaseArchive> {
   const staging = await buildReleaseStaging();
   const target = staging.artifact.id;
   const windows = process.platform === "win32";
-  const name = `lore-${version}-${target}`;
+  const assetNames = releaseAssetNames(version, target, windows);
+  const name = assetNames.packageName;
   const cliName = windows ? "lore.exe" : "lore";
-  // Windows archives are zip via the System32 bsdtar; POSIX keeps tar.gz.
-  const archiveExtension = windows ? "zip" : "tar.gz";
   const tar = windows
     ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe")
     : "tar";
@@ -58,7 +58,7 @@ export async function buildReleaseArchive(): Promise<ReleaseArchive> {
   const artifactsDirectory = join(repositoryRoot, "dist/release/artifacts");
   await rm(artifactsDirectory, { recursive: true, force: true });
   await mkdir(artifactsDirectory, { recursive: true });
-  const archive = join(artifactsDirectory, `${name}.${archiveExtension}`);
+  const archive = join(artifactsDirectory, assetNames.archiveFileName);
   const archiveArguments = windows
     ? [tar, "-C", dirname(packageRoot), "-a", "-cf", archive, name]
     : [tar, "-C", dirname(packageRoot), "-czf", archive, name];
@@ -70,10 +70,8 @@ export async function buildReleaseArchive(): Promise<ReleaseArchive> {
   if (archiveResult.exitCode !== 0)
     throw new Error(`release archive creation failed: ${archiveResult.stderr.toString()}`);
   const archiveSha256 = await sha256File(archive);
-  const checksums = join(artifactsDirectory, "SHA256SUMS");
-  await Bun.write(checksums, `${archiveSha256}  ${name}.${archiveExtension}\n`);
   const nativeManifest = await readNativeArtifactManifest(join(packageRoot, "native", target));
-  const metadata = join(artifactsDirectory, "release-metadata.json");
+  const metadata = join(artifactsDirectory, assetNames.metadataFileName);
   await Bun.write(
     metadata,
     `${JSON.stringify(
@@ -88,7 +86,7 @@ export async function buildReleaseArchive(): Promise<ReleaseArchive> {
         ),
         cliSha256: await sha256File(join(packageRoot, cliName)),
         archive: {
-          fileName: `${name}.${archiveExtension}`,
+          fileName: assetNames.archiveFileName,
           bytes: (await stat(archive)).size,
           sha256: archiveSha256,
         },
@@ -96,6 +94,12 @@ export async function buildReleaseArchive(): Promise<ReleaseArchive> {
       null,
       2,
     )}\n`,
+  );
+  const checksums = join(artifactsDirectory, "SHA256SUMS");
+  const metadataSha256 = await sha256File(metadata);
+  await Bun.write(
+    checksums,
+    `${archiveSha256}  ${assetNames.archiveFileName}\n${metadataSha256}  ${assetNames.metadataFileName}\n`,
   );
   return Object.freeze({ archive, checksums, metadata, version });
 }
