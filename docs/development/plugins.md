@@ -10,6 +10,8 @@ Local MCP is outside the current product and development scope. Do not treat the
 
 The Hook defaults to `lore hook codex`; the Lorelum Skill invokes `lore query` and `lore get` when appropriate. A normal installed Plugin requires Lorelum CLI v0.1.0-alpha.1 or later and should use the released `lore` command, not a command built from a temporary worktree. The Hook wrapper degrades safely when an older CLI does not recognize the ABI. To validate current CLI source, use the source-entrypoint workflow in [Local CLI and multiple worktrees](./README.md#local-cli-and-multiple-worktrees).
 
+[`docs/cli/query.md`](../cli/query.md) is the source of truth for Lorelum's public semantic-default, preparation, recovery, and keyword-mode contract. `skills/lorelum/SKILL.md` and `plugins/lorelum/skills/lorelum/SKILL.md` are separate host-specific translations of that contract: the generic Skill establishes a Catalog when context lacks one, while the Codex Skill uses Hook-injected Catalog metadata. They may intentionally differ in wording, timing, and recovery guidance to suit their host, so do not require text-level synchronization. Review each change against the relevant host behavior, the CLI contract, and the scenarios in [Skill guidance fixtures](skill-guidance-fixtures.md).
+
 ## Verify source changes
 
 From the repository root:

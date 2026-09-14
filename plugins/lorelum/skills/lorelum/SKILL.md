@@ -1,45 +1,30 @@
 ---
 name: lorelum
-description: Use Lorelum's installed Pack Catalog to discover and retrieve relevant engineering Practices for the current task or decision. Treat the catalog as a relevance hint, not complete guidance or a hard filter.
+description: Use Lorelum's injected Pack Catalog to discover and retrieve relevant engineering Practices for the current task or decision.
 ---
 
 # Lorelum
 
-Lorelum is an optional local retrieval layer for engineering Practices. It stores reusable guidance as discrete, trigger-conditioned Practices inside Knowledge Packs. It helps an AI coding agent bring relevant team knowledge into planning, implementation, verification, and recovery without becoming a task workflow or mandatory ceremony.
+Lorelum is an optional local retrieval layer for engineering Practices. It stores reusable, trigger-conditioned Practices inside Knowledge Packs. It helps Codex bring relevant team knowledge into planning, implementation, verification, and recovery without becoming a task workflow or mandatory ceremony.
 
-## Progressive retrieval protocol
+## Use the injected Pack Catalog
 
-1. Treat the injected **Installed Pack Catalog** as lightweight routing metadata, not as complete engineering guidance.
-2. Use each Pack's description and declared stack scope as relevance hints. A missing description or stack scope does not prove that a Pack is irrelevant; it only leaves less routing evidence.
-3. If the catalog is truncated or unavailable, do not assume omitted Packs are absent. Run `lore pack list --details` only when refreshing discovery would help the current task or decision.
-4. When a Pack may be relevant, query with both the task goal and the current work moment, for example:
+Codex receives a compact **Installed Pack Catalog** from the SessionStart Hook. Treat it as lightweight routing metadata, not as complete engineering guidance or a hard filter. Use each Pack's description and declared stack scope as relevance hints.
 
-   ```sh
-   lore query "I am implementing a login page and deciding how it should integrate with the existing authentication API before coding."
-   ```
+Reuse that Catalog for the task; do not rerun `lore pack list --details` at the start because the Hook already supplies the same metadata. If the injected catalog is truncated or unavailable, do not assume omitted Packs are absent; run `lore pack list --details` only when refreshing discovery would help the current task or decision.
 
-5. Use compact query results to select a candidate Practice. Before applying a Practice or claiming that a plan follows it, read its full content. Reuse already-read content only while it remains applicable:
+## Use semantic retrieval for material decisions
 
-   ```sh
-   lore get <practice-id>
-   ```
-
-If semantic query cannot proceed because the Backend, model, or semantic index is unavailable, use one explicit keyword fallback. Derive a concise lexical query from known identifiers, error text, paths, command names, or domain terms—not the original natural-language task description—then state that the response is keyword results:
+When the current scope, plan, high-risk boundary, verification, recovery, or completion moment is worth retrieving engineering guidance for, use this sequence. Describe the task goal, the decision currently being made, and the concrete boundary or constraint:
 
 ```sh
-lore query "login auth API token session" --mode keyword
+lore query "I am designing idempotent writes for a payment API. I need to decide whether the client or service generates the idempotency key, while preserving database uniqueness and safe retry behavior."
 ```
 
-Do not use keyword fallback for an empty semantic result or unrelated failures.
+Then read the complete body of every candidate Practice you will use:
 
-## Good query moments
+```sh
+lore get <practice-id>
+```
 
-Consider a targeted query when:
-
-- defining scope or an implementation plan;
-- entering a high-risk boundary such as auth, data, API, state, persistence, or migrations;
-- changing an earlier requirement or architectural decision;
-- preparing to claim completion;
-- recovering after context compaction and needing to re-ground the task.
-
-Do not turn Lorelum into a mandatory ceremony. Do not run a query before every file edit, shell command, tool call, or turn. Re-evaluate whether to retrieve only when the task scope, risk boundary, decision, or recovery need changes materially.
+The default query is semantic. Do not skip a ready semantic query solely because of expected latency. Do not run backend, model, index, or status commands before this query. Only after the query itself returns a preparation state or an error, read [semantic query recovery](references/semantic-query-recovery.md), follow the relevant recovery path, then retry the same query. Do not silently substitute keyword results for a failed or empty semantic query; use `--mode keyword` only for an intentional offline lookup or semantic-runtime diagnosis. Do not query before every edit, command, or ordinary reply.

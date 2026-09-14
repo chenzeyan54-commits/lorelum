@@ -4,12 +4,12 @@ This is the first Codex integration for Lorelum. It brings relevant engineering 
 
 1. A compact **Installed Pack Catalog** makes the locally available Knowledge Packs discoverable.
 2. The Lorelum Skill uses that catalog as a relevance hint, not as the full engineering rules or a hard filter.
-3. Codex queries targeted Practice summaries when the task, decision, verification, or recovery moment could benefit from them.
+3. At a material task, decision, verification, recovery, or completion moment, Codex uses one targeted natural-language semantic query before deciding retrieval is not worth attempting.
 4. Before applying a Practice or claiming that work follows it, Codex reads the full Practice.
 
 The bundled runtime integration calls `lore hook codex`, the versioned Codex Hook ABI introduced in Lorelum CLI v0.1.0-alpha.1. It runs for supported `SessionStart` sources, including `compact`, so the Catalog is regenerated before Codex continues after compaction. The CLI reads the Hook payload from stdin and writes the Codex `hookSpecificOutput` envelope directly to stdout.
 
-The integration requests Pack metadata only. It does not install or update Packs, or proactively run `lore query` or `lore get`; opening the LocalStore still follows its normal lifecycle. If the CLI is unavailable or returns malformed data, the integration writes a diagnostic to stderr and lets the host continue without additional context.
+The integration requests Pack metadata only. It does not install or update Packs, or automatically run `lore query` or `lore get`; the Skill makes those task-specific decisions and opening the LocalStore still follows its normal lifecycle. If the CLI is unavailable or returns malformed data, the integration writes a diagnostic to stderr and lets the host continue without additional context.
 
 ## Integration scope
 
@@ -17,7 +17,7 @@ This Plugin is deliberately CLI-first: it uses the compiled `lore` executable to
 
 ## Retrieval availability
 
-`lore query` defaults to local semantic retrieval, which requires a running Backend, a loaded model, and an index for the selected Store. An unavailable semantic query does not mean no relevant Practice exists, and the Plugin does not start, configure, or download those dependencies automatically. Use `--mode keyword` only when the explicit offline keyword path is appropriate.
+`lore query` defaults to local semantic retrieval. A ready semantic query is the normal path; expected latency alone is not a reason to skip it, and this documentation makes no fixed-latency promise. The normal Skill path starts by issuing its targeted natural-language query; it does not preflight Backend, model, index, or status commands. A `data.state: "preparing"` response, an unavailable model, or an unavailable semantic index is a lifecycle state or actionable error, not evidence that no relevant Practice exists. Only after such a response does the caller follow the documented model or index recovery path and retry the same query. Use `--mode keyword` only for an intentional offline lookup or semantic-runtime diagnosis, and identify those results as keyword retrieval.
 
 ## Installation
 

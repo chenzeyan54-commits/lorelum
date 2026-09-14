@@ -34,12 +34,12 @@ After an install or update, start a new Codex task so its Skill and Hook configu
 
 At `SessionStart` events including `compact`, the Hook calls `lore hook codex` and injects an **Installed Pack Catalog**. The catalog contains Pack names, versions, descriptions when available, and declared stack scope. It is routing metadata, not full Practice guidance, and it may be truncated to fit the host context budget.
 
-The Lorelum Skill uses the catalog as a relevance hint. Missing or omitted Pack metadata does not establish that no relevant guidance exists. Before applying a Practice or saying that a plan follows it, Codex reads the complete Practice with `lore get <practice-id>`.
+The Lorelum Skill uses the catalog as a relevance hint. Missing or omitted Pack metadata does not establish that no relevant guidance exists. At a material task, planning, high-risk-boundary, verification, recovery, or completion moment where guidance may help, the Skill runs one targeted natural-language semantic query before deciding retrieval is not worth attempting. Before applying a Practice or saying that a plan follows it, Codex reads the complete Practice with `lore get <practice-id>`. The Hook remains metadata-only: it never automatically runs `lore query` or `lore get`.
 
 ## Troubleshooting
 
 - If no catalog appears, first run `lore --version` in the environment that starts Codex and confirm it is v0.1.0-alpha.1 or later. The Hook degrades without blocking Codex when that CLI is unavailable, older, or returns invalid data.
-- If semantic query is unavailable, that does not mean no relevant Practice exists. Prepare the local Backend, model, and Store index explicitly, or use `--mode keyword` only when an offline lexical search is appropriate.
+- A ready semantic query is the normal path; expected latency alone is not a reason to skip it, and this documentation makes no fixed-latency promise. The Skill starts by issuing its targeted semantic query; do not preflight Backend, model, index, or status commands. `data.state: "preparing"` is neither an empty result nor evidence that no Practice applies. Only after the query reports preparation or an error should the caller follow the documented model or index recovery path and retry the same query. Use `--mode keyword` only for an intentional offline lexical lookup or semantic-runtime diagnosis, and identify the result as keyword retrieval.
 - A catalog truncated by the context budget does not imply that omitted Packs are uninstalled. Run `lore pack list --details` when refreshing discovery would help.
 
 For checkout-backed development and hot reload, see [Plugin development](../development/plugins.md).

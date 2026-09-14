@@ -1,42 +1,35 @@
 ---
 name: lorelum
-description: Retrieve relevant engineering Practices from installed Lorelum Knowledge Packs before a task or decision needs them.
+description: Discover installed Lorelum Knowledge Packs, then retrieve relevant engineering Practices before a task or decision needs them.
 ---
 
 # Lorelum
 
 Lorelum is a local retrieval layer for engineering Practices. Packs contain reusable, trigger-conditioned guidance. Use it to bring the right Practice into planning, implementation, verification, recovery, and delivery without turning it into a mandatory workflow.
 
-## Retrieve progressively
+## Establish the Pack Catalog once
 
-1. If the current task could benefit from engineering guidance, make a normal natural-language query that includes the task and current work moment:
-
-   ```sh
-   lore query "I am implementing a login flow and deciding how it should integrate with the existing authentication API before coding."
-   ```
-
-2. Read the complete body of each Practice that may apply before using it:
-
-   ```sh
-   lore get <practice-id>
-   ```
-
-3. Do not query before every edit or command. Good moments include defining scope, crossing a high-risk boundary, changing a material decision, recovering after lost context, and preparing to claim completion.
-
-4. When you need to see what is installed, refresh the Pack catalog:
-
-   ```sh
-   lore pack list --details
-   ```
-
-## Semantic retrieval is the default
-
-Use the default natural-language path for normal work. If the local model or semantic index is preparing, wait or use the relevant model/index lifecycle command, then retry the same query.
-
-Use keyword mode only for an intentional offline lookup or to isolate a semantic-runtime problem. Build that fallback query from concrete identifiers, paths, error text, or domain words, and state that the result is keyword retrieval:
+At the start of each new engineering task, first check whether the current context already includes an installed Pack Catalog for this task. If it does, reuse it. If it does not, discover the installed Packs and their routing metadata once:
 
 ```sh
-lore query "login auth API token session" --mode keyword
+lore pack list --details
 ```
 
-Do not silently substitute keyword results for a failed or empty semantic query.
+Use each Pack's description and declared stack scope as relevance hints, not as complete guidance or a hard filter. Keep this catalog for the task; do not rerun it before every edit, command, or ordinary reply. Refresh it only when the task scope changes materially, the Store may have changed, or discovery output was incomplete.
+
+## Use semantic retrieval for material decisions
+
+When the current scope, plan, high-risk boundary, verification, recovery, or completion moment is worth retrieving engineering guidance for, use this sequence. Describe the task goal, the decision currently being made, and the concrete boundary or constraint:
+
+```sh
+lore query "I am designing idempotent writes for a payment API. I need to decide whether the client or service generates the idempotency key, while preserving database uniqueness and safe retry behavior."
+```
+
+
+Then read the complete body of every candidate Practice you will use:
+
+```sh
+lore get <practice-id>
+```
+
+The default query is semantic. Do not skip a ready semantic query solely because of expected latency. Do not run backend, model, index, or status commands before this query. Only after the query itself returns a preparation state or an error, read [semantic query recovery](references/semantic-query-recovery.md), follow the relevant recovery path, then retry the same query. Do not silently substitute keyword results for a failed or empty semantic query; use `--mode keyword` only for an intentional offline lookup or semantic-runtime diagnosis. Do not query before every edit, command, or ordinary reply.
