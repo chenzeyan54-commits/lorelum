@@ -9,7 +9,7 @@ Lorelum is an optional local retrieval layer for engineering Practices. It store
 
 ## Use the injected Pack Catalog
 
-Codex receives a compact **Installed Pack Catalog** from the SessionStart Hook. Treat it as lightweight routing metadata, not as complete engineering guidance or a hard filter. Each Pack entry includes its current `packRoot`, while resource files and Practice bodies remain absent. Use each Pack's description and declared stack scope as relevance hints.
+Codex receives a compact **Installed Pack Catalog** from the SessionStart Hook. Treat it as lightweight routing metadata, not as complete engineering guidance or a hard filter. Each Pack entry includes its current, directly readable `packRoot` view rather than an internal artifact path, while resource files and Practice bodies remain absent. Use each Pack's description and declared stack scope as relevance hints.
 
 Reuse that Catalog for the task; do not rerun `lore pack list --details` at the start because the Hook already supplies the same metadata. If the injected catalog is truncated or unavailable, do not assume omitted Packs are absent; run `lore pack list --details` only when refreshing discovery would help the current task or decision.
 
@@ -35,7 +35,7 @@ Packs may include optional `references/`, `assets/`, and `scripts/` directories.
 [API compatibility matrix](resource:references/api-compatibility.md)
 ```
 
-The link is the Practice's suggested route for the current task, not an access-control allowlist. When the relevant Pack is already clear, the SessionStart Catalog provides its `packRoot` for Pack-level browsing. Resolve the part after `resource:` from the corresponding `sources[].packRoot` in `lore get` whenever the selected Practice has a source; this preserves source choice when multiple Packs provide the same Practice. When the user explicitly needs to browse or maintain a Pack, `lore pack list <pack-name>` obtains a fresh `packRoot`. Do not construct paths from a Pack name or use the Store's SQLite/projection layout as an interface.
+The link is the Practice's suggested route for the current task, not an access-control allowlist. When the relevant Pack is already clear, the SessionStart Catalog provides its `packRoot` for Pack-level browsing. Resolve the part after `resource:` from the corresponding `sources[].packRoot` in `lore get` whenever the selected Practice has a source; this preserves source choice when multiple Packs provide the same Practice. A `packRoot` is a mutable current view, so after a Pack mutation retrieve the current Practice/source again before interpreting a resource. When the user explicitly needs to browse or maintain a Pack, `lore pack list <pack-name>` obtains a fresh `packRoot`. Do not construct paths from a Pack name or use the Store's SQLite/projection layout as an interface.
 
 - Read linked `references/` material only when the Practice needs the extra detail.
 - Copy an `assets/` file to the task destination before editing it; the installed Pack is not a writable work directory.

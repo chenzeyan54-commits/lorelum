@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -233,9 +233,12 @@ test("Pack catalog locators advance with a resource-only update", async () => {
     expect(secondList).toMatchObject({ generation: 2, effectiveRevision: 1 });
     expect(secondDetails).toMatchObject({ generation: 2, effectiveRevision: 1 });
     expect(secondCatalog).toMatchObject({ generation: 2, effectiveRevision: 1 });
-    expect(secondList.packs[0]?.packRoot).not.toBe(firstList.packs[0]?.packRoot);
-    expect(secondDetails.packs[0]?.packRoot).not.toBe(firstDetails.packs[0]?.packRoot);
-    expect(secondCatalog.pack.packRoot).not.toBe(firstCatalog.pack.packRoot);
+    expect(secondList.packs[0]?.packRoot).toBe(firstList.packs[0]?.packRoot);
+    expect(secondDetails.packs[0]?.packRoot).toBe(firstDetails.packs[0]?.packRoot);
+    expect(secondCatalog.pack.packRoot).toBe(firstCatalog.pack.packRoot);
+    expect(await readFile(join(secondCatalog.pack.packRoot, "references", "api.md"), "utf8")).toBe(
+      "second resource bytes\n",
+    );
   } finally {
     await removeStoreRoot(directory);
   }

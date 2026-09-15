@@ -26,7 +26,7 @@ codex plugin marketplace add lorelum/lorelum
 codex plugin add lorelum@lorelum-plugins
 ```
 
-按 Codex 提示审阅 Plugin 的 Hook，再启动新任务。Hook 执行 `lore pack list --details` 获取 Pack 元数据。
+按 Codex 提示审阅 Plugin 的 Hook，再启动新任务。Hook 执行 `lore pack list --details` 获取 Pack 元数据，包括每个可直接读取的当前 `packRoot`。
 
 ### 迁移早期 alpha 安装
 
@@ -42,7 +42,7 @@ codex plugin add lorelum@lorelum-plugins
 
 ## 检索如何发生
 
-1. 在受支持的会话启动事件中，Hook 提供精简的已安装 Pack 目录。
+1. 在受支持的会话启动事件中，Hook 提供精简的已安装 Pack 目录及其可直接读取的当前 `packRoot`。
 2. Skill 将目录作为相关性线索，围绕任务和当前判断发起查询。
 3. Codex 使用 `lore get` 读完 Practice 后，再应用其中的指导。
 

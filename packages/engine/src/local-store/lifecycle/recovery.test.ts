@@ -179,11 +179,13 @@ test("cold open rejects a tampered artifact digest", async () => {
 test("reindex rebuilds a store whose SQLite was deleted", async () => {
   await withRoot(async (root) => {
     const store = createLocalStore();
-    await store.install(root, candidate("platform", platform));
+    const installed = await store.install(root, candidate("platform", platform));
+    await rm(installed.packRoot, { force: true });
     await rm(sqlitePath(root.rootPath), { force: true });
 
     const reindexed = await store.reindex(root);
     expect(reindexed.effectiveRevision).toBeGreaterThan(0);
+    await expect(access(installed.packRoot)).resolves.toBeNull();
     const practices = await store.readEffectivePractices(root);
     expect(practices.map((p) => p.practiceId)).toEqual(["platform.api", "platform.auth"]);
   });

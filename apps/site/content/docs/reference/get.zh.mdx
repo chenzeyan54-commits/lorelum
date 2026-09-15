@@ -15,9 +15,9 @@ lore get <practice-id> [--store-root <path>]
 lore get example.practice-id
 ```
 
-成功 data 包含 `practice`（全文及元数据）、`contentDigest` 和 `sources`（`packName`、`sourcePath`、`packRoot`）。`sourcePath` 相对该 source 的 `packRoot`，因此无需重复提供 `practicePath`。`packRoot` 是该 source 当前本机已验证 artifact 的根目录，可用来解析 Practice 中的 `resource:references/api-compatibility.md` 这类 link。
+成功 data 包含 `practice`（全文及元数据）、`contentDigest` 和 `sources`（`packName`、`sourcePath`、`packRoot`）。`sourcePath` 相对该 source 的 `packRoot`，因此无需重复提供 `practicePath`。`packRoot` 是该 source 可直接读取的本机 `current` view，不是内部 digest artifact 路径，可用来解析 Practice 中的 `resource:references/api-compatibility.md` 这类 link。
 
-同一 Practice 有多个 source 时，应保持各自的 root，不能静默选中一个或合并多个 Pack 的资源。随后 Pack 更新可能令 locator 失效；应重新调用 `get`，或用 `lore pack list <pack-name>` 明确选择 Pack，不能依赖 Store 内部实现推导新路径。reference 的读取、asset 的复制和 script 的显式运行规则见 [Pack 格式](./pack-format)。
+同一 Practice 有多个 source 时，应保持各自的 root，不能静默选中一个或合并多个 Pack 的资源。后续 Pack mutation 可能让相同的 current 路径解析到新 bytes，或随着 Pack 被移除而消失；应重新调用 `get`，或用 `lore pack list <pack-name>` 明确选择 Pack 后再使用，不能依赖 Store 内部实现推导新路径。reference 的读取、asset 的复制和 script 的显式运行规则见 [Pack 格式](./pack-format)。
 
 将 query 返回的 `practiceId` 原样作为精确 `practice-id`。无效 ID 返回 `usage.invalid`；选中 Store 中不存在时返回 `practice.not-found`。Store 忙或需要恢复时分别返回 `store.busy`、`store.recovery-required`。
 

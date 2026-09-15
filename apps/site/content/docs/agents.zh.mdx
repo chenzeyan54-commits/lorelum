@@ -69,7 +69,7 @@ lore get <practice-id>
 
 Practice 可以通过 `resource:` target 链接 Pack 内材料，例如 `resource:references/api-compatibility.md`。从 `get` 结果中相同 source 的 `packRoot` 解析它。只有当前判断需要额外细节时才读取 reference；asset 先复制到任务工作区再编辑；script 仅在当前任务授权、且 Practice 已说明用途和输入时运行。
 
-link 是默认任务路由，不是文件访问 allowlist。Codex SessionStart Catalog 会为每个已安装 Pack 提供当前 `packRoot`，当 Pack 上下文已经明确时可以直接使用它。对于已经取回的 Practice，多个 source 必须保持分开，并使用相同 source 的 `get` root，而不能静默挑选 Catalog entry。更新后旧 locator 失效时，重新执行 `get` 或 `pack list`；不要通过 Store 内部实现推导 root。不要假定 Pack script 会在 install、validate、query、list、get、index 或 recovery 期间运行。
+link 是默认任务路由，不是文件访问 allowlist。Codex SessionStart Catalog 会为每个已安装 Pack 提供可直接读取的当前 `packRoot`，当 Pack 上下文已经明确时可以直接使用它。对于已经取回的 Practice，多个 source 必须保持分开，并使用相同 source 的 `get` root，而不能静默挑选 Catalog entry。root 是可变的 current view：发生 Pack mutation 后，重新执行 `get` 或 `pack list` 后再将它视为当前 source；不要通过 Store 内部实现推导 root。不要假定 Pack script 会在 install、validate、query、list、get、index 或 recovery 期间运行。
 
 ## 处理 JSON 和退出状态
 

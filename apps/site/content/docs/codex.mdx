@@ -26,7 +26,7 @@ codex plugin marketplace add lorelum/lorelum
 codex plugin add lorelum@lorelum-plugins
 ```
 
-Review the Plugin's Hook when Codex requests it, then start a new task. The Hook executes `lore pack list --details` to obtain Pack-level discovery data, including each current `packRoot`.
+Review the Plugin's Hook when Codex requests it, then start a new task. The Hook executes `lore pack list --details` to obtain Pack-level discovery data, including each readable current `packRoot`.
 
 ### Migrate an earlier alpha installation
 
@@ -42,7 +42,7 @@ codex plugin add lorelum@lorelum-plugins
 
 ## How retrieval works
 
-1. At supported session-start events, the Hook supplies a compact catalog of installed Packs and their current `packRoot` locators.
+1. At supported session-start events, the Hook supplies a compact catalog of installed Packs and their readable current `packRoot` locators.
 2. The Skill uses the catalog as a relevance hint and queries for the task and current decision.
 3. Codex reads the complete Practice with `lore get` before applying its guidance.
 

@@ -15,9 +15,9 @@ Use the exact `id` returned by [`query`](./query) or `lore pack list <pack>`; ti
 lore get example.practice-id
 ```
 
-Success data contains `practice` (the full Practice and metadata), `contentDigest`, and `sources` (`packName`, `sourcePath`, and `packRoot`). `sourcePath` is relative to that source's `packRoot`, so a separate `practicePath` is unnecessary. `packRoot` names the current local verified artifact for that source and lets a caller resolve a Practice link such as `resource:references/api-compatibility.md`.
+Success data contains `practice` (the full Practice and metadata), `contentDigest`, and `sources` (`packName`, `sourcePath`, and `packRoot`). `sourcePath` is relative to that source's `packRoot`, so a separate `practicePath` is unnecessary. `packRoot` is the source Pack's readable local `current` view, not an internal digest artifact path, and lets a caller resolve a Practice link such as `resource:references/api-compatibility.md`.
 
-If one Practice has multiple sources, retain each root separately: do not silently choose one source or combine resources from several Packs. A later Pack update can make a locator stale; call `get` again, or explicitly select a Pack with `lore pack list <pack-name>`, instead of deriving a new path from Store internals. See [Pack format](./pack-format) for how to read references, copy assets, and explicitly run scripts.
+If one Practice has multiple sources, retain each root separately: do not silently choose one source or combine resources from several Packs. A later Pack mutation can make the same current path resolve to newer bytes, or remove it with the Pack; call `get` again, or explicitly select a Pack with `lore pack list <pack-name>`, before treating it as the current source. Never derive a path from Store internals. See [Pack format](./pack-format) for how to read references, copy assets, and explicitly run scripts.
 
 Use the `practiceId` returned by query as the exact `practice-id`. An invalid ID returns `usage.invalid`; an ID absent from the selected Store returns `practice.not-found`. Store contention and recovery report `store.busy` or `store.recovery-required`.
 
