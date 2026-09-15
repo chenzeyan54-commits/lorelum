@@ -191,6 +191,7 @@ export class ProjectSemanticProgressService {
     private readonly profile: EmbeddingProfile,
     private readonly embedding: EmbeddingPort,
     private readonly shouldContinue?: () => boolean,
+    private readonly onProgress?: (status: ProjectSemanticProgressStatus) => Promise<void>,
   ) {}
 
   private get paths() {
@@ -295,6 +296,11 @@ export class ProjectSemanticProgressService {
               state: "progress",
               filePath: this.progress,
               verified: false,
+            });
+            await this.onProgress?.({
+              state: "indexing",
+              indexedPracticeCount: readSemanticIndexMetadata(connection).vectorCount,
+              totalPracticeCount: this.snapshot.practices.length,
             });
           }
           const metadata = readSemanticIndexMetadata(connection);

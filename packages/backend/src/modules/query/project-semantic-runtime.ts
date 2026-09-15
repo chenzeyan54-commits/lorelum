@@ -148,18 +148,35 @@ export class ProjectSemanticRuntime
       this.documentEmbedding,
     );
     const status = await progress.status();
-    if (status.state === "indexing") {
-      const artifactId = projectSemanticArtifactId(snapshot, this.profile.profileId);
-      const operation =
-        this.operations.get(artifactId) ?? (await this.journal?.findByArtifact(artifactId));
-      if (operation !== undefined) {
+    const artifactId = projectSemanticArtifactId(snapshot, this.profile.profileId);
+    const liveOperation = this.operations.get(artifactId);
+    const recordedOperation = await this.journal?.findByArtifact(artifactId);
+    if (status.state === "indexing" || status.state === "missing") {
+      if (
+        liveOperation !== undefined ||
+        (recordedOperation !== undefined &&
+          (recordedOperation.state === "waiting-for-source" ||
+            recordedOperation.state === "queued" ||
+            recordedOperation.state === "preparing" ||
+            recordedOperation.state === "building"))
+      ) {
+        const operationId = liveOperation?.operationId ?? recordedOperation!.operationId;
         return Object.freeze({
           state: "indexing",
           profileId: this.profile.profileId,
-          operationId: operation.operationId,
-          indexedPracticeCount: status.indexedPracticeCount,
-          totalPracticeCount: status.totalPracticeCount,
+          operationId,
+          indexedPracticeCount:
+            status.state === "indexing"
+              ? status.indexedPracticeCount
+              : (recordedOperation?.indexedPracticeCount ?? 0),
+          totalPracticeCount:
+            status.state === "indexing"
+              ? status.totalPracticeCount
+              : (recordedOperation?.totalPracticeCount ?? snapshot.practices.length),
         });
+      }
+      if (status.state === "missing") {
+        return Object.freeze({ state: "missing", profileId: this.profile.profileId });
       }
       // An untracked progress file can only arise from interrupted derived
       // state. It is not ready, but reporting it as stale keeps index status
@@ -192,6 +209,7 @@ export class ProjectSemanticRuntime
       previous !== undefined &&
       previous.artifactId !== artifactId &&
       (previous.state === "queued" ||
+        previous.state === "preparing" ||
         previous.state === "building" ||
         previous.state === "waiting-for-source")
     ) {
@@ -222,6 +240,21 @@ export class ProjectSemanticRuntime
         this.profile,
         this.documentEmbedding,
         desired,
+        async (status) => {
+          await this.record({
+            operationId,
+            projectRootId: snapshot.projectRootId,
+            projectSlotId,
+            artifactId,
+            corpusDigest: snapshot.indexCorpusDigest,
+            profileId: this.profile.profileId,
+            state: "building",
+            indexedPracticeCount: status.indexedPracticeCount,
+            totalPracticeCount: status.totalPracticeCount,
+            attempts: attempts + 1,
+            createdAt,
+          });
+        },
       );
       try {
         await this.record({

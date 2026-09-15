@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createEmbeddingProfile } from "@lorelum/engine";
 
 import { ProjectSemanticRuntime } from "./project-semantic-runtime";
+import { ProjectOperationJournal } from "./project-operation-journal";
 
 const encodingId = "c".repeat(64);
 
@@ -184,6 +185,106 @@ test("coalesces rapid edits for one directory to the latest semantic target", as
     await Promise.all([
       rm(root, { recursive: true, force: true }),
       rm(cache, { recursive: true, force: true }),
+    ]);
+  }
+});
+
+test("persists each completed ProjectContext batch for restart-safe source reattachment", async () => {
+  const [root, cache] = await Promise.all([
+    mkdtemp(join(tmpdir(), "lorelum-backend-project-progress-")),
+    mkdtemp(join(tmpdir(), "lorelum-backend-project-progress-cache-")),
+  ]);
+  const runtime = await realpath(
+    await mkdtemp(join(tmpdir(), "lorelum-backend-project-progress-runtime-")),
+  );
+  try {
+    const pack = join(root, ".lorelum", "packs", "platform");
+    await mkdir(join(pack, "practices"), { recursive: true });
+    await writeFile(join(pack, "pack.yaml"), "name: platform\nversion: 1.0.0\n");
+    for (const id of ["platform.first", "platform.second"]) {
+      await writeFile(
+        join(pack, "practices", `${id}.md`),
+        `---
+id: ${id}
+title: ${id}
+stage: implementation
+tech_stack:
+  - typescript
+applies_when: When persisting an incremental target.
+---
+${id}
+`,
+      );
+    }
+    const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
+    let releaseSecond!: () => void;
+    const second = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+    let documentCalls = 0;
+    const journal = new ProjectOperationJournal(runtime);
+    const service = new ProjectSemanticRuntime(
+      {
+        async readEffectivePracticeSnapshot() {
+          return {
+            identity: {
+              rootBinding: "test-store",
+              generation: 0,
+              effectiveRevision: 0,
+              manifestDigest: "0".repeat(64),
+            },
+            practices: [],
+          };
+        },
+      },
+      profile,
+      {
+        maxBatchSize: 1,
+        async embed(inputs) {
+          documentCalls += inputs.filter((input) => input.startsWith("Practice:")).length;
+          if (documentCalls === 2) await second;
+          return { encodingId, vectors: inputs.map(() => [1, 0]) };
+        },
+      },
+      {
+        maxBatchSize: 1,
+        async embed(inputs) {
+          return { encodingId, vectors: inputs.map(() => [1, 0]) };
+        },
+      },
+      {
+        beginModelPreparation() {
+          throw new Error("model preparation should not be needed");
+        },
+        async waitModelPreparation() {
+          throw new Error("model preparation should not be needed");
+        },
+      },
+      journal,
+    );
+    const result = await service.query(
+      { rootPath: join(root, "store") },
+      { projectRoot: root, cacheRoot: cache },
+      { text: "persisted progress" },
+      { maxWaitMs: 0, minCoveragePercent: 100 },
+    );
+    if (!("operationId" in result)) throw new Error("Expected an accepted index operation");
+    for (let attempt = 0; attempt < 50 && documentCalls < 2; attempt += 1) {
+      // eslint-disable-next-line no-await-in-loop -- bounded synchronization with the second batch.
+      await Bun.sleep(5);
+    }
+    await expect(journal.findById(result.operationId)).resolves.toMatchObject({
+      state: "building",
+      indexedPracticeCount: 1,
+      totalPracticeCount: 2,
+    });
+    releaseSecond();
+    await service.waitForIdle();
+  } finally {
+    await Promise.all([
+      rm(root, { recursive: true, force: true }),
+      rm(cache, { recursive: true, force: true }),
+      rm(runtime, { recursive: true, force: true }),
     ]);
   }
 });
