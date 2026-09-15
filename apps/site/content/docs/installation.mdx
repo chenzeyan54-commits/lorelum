@@ -64,6 +64,6 @@ Read the target release's compatibility notes, then rerun the installer with its
 lore backend stop
 ```
 
-The next semantic command starts it again. Restart your agent application if it still uses the old CLI environment.
+If you already installed the update but forgot to stop the old Backend first, run the same command from the new CLI. It can safely stop a verified Backend from a different build when the internal protocol is compatible, so you do not need to kill the process manually. The next semantic command starts it again. Restart your agent application if it still uses the old CLI environment.
 
 CLI, Pack, and Plugin versions are managed separately. Use [Pack commands](./reference/packs) for Pack updates and [Codex integration](./codex) for Plugin updates. See [Alpha compatibility](./alpha) before moving an existing Store between versions.

@@ -6,7 +6,7 @@
 ## 2. Upgrade regression and documentation
 
 - [x] 2.1 修改 `packages/backend/src/runtime/supervisor.test.ts` 的真实 daemon 不同 build 场景：build B 成功停止 build A，并验证 A 退出、record 清理，且 B 的 status/start 仍为 `backend.incompatible`。
-- [x] 2.2 更新 `docs/cli/backend.md`，说明 `backend stop` 可安全停止 protocol-compatible 的不同 build 实例，普通 lifecycle/runtime 请求仍遵守 build compatibility；验证文档不承诺 PID/端口 kill 或跨 protocol 停机。
+- [x] 2.2 更新 CLI/API reference 与 public site 的 Backend/installation 文档，说明 `backend stop` 可安全停止 protocol-compatible 的不同 build 实例，普通 lifecycle/runtime 请求仍遵守 build compatibility；验证文档不承诺 PID/端口 kill 或跨 protocol 停机。
 - [x] 2.3 运行 `openspec validate allow-cross-build-backend-stop --strict`，确认 delta spec 反映上述最小范围。
 
 ## 3. Verification

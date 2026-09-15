@@ -13,6 +13,8 @@ lore backend stop
 
 `start` 会初始化缺失的默认配置，启动或复用兼容的本地实例，并等待其 ready；不会加载模型。`status` 返回 `state`、`model`，以及可用时的 `instanceId`、`buildIdentity`，不会启动进程。`stop` 等待服务退出，服务已停止时重复调用也安全。
 
+升级后，只要内部 protocol 仍兼容，新 CLI 可以用 `stop` 安全停止由不同 build 启动、且已经验证为同一实例的本地 Backend。这只是 stop 的恢复路径：`start`、`status`、query、index 和 model 命令仍要求 build 兼容。Lorelum 不会因为某个进程占用了本地端口就终止它。
+
 默认服务地址为 loopback（`127.0.0.1:26186`）。全局 `--store-root` 只影响 Store 数据；`--log-level` 控制 stderr 的进度与诊断日志。
 
 常见错误包括 `backend.unavailable`、`backend.port-conflict`、`backend.incompatible`、`backend.config-invalid`、`backend.busy`、`backend.failed` 和 `backend.deadline-exceeded`。按错误信息处理本地状态后重试。成功退出 `0`，失败退出 `2`。各子命令 schema 见 `lore describe backend.start` 等。

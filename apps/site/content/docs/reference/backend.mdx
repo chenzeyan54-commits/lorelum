@@ -13,6 +13,8 @@ lore backend stop
 
 `start` initializes missing default configuration, starts or reuses a compatible local instance, and waits until it is ready. It does not load the model. `status` reports `state`, `model`, and, when available, `instanceId` and `buildIdentity`; it never starts a process. `stop` waits for the service to exit and is safe when it is already stopped.
 
+After an upgrade, a new CLI can use `stop` to safely shut down a verified local Backend started by a different CLI build when their internal protocol is still compatible. This is a stop-only recovery path: `start`, `status`, query, index, and model commands still require a compatible build. Lorelum never stops an arbitrary process that happens to use the local port.
+
 The default service address is loopback (`127.0.0.1:26186`). Global `--store-root` affects Store data only. `--log-level` controls stderr progress and diagnostics.
 
 Backend errors include `backend.unavailable`, `backend.port-conflict`, `backend.incompatible`, `backend.config-invalid`, `backend.busy`, `backend.failed`, and `backend.deadline-exceeded`. Correct the reported local condition and retry. Success exits `0`; failures exit `2`. Use `lore describe backend.start` (or the other subcommand) for the installed schema.

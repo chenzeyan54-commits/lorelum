@@ -64,6 +64,6 @@ lore --version
 lore backend stop
 ```
 
-下一次 semantic 命令会重新启动服务。如果 Agent 仍使用旧的 CLI 环境，也需要重启 Agent 应用。
+如果已经完成更新、却忘了先停止旧 Backend，也可以直接用新 CLI 运行同一条命令：只要内部 protocol 仍兼容，它会安全停止已经验证的不同 build Backend，无需手动 kill 进程。下一次 semantic 命令会重新启动服务。如果 Agent 仍使用旧的 CLI 环境，也需要重启 Agent 应用。
 
 CLI、Pack 和 Plugin 的版本分别管理。Pack 更新见 [Pack 命令](./reference/packs)，Plugin 更新见 [Codex 集成](./codex)。已有 Store 跨版本使用前，请阅读 [Alpha 兼容性](./alpha)。
