@@ -23,6 +23,7 @@ import { queryRequestSchema, queryResultSchema, type BackendQueryResult } from "
 import type {
   ProjectSemanticQueryResult,
   ProjectSemanticRuntimePort,
+  StoreSemanticRuntimePort,
 } from "./project-semantic-runtime";
 import type { IndexOperationService } from "../index/operation-service";
 
@@ -30,6 +31,7 @@ export interface QueryControllerServices {
   readonly keywordQueryService: QueryService;
   readonly semanticQueryService: SemanticQueryService;
   readonly projectSemanticRuntime?: ProjectSemanticRuntimePort;
+  readonly storeSemanticRuntime?: StoreSemanticRuntimePort;
   readonly indexOperations?: IndexOperationService;
 }
 
@@ -64,6 +66,25 @@ export function queryController(services: QueryControllerServices, available: ()
               await services.projectSemanticRuntime.query(
                 { rootPath: body.storageRoot },
                 body.query.projectContext,
+                query,
+                {
+                  maxWaitMs: body.query.maxWaitMs ?? 3_000,
+                  minCoveragePercent: body.query.minCoveragePercent ?? 0,
+                },
+              ),
+            );
+          }
+          if (body.query.cacheRoot !== undefined) {
+            if (services.storeSemanticRuntime === undefined) {
+              return status(
+                503,
+                domainError("semantic.index-failed", "Store semantic query is unavailable."),
+              );
+            }
+            return toResponse(
+              await services.storeSemanticRuntime.queryStore(
+                { rootPath: body.storageRoot },
+                { cacheRoot: body.query.cacheRoot },
                 query,
                 {
                   maxWaitMs: body.query.maxWaitMs ?? 3_000,

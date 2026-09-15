@@ -14,11 +14,11 @@ import {
 } from "../query/semantic";
 import { projectSemanticIndexDatabaseDefinition } from "../persistence/definitions";
 import { projectSemanticIndexPaths } from "./cache";
-import type { ProjectContextSnapshot } from "./types";
+import type { ContentAddressedCorpus } from "./cache";
 
-function identityFor(snapshot: ProjectContextSnapshot): StoreSnapshotIdentity {
+function identityFor(snapshot: ContentAddressedCorpus): StoreSnapshotIdentity {
   return Object.freeze({
-    rootBinding: `project-context:${snapshot.indexCorpusDigest}`,
+    rootBinding: `content-addressed:${snapshot.indexCorpusDigest}`,
     generation: 0,
     effectiveRevision: 0,
     manifestDigest: snapshot.indexCorpusDigest,
@@ -35,7 +35,7 @@ function sameIdentity(left: StoreSnapshotIdentity, right: StoreSnapshotIdentity)
 }
 
 function practicesAtSnapshot(
-  snapshot: ProjectContextSnapshot,
+  snapshot: ContentAddressedCorpus,
   expected: StoreSnapshotIdentity,
   ids: readonly string[],
 ): readonly EffectivePractice[] {
@@ -44,7 +44,7 @@ function practicesAtSnapshot(
   return Object.freeze(snapshot.practices.filter((practice) => requested.has(practice.practiceId)));
 }
 
-export interface ProjectSemanticServices {
+export interface ContentAddressedSemanticServices {
   /** Opaque virtual root. Its path is never used for cache location or source discovery. */
   readonly root: StorageRoot;
   readonly index: SemanticIndexService;
@@ -56,14 +56,14 @@ export interface ProjectSemanticServices {
  * ProjectContext snapshot. The target has no mutable Store revision: a source edit
  * produces a different artifact identity, while the old artifact remains reusable.
  */
-export function createProjectSemanticServices(
-  snapshot: ProjectContextSnapshot,
+export function createContentAddressedSemanticServices(
+  snapshot: ContentAddressedCorpus,
   cacheRoot: string,
   profile: EmbeddingProfile,
   embedding: EmbeddingPort,
-): ProjectSemanticServices {
+): ContentAddressedSemanticServices {
   const identity = identityFor(snapshot);
-  const root = Object.freeze({ rootPath: "project-context-artifact" });
+  const root = Object.freeze({ rootPath: "content-addressed-artifact" });
   const paths = (_root: StorageRoot, profileId: string) =>
     projectSemanticIndexPaths(cacheRoot, snapshot, profileId);
   const index = createSemanticIndexService({
@@ -106,3 +106,8 @@ export function createProjectSemanticServices(
   });
   return Object.freeze({ root, index, query });
 }
+
+/** @deprecated Use createContentAddressedSemanticServices for non-project corpora too. */
+export const createProjectSemanticServices = createContentAddressedSemanticServices;
+/** @deprecated Use ContentAddressedSemanticServices for non-project corpora too. */
+export type ProjectSemanticServices = ContentAddressedSemanticServices;

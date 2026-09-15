@@ -172,7 +172,7 @@ function command(
             : await services.resolveProjectContext(root, projectOptions);
         const indexOptions =
           project === undefined
-            ? undefined
+            ? { cacheRoot: projectOptions.cacheRoot }
             : {
                 projectContext: {
                   projectRoot: project.projectRootPath,

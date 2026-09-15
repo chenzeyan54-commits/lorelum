@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { createEmbeddingProfile } from "../query/semantic";
 import { resolveProjectContext } from "./resolver";
 import { ProjectSemanticProgressService } from "./semantic-progress";
+import { semanticVectorCachePaths } from "./cache";
 
 const encodingId = "b".repeat(64);
 
@@ -206,6 +207,54 @@ test("shared vectors never cross an embedding Profile or changed semantic projec
       },
     }).build();
     expect(changedProjectionEmbeds).toBe(1);
+  } finally {
+    await Promise.all([
+      rm(root, { recursive: true, force: true }),
+      rm(cache, { recursive: true, force: true }),
+    ]);
+  }
+});
+
+test("a forced rebuild failure keeps the prior ready artifact queryable", async () => {
+  const { root, cache } = await setup();
+  try {
+    const snapshot = await resolveProjectContext({
+      startDirectory: root,
+      storageRoot: { rootPath: join(root, "store") },
+      store: {
+        async readEffectivePracticeSnapshot() {
+          return { practices: [] };
+        },
+      },
+    });
+    if (snapshot === undefined) throw new Error("Expected ProjectContext");
+    const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
+    await new ProjectSemanticProgressService(snapshot, cache, profile, {
+      maxBatchSize: 4,
+      async embed(inputs) {
+        return { encodingId, vectors: inputs.map(() => [1, 0]) };
+      },
+    }).build();
+    const vectors = semanticVectorCachePaths(cache);
+    await Promise.all([
+      rm(vectors.database, { force: true }),
+      rm(`${vectors.database}-wal`, { force: true }),
+      rm(`${vectors.database}-shm`, { force: true }),
+    ]);
+    const replacement = new ProjectSemanticProgressService(snapshot, cache, profile, {
+      maxBatchSize: 1,
+      async embed() {
+        throw new Error("replacement embedding failed");
+      },
+    });
+    await expect(replacement.build({ force: true })).rejects.toThrow(
+      "replacement embedding failed",
+    );
+    await expect(replacement.status()).resolves.toEqual({
+      state: "ready",
+      indexedPracticeCount: 2,
+      totalPracticeCount: 2,
+    });
   } finally {
     await Promise.all([
       rm(root, { recursive: true, force: true }),

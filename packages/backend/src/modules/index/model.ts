@@ -48,13 +48,19 @@ export const indexStatusQuerySchema = z
     cacheRoot: projectContextSchema.shape.cacheRoot.optional(),
   })
   .refine(
-    (value) => (value.projectRoot === undefined) === (value.cacheRoot === undefined),
-    "projectRoot and cacheRoot must be supplied together",
+    (value) => value.projectRoot === undefined || value.cacheRoot !== undefined,
+    "projectRoot requires cacheRoot",
   );
-export const indexMutationSchema = z.strictObject({
-  storageRoot: storageRootSchema,
-  projectContext: projectContextSchema.optional(),
-});
+export const indexMutationSchema = z
+  .strictObject({
+    storageRoot: storageRootSchema,
+    projectContext: projectContextSchema.optional(),
+    cacheRoot: projectContextSchema.shape.cacheRoot.optional(),
+  })
+  .refine(
+    (value) => value.projectContext === undefined || value.cacheRoot === undefined,
+    "projectContext carries its cacheRoot",
+  );
 export const indexOperationStateSchema = z.enum([
   "waiting-for-source",
   "queued",

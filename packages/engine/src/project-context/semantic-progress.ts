@@ -26,9 +26,12 @@ import { assembleQueryHits } from "../query/result";
 import type { QueryRequest } from "../query/types";
 import type { SemanticQueryResult } from "../query/semantic/query-service";
 import { withProjectArtifactLease } from "./artifact-lease";
-import { projectSemanticArtifactId, projectSemanticIndexPaths } from "./cache";
+import {
+  projectSemanticArtifactId,
+  projectSemanticIndexPaths,
+  type ContentAddressedCorpus,
+} from "./cache";
 import { recordProjectCacheArtifact } from "./cache-catalog";
-import type { ProjectContextSnapshot } from "./types";
 import { readSharedEmbeddingVectors, writeSharedEmbeddingVectors } from "./vector-cache";
 
 export interface ProjectSemanticProgressStatus {
@@ -43,9 +46,9 @@ export interface ProjectSemanticPartialResult {
   readonly totalPracticeCount: number;
 }
 
-function targetIdentity(snapshot: ProjectContextSnapshot) {
+function targetIdentity(snapshot: ContentAddressedCorpus) {
   return Object.freeze({
-    rootBinding: `project-context:${snapshot.indexCorpusDigest}`,
+    rootBinding: `content-addressed:${snapshot.indexCorpusDigest}`,
     generation: 0,
     effectiveRevision: 0,
     manifestDigest: snapshot.indexCorpusDigest,
@@ -54,7 +57,7 @@ function targetIdentity(snapshot: ProjectContextSnapshot) {
 
 function progressPath(
   cacheRoot: string,
-  snapshot: ProjectContextSnapshot,
+  snapshot: ContentAddressedCorpus,
   profile: EmbeddingProfile,
 ): string {
   return join(
@@ -65,14 +68,14 @@ function progressPath(
 
 function progressPaths(
   cacheRoot: string,
-  snapshot: ProjectContextSnapshot,
+  snapshot: ContentAddressedCorpus,
   profile: EmbeddingProfile,
 ) {
   const paths = projectSemanticIndexPaths(cacheRoot, snapshot, profile.profileId);
   return Object.freeze({ ...paths, active: progressPath(cacheRoot, snapshot, profile) });
 }
 
-function documents(snapshot: ProjectContextSnapshot): readonly SemanticDocument[] {
+function documents(snapshot: ContentAddressedCorpus): readonly SemanticDocument[] {
   return Object.freeze(snapshot.practices.map(projectSemanticPractice));
 }
 
@@ -87,7 +90,7 @@ async function exists(path: string): Promise<boolean> {
 
 function openProgress(
   path: string,
-  snapshot: ProjectContextSnapshot,
+  snapshot: ContentAddressedCorpus,
   profile: EmbeddingProfile,
 ): SemanticIndexConnection {
   const connection = openSqliteConnection(path, semanticProgressIndexDatabaseDefinition.schema);
@@ -116,7 +119,7 @@ function readyIds(connection: SemanticIndexConnection): ReadonlySet<string> {
 
 async function ensureProgress(
   path: string,
-  snapshot: ProjectContextSnapshot,
+  snapshot: ContentAddressedCorpus,
   profile: EmbeddingProfile,
 ): Promise<SemanticIndexConnection> {
   if (await exists(path)) {
@@ -186,7 +189,7 @@ async function vectorsForBatch(
  */
 export class ProjectSemanticProgressService {
   constructor(
-    private readonly snapshot: ProjectContextSnapshot,
+    private readonly snapshot: ContentAddressedCorpus,
     private readonly cacheRoot: string,
     private readonly profile: EmbeddingProfile,
     private readonly embedding: EmbeddingPort,
@@ -254,14 +257,23 @@ export class ProjectSemanticProgressService {
     }
   }
 
-  async build(): Promise<ProjectSemanticProgressStatus> {
+  /**
+   * `force` creates a complete replacement in progress.sqlite while retaining
+   * the prior active.sqlite until the replacement passes publication checks.
+   */
+  async build(options: { readonly force?: boolean } = {}): Promise<ProjectSemanticProgressStatus> {
     await mkdir(this.paths.directory, { recursive: true });
     return withProjectArtifactLease(this.paths.directory, async () => {
       await mkdir(this.paths.writer, { recursive: true });
       const lock = await acquireMutationLock(this.paths.writer);
       try {
         const current = await this.status();
-        if (current.state === "ready") return current;
+        if (current.state === "ready" && options.force !== true) return current;
+        if (options.force === true) {
+          // Rebuild must reconstruct this target's complete artifact. The prior
+          // active file remains in place until the fresh progress file publishes.
+          await rm(this.progress, { force: true }).catch(() => undefined);
+        }
         const connection = await ensureProgress(this.progress, this.snapshot, this.profile);
         try {
           const completed = readyIds(connection);

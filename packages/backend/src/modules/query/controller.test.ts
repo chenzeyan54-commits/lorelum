@@ -5,7 +5,10 @@ import { createBackendApp } from "../../app";
 import { createBackendService } from "../backend/service";
 import type { QueryService } from "@lorelum/engine";
 import type { SemanticQueryService } from "@lorelum/engine";
-import type { ProjectSemanticRuntimePort } from "./project-semantic-runtime";
+import type {
+  ProjectSemanticRuntimePort,
+  StoreSemanticRuntimePort,
+} from "./project-semantic-runtime";
 import { PROTOCOL_VERSION } from "../../protocol/constants";
 
 const secret = "query-controller-test-secret";
@@ -31,12 +34,14 @@ function app(
   keywordQueryService: QueryService,
   semanticQueryService: SemanticQueryService,
   projectSemanticRuntime?: ProjectSemanticRuntimePort,
+  storeSemanticRuntime?: StoreSemanticRuntimePort,
 ) {
   return createBackendApp({
     backend: createBackendService({ identity, secret, onStop: () => undefined }),
     keywordQueryService,
     semanticQueryService,
     ...(projectSemanticRuntime === undefined ? {} : { projectSemanticRuntime }),
+    ...(storeSemanticRuntime === undefined ? {} : { storeSemanticRuntime }),
   });
 }
 
@@ -195,6 +200,60 @@ test("uses the project runtime for partial and indexing query results", async ()
       root: { rootPath: "/tmp/query-controller" },
       context: { projectRoot: "/tmp/project", cacheRoot: "/tmp/cache" },
       query: { text: "deployment" },
+    },
+  ]);
+});
+
+test("uses the Store target runtime whenever semantic query supplies a cache root", async () => {
+  const calls: unknown[] = [];
+  const runtime: StoreSemanticRuntimePort = {
+    async queryStore(root, request, query, policy) {
+      calls.push({ root, request, query, policy });
+      return {
+        state: "indexing",
+        operationId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        indexedPracticeCount: 50,
+        totalPracticeCount: 100,
+      };
+    },
+  };
+  const instance = app(
+    {
+      async query() {
+        return { mode: "keyword", results: [] };
+      },
+    },
+    {
+      async query() {
+        throw new Error("legacy Store semantic path must not run");
+      },
+    },
+    undefined,
+    runtime,
+  );
+  const response = await instance.handle(
+    request({
+      storageRoot: "/tmp/query-controller",
+      query: {
+        text: "deployment",
+        cacheRoot: "/tmp/query-cache",
+        maxWaitMs: 5000,
+        minCoveragePercent: 80,
+      },
+    }),
+  );
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({
+    state: "indexing",
+    indexedPracticeCount: 50,
+    totalPracticeCount: 100,
+  });
+  expect(calls).toEqual([
+    {
+      root: { rootPath: "/tmp/query-controller" },
+      request: { cacheRoot: "/tmp/query-cache" },
+      query: { text: "deployment" },
+      policy: { maxWaitMs: 5000, minCoveragePercent: 80 },
     },
   ]);
 });

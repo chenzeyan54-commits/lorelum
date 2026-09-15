@@ -11,11 +11,11 @@ const OBSERVATION_MS = 1_000;
 export interface IndexRuntimeClient {
   build(
     root: StorageRoot,
-    options?: RuntimeWaitOptions & Pick<BackendIndexRequestOptions, "projectContext">,
+    options?: RuntimeWaitOptions & Pick<BackendIndexRequestOptions, "projectContext" | "cacheRoot">,
   ): Promise<IndexOperation>;
   rebuild(
     root: StorageRoot,
-    options?: RuntimeWaitOptions & Pick<BackendIndexRequestOptions, "projectContext">,
+    options?: RuntimeWaitOptions & Pick<BackendIndexRequestOptions, "projectContext" | "cacheRoot">,
   ): Promise<IndexOperation>;
 }
 
@@ -99,7 +99,7 @@ export function createIndexRuntimeClient(
   async function run(
     kind: IndexOperationKind,
     root: StorageRoot,
-    options: RuntimeWaitOptions & Pick<BackendIndexRequestOptions, "projectContext">,
+    options: RuntimeWaitOptions & Pick<BackendIndexRequestOptions, "projectContext" | "cacheRoot">,
   ): Promise<IndexOperation> {
     const client = await coordinator.connect(options);
     const initial =
@@ -108,14 +108,18 @@ export function createIndexRuntimeClient(
             signal: options.signal,
             deadline: options.deadline,
             ...(options.projectContext === undefined
-              ? {}
+              ? options.cacheRoot === undefined
+                ? {}
+                : { cacheRoot: options.cacheRoot }
               : { projectContext: options.projectContext }),
           })
         : await client.rebuildIndex(root, {
             signal: options.signal,
             deadline: options.deadline,
             ...(options.projectContext === undefined
-              ? {}
+              ? options.cacheRoot === undefined
+                ? {}
+                : { cacheRoot: options.cacheRoot }
               : { projectContext: options.projectContext }),
           });
     return observe(client, initial, options);
@@ -124,11 +128,13 @@ export function createIndexRuntimeClient(
   return Object.freeze({
     build: (
       root: StorageRoot,
-      options: RuntimeWaitOptions & Pick<BackendIndexRequestOptions, "projectContext"> = defaults,
+      options: RuntimeWaitOptions &
+        Pick<BackendIndexRequestOptions, "projectContext" | "cacheRoot"> = defaults,
     ) => run("build", root, options),
     rebuild: (
       root: StorageRoot,
-      options: RuntimeWaitOptions & Pick<BackendIndexRequestOptions, "projectContext"> = defaults,
+      options: RuntimeWaitOptions &
+        Pick<BackendIndexRequestOptions, "projectContext" | "cacheRoot"> = defaults,
     ) => run("rebuild", root, options),
   });
 }

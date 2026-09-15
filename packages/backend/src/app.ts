@@ -10,6 +10,8 @@ import type { IndexOperationService } from "./modules/index/operation-service";
 import type {
   ProjectSemanticIndexRuntimePort,
   ProjectSemanticRuntimePort,
+  StoreSemanticIndexRuntimePort,
+  StoreSemanticRuntimePort,
 } from "./modules/query/project-semantic-runtime";
 import { localBoundary, reject } from "./plugins/local-auth";
 import { BACKEND_HOST, BACKEND_PORT } from "./protocol/constants";
@@ -21,7 +23,9 @@ export interface CreateBackendAppOptions {
   readonly keywordQueryService: QueryService;
   readonly semanticQueryService: SemanticQueryService;
   readonly projectSemanticRuntime?: ProjectSemanticRuntimePort;
+  readonly storeSemanticRuntime?: StoreSemanticRuntimePort;
   readonly projectSemanticIndexRuntime?: ProjectSemanticIndexRuntimePort;
+  readonly storeSemanticIndexRuntime?: StoreSemanticIndexRuntimePort;
   /** Internal test injection; production always uses the fixed IPv4 endpoint. */
   readonly host?: string;
   readonly port?: number;
@@ -57,6 +61,7 @@ export function createBackendApp(options: CreateBackendAppOptions) {
             options.indexOperations,
             backend.available,
             options.projectSemanticIndexRuntime,
+            options.storeSemanticIndexRuntime,
           )
         : new Elysia(),
     )
@@ -71,6 +76,9 @@ export function createBackendApp(options: CreateBackendAppOptions) {
           ...(options.projectSemanticRuntime === undefined
             ? {}
             : { projectSemanticRuntime: options.projectSemanticRuntime }),
+          ...(options.storeSemanticRuntime === undefined
+            ? {}
+            : { storeSemanticRuntime: options.storeSemanticRuntime }),
         },
         backend.available,
       ),

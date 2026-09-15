@@ -8,6 +8,18 @@ Lorelum 使用共享的 `~/.lorelum/config.yaml`。每个模块只读取自己�
 
 - [Embedding 配置实现](embedding.md)：模型路径、缓存、下载和 CPU 参数的运行时边界。
 
+## Query 前台预算
+
+semantic query 的等待和 partial coverage 策略属于用户级 `query` section：
+
+```yaml
+query:
+  maxWaitMs: 3000
+  minCoveragePercent: 0
+```
+
+`maxWaitMs` 是 `0` 到 `120000` 的整数毫秒；它只限制当前命令观察 Backend、model preparation 和 index progress 的时间，operation 会在后台继续。`minCoveragePercent` 是 `0` 到 `100` 的整数百分比；只要已验证 current progress 达到该值，query 就可以返回带 `coverage: "partial"` 和完成/总数的成功结果。`--max-wait-ms`、`--min-coverage-percent` 覆盖一次命令，`--require-complete` 等价于 `100`，且不能与后者同时使用。
+
 配置文件和模型缓存独立于 LocalStore；`--store-root` 不改变它们。
 
 ## 首次运行与目录
@@ -58,6 +70,6 @@ const document = await loadConfig();
 // 消费方用自己的 schema 校验 document.cli / document.store 等已定义的 section。
 ```
 
-上述包名导入用于已声明 workspace 依赖的模块。基础包不会新增尚未定义的 CLI/Store 设置。backend config loader 只读并解析 backend/embedding 字段；即使 backend 某字段无效，其他模块仍可读取和校验自己的 section。YAML 文档本身损坏时，所有消费者都会收到通用 ConfigError。
+上述包名导入用于已声明 workspace 依赖的模块。基础包不会新增尚未定义的 CLI/Store 设置。backend config loader 只读并解析 backend/embedding 字段，query loader 只读并解析 query 字段；即使某个 section 无效，其他消费者仍有各自的边界。YAML 文档本身损坏时，所有消费者都会收到通用 ConfigError。
 
 首次初始化的模块默认值在 CLI 的 `config/initialize.ts` 组装。当前只有 backend/embedding 默认字段，来自该模块导出的 defaults；默认值的所有权仍归消费方，文件初始化的所有权归全局 config。未来已实现的模块可在应用组装处加入自己的默认段，不需要修改基础包或访问 backend 服务。

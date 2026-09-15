@@ -1,12 +1,14 @@
 export { resolveProjectContext } from "./resolver";
 export {
   defaultProjectCacheRoot,
+  indexCorpusDigest,
   projectCachePaths,
   projectKeywordArtifactId,
   projectKeywordIndexPaths,
   projectSemanticArtifactId,
   projectSemanticIndexPaths,
   semanticVectorCachePaths,
+  type ContentAddressedCorpus,
 } from "./cache";
 export { withProjectArtifactLease } from "./artifact-lease";
 export {
@@ -16,7 +18,12 @@ export {
   type ProjectCacheStatus,
 } from "./cache-manager";
 export { queryProjectContextKeyword } from "./keyword-query";
-export { createProjectSemanticServices, type ProjectSemanticServices } from "./semantic";
+export {
+  createContentAddressedSemanticServices,
+  createProjectSemanticServices,
+  type ContentAddressedSemanticServices,
+  type ProjectSemanticServices,
+} from "./semantic";
 export {
   ProjectSemanticProgressService,
   type ProjectSemanticPartialResult,

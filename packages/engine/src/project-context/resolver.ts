@@ -9,7 +9,7 @@ import {
   type ProjectPackConfig,
 } from "@lorelum/config";
 
-import { projectSemanticPractice } from "../query/semantic/projection";
+import { indexCorpusDigest } from "./cache";
 import type { EffectivePractice } from "../local-store";
 import { loadProjectPack, ProjectPackLoadError } from "./load-pack";
 import {
@@ -141,7 +141,8 @@ async function listPackDirectories(layer: Layer): Promise<{
 }> {
   const directory = resolveProjectPaths(layer.path).packsDirectory;
   const info = await lstat(directory).catch(() => undefined);
-  if (info === undefined) return Object.freeze({ directories: Object.freeze([]), unsafeEntryFound: false });
+  if (info === undefined)
+    return Object.freeze({ directories: Object.freeze([]), unsafeEntryFound: false });
   if (info.isSymbolicLink() || !info.isDirectory()) throw new ProjectPackLoadError();
   const entries = await readdir(directory, { withFileTypes: true }).catch(() => undefined);
   if (entries === undefined) throw new ProjectPackLoadError();
@@ -174,18 +175,6 @@ function sourceStatus(candidate: Candidate, status: "active" | "shadowed"): Cont
     sourcePath: candidate.source.sourcePath,
     ...(candidate.scope === "project" ? { layerDepth: candidate.layerDepth } : {}),
   });
-}
-
-function corpusDigest(practices: readonly EffectivePractice[]): string {
-  return hash([
-    "project-context-index/v1",
-    ...[...practices]
-      .sort((left, right) => compareCodeUnits(left.practiceId, right.practiceId))
-      .flatMap((practice) => {
-        const projection = projectSemanticPractice(practice);
-        return [practice.practiceId, practice.contentDigest, projection.projectionDigest];
-      }),
-  ]);
 }
 
 function effectiveSettings(config: EffectiveProjectConfig, packName: string): ProjectPackConfig {
@@ -302,12 +291,12 @@ export async function resolveProjectContext(
   }
   practices.sort((left, right) => compareCodeUnits(left.practiceId, right.practiceId));
   const projectRootId = hash(["project-context-root/v1", await realpath(leafPath)]);
-  const indexCorpusDigest = corpusDigest(practices);
+  const corpusDigest = indexCorpusDigest(practices);
   const contextDigest = hash([
     "project-context-snapshot/v1",
     projectRootId,
     JSON.stringify(config),
-    indexCorpusDigest,
+    corpusDigest,
   ]);
   return Object.freeze({
     kind: "project",
@@ -326,7 +315,7 @@ export async function resolveProjectContext(
       }),
     ),
     contextDigest,
-    indexCorpusDigest,
+    indexCorpusDigest: corpusDigest,
     state: warnings.length === 0 ? "ready" : "degraded",
     warnings: Object.freeze(warnings),
   });

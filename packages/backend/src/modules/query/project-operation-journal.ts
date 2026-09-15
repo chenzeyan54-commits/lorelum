@@ -19,10 +19,17 @@ const operationState = z.enum([
   "failed",
 ]);
 
-export const projectOperationRecordSchema = z.strictObject({
+const targetKind = z.enum(["project", "store"]);
+
+export const semanticOperationRecordSchema = z.strictObject({
   operationId: z.string().uuid(),
-  projectRootId: digest,
-  projectSlotId: digest,
+  targetKind,
+  /** Opaque project root or Store source identity; never an absolute path. */
+  sourceId: digest,
+  /** Opaque source/profile/cache-scope coalescing key. */
+  targetSlotId: digest,
+  /** Opaque cache-root scope; artifact IDs themselves remain content-addressed. */
+  cacheScopeId: digest,
   artifactId: digest,
   corpusDigest: digest,
   profileId: digest,
@@ -34,24 +41,25 @@ export const projectOperationRecordSchema = z.strictObject({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
-export type ProjectOperationRecord = z.infer<typeof projectOperationRecordSchema>;
+export type SemanticOperationRecord = z.infer<typeof semanticOperationRecordSchema>;
 
 const journalSchema = z
-  .strictObject({ operations: z.array(projectOperationRecordSchema).max(128) })
+  .strictObject({ operations: z.array(semanticOperationRecordSchema).max(128) })
   .refine((value) => Buffer.byteLength(JSON.stringify(value), "utf8") <= MAX_JOURNAL_BYTES);
 
 function pathFor(runtimeDirectory: string): string {
-  return join(runtimeDirectory, "project-index-operations.json");
+  return join(runtimeDirectory, "semantic-index-operations.json");
 }
 
 /**
- * Backend-private operation metadata. It holds opaque digests and counters,
- * never a ProjectContext path, Practice body, source provenance, or credentials.
+ * Backend-private operation metadata for Store and ProjectContext targets. It
+ * holds opaque digests and counters, never a path, Practice body, provenance,
+ * or credentials.
  */
-export class ProjectOperationJournal {
+export class SemanticOperationJournal {
   constructor(private readonly runtimeDirectory: string) {}
 
-  private async read(): Promise<readonly ProjectOperationRecord[]> {
+  private async read(): Promise<readonly SemanticOperationRecord[]> {
     if (!(await checkDirectory(this.runtimeDirectory, true))) return [];
     const path = pathFor(this.runtimeDirectory);
     if (!(await assertPrivateFile(path))) return [];
@@ -76,7 +84,7 @@ export class ProjectOperationJournal {
     }
   }
 
-  private async write(operations: readonly ProjectOperationRecord[]): Promise<void> {
+  private async write(operations: readonly SemanticOperationRecord[]): Promise<void> {
     await checkDirectory(this.runtimeDirectory, true);
     const serialized = JSON.stringify({ operations });
     if (Buffer.byteLength(serialized, "utf8") > MAX_JOURNAL_BYTES) {
@@ -98,7 +106,7 @@ export class ProjectOperationJournal {
   }
 
   /** Convert interrupted nonterminal work to safe source-reattachment state. */
-  async recover(): Promise<readonly ProjectOperationRecord[]> {
+  async recover(): Promise<readonly SemanticOperationRecord[]> {
     const current = await this.read();
     const timestamp = new Date().toISOString();
     const recovered = current.map((operation) =>
@@ -112,21 +120,29 @@ export class ProjectOperationJournal {
     return recovered;
   }
 
-  async findByArtifact(artifactId: string): Promise<ProjectOperationRecord | undefined> {
-    return (await this.read()).find((operation) => operation.artifactId === artifactId);
-  }
-
-  async findById(operationId: string): Promise<ProjectOperationRecord | undefined> {
-    return (await this.read()).find((operation) => operation.operationId === operationId);
-  }
-
-  async latestForSlot(projectSlotId: string): Promise<ProjectOperationRecord | undefined> {
+  async findByTarget(
+    artifactId: string,
+    cacheScopeId: string,
+  ): Promise<SemanticOperationRecord | undefined> {
     return (await this.read())
-      .filter((operation) => operation.projectSlotId === projectSlotId)
+      .filter(
+        (operation) =>
+          operation.artifactId === artifactId && operation.cacheScopeId === cacheScopeId,
+      )
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
   }
 
-  async upsert(record: ProjectOperationRecord): Promise<void> {
+  async findById(operationId: string): Promise<SemanticOperationRecord | undefined> {
+    return (await this.read()).find((operation) => operation.operationId === operationId);
+  }
+
+  async latestForSlot(targetSlotId: string): Promise<SemanticOperationRecord | undefined> {
+    return (await this.read())
+      .filter((operation) => operation.targetSlotId === targetSlotId)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+  }
+
+  async upsert(record: SemanticOperationRecord): Promise<void> {
     const current = await this.read();
     const index = current.findIndex((item) => item.operationId === record.operationId);
     const next = [...current];

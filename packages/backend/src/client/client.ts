@@ -58,6 +58,7 @@ import type { QueryRequest, StorageRoot } from "@lorelum/engine";
 export type BackendQueryRequest = QueryRequest & {
   readonly mode?: QueryMode;
   readonly projectContext?: ProjectSemanticRequest;
+  readonly cacheRoot?: string;
   readonly maxWaitMs?: number;
   readonly minCoveragePercent?: number;
 };
@@ -68,6 +69,7 @@ export interface BackendRequestOptions {
 
 export interface BackendIndexRequestOptions extends BackendRequestOptions {
   readonly projectContext?: ProjectIndexRequest;
+  readonly cacheRoot?: string;
 }
 
 export interface CreateBackendClientOptions {
@@ -360,12 +362,14 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
     async indexStatus(root, requestOptions) {
       const payload = {
         storageRoot: root.rootPath,
-        ...(requestOptions?.projectContext === undefined
-          ? {}
-          : {
+        ...(requestOptions?.projectContext !== undefined
+          ? {
               projectRoot: requestOptions.projectContext.projectRoot,
               cacheRoot: requestOptions.projectContext.cacheRoot,
-            }),
+            }
+          : requestOptions?.cacheRoot === undefined
+            ? {}
+            : { cacheRoot: requestOptions.cacheRoot }),
       };
       if (!indexStatusQuerySchema.safeParse(payload).success)
         throw new BackendError("backend.invalid-request");
@@ -373,6 +377,8 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
       if (requestOptions?.projectContext !== undefined) {
         search.set("projectRoot", requestOptions.projectContext.projectRoot);
         search.set("cacheRoot", requestOptions.projectContext.cacheRoot);
+      } else if (requestOptions?.cacheRoot !== undefined) {
+        search.set("cacheRoot", requestOptions.cacheRoot);
       }
       return request(
         `${BACKEND_ROUTES.indexStatus}?${search.toString()}`,
@@ -383,9 +389,11 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
     async buildIndex(root, requestOptions) {
       const payload = {
         storageRoot: root.rootPath,
-        ...(requestOptions?.projectContext === undefined
-          ? {}
-          : { projectContext: requestOptions.projectContext }),
+        ...(requestOptions?.projectContext !== undefined
+          ? { projectContext: requestOptions.projectContext }
+          : requestOptions?.cacheRoot === undefined
+            ? {}
+            : { cacheRoot: requestOptions.cacheRoot }),
       };
       if (!indexMutationSchema.safeParse(payload).success)
         throw new BackendError("backend.invalid-request");
@@ -397,9 +405,11 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
     async rebuildIndex(root, requestOptions) {
       const payload = {
         storageRoot: root.rootPath,
-        ...(requestOptions?.projectContext === undefined
-          ? {}
-          : { projectContext: requestOptions.projectContext }),
+        ...(requestOptions?.projectContext !== undefined
+          ? { projectContext: requestOptions.projectContext }
+          : requestOptions?.cacheRoot === undefined
+            ? {}
+            : { cacheRoot: requestOptions.cacheRoot }),
       };
       if (!indexMutationSchema.safeParse(payload).success)
         throw new BackendError("backend.invalid-request");

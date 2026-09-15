@@ -3,7 +3,7 @@ import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { ProjectOperationJournal } from "./project-operation-journal";
+import { SemanticOperationJournal } from "./project-operation-journal";
 
 const digest = "a".repeat(64);
 
@@ -12,11 +12,13 @@ test("persists opaque project targets and converts interrupted work to waiting-f
     await mkdtemp(join(tmpdir(), "lorelum-project-operation-journal-")),
   );
   try {
-    const journal = new ProjectOperationJournal(directory);
+    const journal = new SemanticOperationJournal(directory);
     await journal.upsert({
       operationId: "0f8fad5b-d9cb-469f-a165-70867728950e",
-      projectRootId: digest,
-      projectSlotId: "b".repeat(64),
+      targetKind: "project",
+      sourceId: digest,
+      targetSlotId: "b".repeat(64),
+      cacheScopeId: "f".repeat(64),
       artifactId: "c".repeat(64),
       corpusDigest: "d".repeat(64),
       profileId: "e".repeat(64),
@@ -34,7 +36,7 @@ test("persists opaque project targets and converts interrupted work to waiting-f
         totalPracticeCount: 100,
       },
     ]);
-    const raw = await readFile(join(directory, "project-index-operations.json"), "utf8");
+    const raw = await readFile(join(directory, "semantic-index-operations.json"), "utf8");
     expect(raw).not.toContain("/Users/");
     expect(raw).not.toContain("Practice:");
     expect(raw).not.toContain("cacheRoot");

@@ -3,9 +3,10 @@ import { join } from "node:path";
 
 import { resolveLorelumPaths } from "@lorelum/config";
 
+import type { EffectivePractice } from "../local-store";
 import type { PersistentKeywordIndexPaths } from "../query/keyword/persistent-keyword-index";
+import { projectSemanticPractice } from "../query/semantic/projection";
 import type { SemanticIndexPaths } from "../query/semantic/index/paths";
-import type { ProjectContextSnapshot } from "./types";
 
 export const PROJECT_CONTEXT_CACHE_VERSION = "v1";
 
@@ -20,6 +21,12 @@ export interface SemanticVectorCachePaths {
   readonly directory: string;
   readonly database: string;
   readonly writer: string;
+}
+
+/** A resolved active corpus; its sources stay outside derived cache identity. */
+export interface ContentAddressedCorpus {
+  readonly practices: readonly EffectivePractice[];
+  readonly indexCorpusDigest: string;
 }
 
 function hash(parts: readonly string[]): string {
@@ -57,12 +64,26 @@ export function semanticVectorCachePaths(cacheRoot: string): SemanticVectorCache
   });
 }
 
-export function projectKeywordArtifactId(snapshot: ProjectContextSnapshot): string {
+export function indexCorpusDigest(practices: readonly EffectivePractice[]): string {
+  return hash([
+    "project-context-index/v1",
+    ...[...practices]
+      .sort((left, right) => left.practiceId.localeCompare(right.practiceId))
+      .flatMap((practice) => {
+        const projection = projectSemanticPractice(practice);
+        return [practice.practiceId, practice.contentDigest, projection.projectionDigest];
+      }),
+  ]);
+}
+
+export function projectKeywordArtifactId(
+  snapshot: Pick<ContentAddressedCorpus, "indexCorpusDigest">,
+): string {
   return hash(["project-context-keyword/v1", snapshot.indexCorpusDigest]);
 }
 
 export function projectSemanticArtifactId(
-  snapshot: ProjectContextSnapshot,
+  snapshot: Pick<ContentAddressedCorpus, "indexCorpusDigest">,
   profileId: string,
 ): string {
   return hash(["project-context-semantic/v1", profileId, snapshot.indexCorpusDigest]);
@@ -70,7 +91,7 @@ export function projectSemanticArtifactId(
 
 export function projectKeywordIndexPaths(
   cacheRoot: string,
-  snapshot: ProjectContextSnapshot,
+  snapshot: Pick<ContentAddressedCorpus, "indexCorpusDigest">,
 ): PersistentKeywordIndexPaths {
   const directory = join(
     projectCachePaths(cacheRoot).artifacts,
@@ -86,7 +107,7 @@ export function projectKeywordIndexPaths(
 
 export function projectSemanticIndexPaths(
   cacheRoot: string,
-  snapshot: ProjectContextSnapshot,
+  snapshot: Pick<ContentAddressedCorpus, "indexCorpusDigest">,
   profileId: string,
 ): SemanticIndexPaths {
   const directory = join(

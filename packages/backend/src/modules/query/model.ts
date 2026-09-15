@@ -10,18 +10,24 @@ export const projectSemanticRequestSchema = z.strictObject({
   cacheRoot: absolutePath,
 });
 export type ProjectSemanticRequest = z.infer<typeof projectSemanticRequestSchema>;
-export const queryRequestSchema = z.strictObject({
-  // The store root must be explicit and absolute; the separator convention is the host's.
-  storageRoot: z.string().min(1).refine(isAbsolute, "storageRoot must be an absolute path"),
-  query: z.strictObject({
-    text: z.string(),
-    limit: z.int().optional(),
-    mode: queryModeSchema.optional(),
-    projectContext: projectSemanticRequestSchema.optional(),
-    maxWaitMs: z.int().nonnegative().max(120_000).optional(),
-    minCoveragePercent: z.int().min(0).max(100).optional(),
-  }),
-});
+export const queryRequestSchema = z
+  .strictObject({
+    // The store root must be explicit and absolute; the separator convention is the host's.
+    storageRoot: z.string().min(1).refine(isAbsolute, "storageRoot must be an absolute path"),
+    query: z.strictObject({
+      text: z.string(),
+      limit: z.int().optional(),
+      mode: queryModeSchema.optional(),
+      projectContext: projectSemanticRequestSchema.optional(),
+      cacheRoot: absolutePath.optional(),
+      maxWaitMs: z.int().nonnegative().max(120_000).optional(),
+      minCoveragePercent: z.int().min(0).max(100).optional(),
+    }),
+  })
+  .refine(
+    (value) => value.query.projectContext === undefined || value.query.cacheRoot === undefined,
+    "projectContext carries its cacheRoot",
+  );
 export type BackendQueryRequest = z.infer<typeof queryRequestSchema>;
 
 export const queryHitSchema = z.strictObject({
@@ -53,9 +59,14 @@ export const semanticIndexingResultSchema = z.strictObject({
   indexedPracticeCount: z.int().nonnegative(),
   totalPracticeCount: z.int().nonnegative(),
 });
+export const semanticPreparingResultSchema = z.strictObject({
+  state: z.literal("preparing"),
+  preparationId: z.string().uuid(),
+});
 export const queryResultSchema = z.union([
   keywordQueryResultSchema,
   semanticQueryResultSchema,
   semanticIndexingResultSchema,
+  semanticPreparingResultSchema,
 ]);
 export type BackendQueryResult = z.infer<typeof queryResultSchema>;

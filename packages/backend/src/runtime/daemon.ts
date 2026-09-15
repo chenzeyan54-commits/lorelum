@@ -19,7 +19,7 @@ import {
 } from "../modules/index/embedding-adapter";
 import { createIndexOperationService } from "../modules/index/operation-service";
 import { ProjectSemanticRuntime } from "../modules/query/project-semantic-runtime";
-import { ProjectOperationJournal } from "../modules/query/project-operation-journal";
+import { SemanticOperationJournal } from "../modules/query/project-operation-journal";
 import { isSameProcess } from "./process-identity";
 import { readRecord, removeRecord, writeRecord } from "./runtime-state";
 import { logEvent } from "./log";
@@ -98,7 +98,7 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
     createEmbeddingAdapter(embedding),
     createQueryEmbeddingAdapter(embedding),
     embedding,
-    new ProjectOperationJournal(directory),
+    new SemanticOperationJournal(directory),
   );
   const app = createBackendApp({
     backend,
@@ -108,7 +108,9 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
     semanticQueryService: semanticQuery,
     indexOperations,
     projectSemanticRuntime,
+    storeSemanticRuntime: projectSemanticRuntime,
     projectSemanticIndexRuntime: projectSemanticRuntime,
+    storeSemanticIndexRuntime: projectSemanticRuntime,
   });
   const signalHandler = () => {
     void backend.stop();

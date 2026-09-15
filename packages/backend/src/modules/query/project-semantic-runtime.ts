@@ -1,13 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import {
-  createProjectSemanticServices,
+  createContentAddressedSemanticServices,
+  indexCorpusDigest,
   InvalidProjectRootError,
   ProjectSemanticProgressService,
   projectSemanticArtifactId,
   projectSemanticIndexPaths,
   resolveProjectContext,
   withProjectArtifactLease,
+  type ContentAddressedCorpus,
   type EmbeddingPort,
   type EmbeddingProfile,
   type LocalStore,
@@ -19,74 +21,106 @@ import {
 import { EmbeddingError } from "../embedding/errors";
 import type { ModelPreparation, ModelStatus } from "../embedding/dto";
 import type { IndexOperation, IndexStatus } from "../index/model";
-import { ProjectOperationJournal, type ProjectOperationRecord } from "./project-operation-journal";
+import {
+  SemanticOperationJournal,
+  type SemanticOperationRecord,
+} from "./project-operation-journal";
 
 export interface ProjectSemanticRequest {
   readonly projectRoot: string;
   readonly cacheRoot: string;
 }
-
+export interface StoreSemanticRequest {
+  readonly cacheRoot: string;
+}
 export interface ProjectSemanticIndexingResult {
   readonly state: "indexing";
   readonly operationId: string;
   readonly indexedPracticeCount: number;
   readonly totalPracticeCount: number;
 }
-
+export interface ProjectSemanticPreparingResult {
+  readonly state: "preparing";
+  readonly preparationId: string;
+}
 export interface ProjectSemanticPartialResult extends SemanticQueryResult {
   readonly indexedPracticeCount: number;
   readonly totalPracticeCount: number;
   readonly operationId: string;
 }
-
 export type ProjectSemanticQueryResult =
   | SemanticQueryResult
   | ProjectSemanticPartialResult
-  | ProjectSemanticIndexingResult;
+  | ProjectSemanticIndexingResult
+  | ProjectSemanticPreparingResult;
 
 export interface ProjectSemanticRuntimePort {
   query(
     root: StorageRoot,
     request: ProjectSemanticRequest,
     query: QueryRequest,
-    policy: { readonly maxWaitMs: number; readonly minCoveragePercent: number },
+    policy: QueryPolicy,
   ): Promise<ProjectSemanticQueryResult>;
   waitForIdle(deadline?: number): Promise<void>;
 }
-
+export interface StoreSemanticRuntimePort {
+  queryStore(
+    root: StorageRoot,
+    request: StoreSemanticRequest,
+    query: QueryRequest,
+    policy: QueryPolicy,
+  ): Promise<ProjectSemanticQueryResult>;
+}
 export interface ProjectSemanticIndexRuntimePort {
   indexStatus(root: StorageRoot, request: ProjectSemanticRequest): Promise<IndexStatus>;
   buildIndex(root: StorageRoot, request: ProjectSemanticRequest): Promise<IndexOperation>;
   rebuildIndex(root: StorageRoot, request: ProjectSemanticRequest): Promise<IndexOperation>;
   indexOperation(operationId: string): Promise<IndexOperation | undefined>;
 }
-
-interface ProjectOperation {
-  readonly operationId: string;
-  readonly artifactId: string;
-  readonly projectSlotId: string;
-  readonly snapshot: Awaited<ReturnType<ProjectSemanticRuntime["snapshot"]>>;
-  readonly cacheRoot: string;
-  readonly task: Promise<void>;
+export interface StoreSemanticIndexRuntimePort {
+  indexStatusStore(root: StorageRoot, request: StoreSemanticRequest): Promise<IndexStatus>;
+  buildStoreIndex(root: StorageRoot, request: StoreSemanticRequest): Promise<IndexOperation>;
+  rebuildStoreIndex(root: StorageRoot, request: StoreSemanticRequest): Promise<IndexOperation>;
 }
-
 export interface ProjectSemanticModelPreparation {
   beginModelPreparation(): ModelPreparation;
   waitModelPreparation(preparationId: string): Promise<ModelStatus>;
 }
 
-/**
- * Backend-owned operation manager for content-addressed project artifacts.
- * Source locations live only in the closure of an accepted task. Its durable
- * progress file contains target digests and vectors, never a project path.
- */
+interface QueryPolicy {
+  readonly maxWaitMs: number;
+  readonly minCoveragePercent: number;
+}
+interface SemanticTarget {
+  readonly kind: "project" | "store";
+  readonly sourceId: string;
+  readonly targetSlotId: string;
+  readonly cacheScopeId: string;
+  readonly artifactId: string;
+  readonly corpus: ContentAddressedCorpus;
+  readonly cacheRoot: string;
+  readonly isCurrent: () => Promise<boolean>;
+}
+interface SemanticOperation {
+  readonly operationId: string;
+  readonly key: string;
+  readonly target: SemanticTarget;
+  readonly task: Promise<void>;
+}
+
+/** Shared persistent target queue for Store-only and ProjectContext corpora. */
 export class ProjectSemanticRuntime
-  implements ProjectSemanticRuntimePort, ProjectSemanticIndexRuntimePort
+  implements
+    ProjectSemanticRuntimePort,
+    StoreSemanticRuntimePort,
+    ProjectSemanticIndexRuntimePort,
+    StoreSemanticIndexRuntimePort
 {
-  private readonly operations = new Map<string, ProjectOperation>();
-  private readonly desiredArtifactBySlot = new Map<string, string>();
+  private readonly operations = new Map<string, SemanticOperation>();
+  private readonly starting = new Map<string, Promise<SemanticOperation>>();
+  private readonly desiredTargetBySlot = new Map<string, string>();
   private queue: Promise<void> = Promise.resolve();
-  private readonly recovered: Promise<readonly ProjectOperationRecord[]>;
+  private readonly recovered: Promise<readonly SemanticOperationRecord[]>;
 
   constructor(
     private readonly store: Pick<LocalStore, "readEffectivePracticeSnapshot">,
@@ -94,7 +128,7 @@ export class ProjectSemanticRuntime
     private readonly documentEmbedding: EmbeddingPort,
     private readonly queryEmbedding: EmbeddingPort,
     private readonly modelPreparation: ProjectSemanticModelPreparation,
-    private readonly journal?: ProjectOperationJournal,
+    private readonly journal?: SemanticOperationJournal,
   ) {
     this.recovered = journal?.recover() ?? Promise.resolve([]);
   }
@@ -107,82 +141,154 @@ export class ProjectSemanticRuntime
     }
     return hasher.digest("hex");
   }
-
-  private projectSlotId(snapshot: Awaited<ReturnType<ProjectSemanticRuntime["snapshot"]>>): string {
+  private cacheScopeId(cacheRoot: string): string {
+    return ProjectSemanticRuntime.hash(["semantic-cache-scope/v1", cacheRoot]);
+  }
+  private targetSlotId(
+    kind: SemanticTarget["kind"],
+    sourceId: string,
+    cacheScopeId: string,
+  ): string {
     return ProjectSemanticRuntime.hash([
-      "project-context-slot/v1",
-      snapshot.projectRootId,
+      "semantic-target-slot/v1",
+      kind,
+      sourceId,
       this.profile.profileId,
+      cacheScopeId,
     ]);
+  }
+  private operationKey(target: Pick<SemanticTarget, "cacheScopeId" | "artifactId">): string {
+    return `${target.cacheScopeId}:${target.artifactId}`;
   }
 
   private async record(
-    input: Omit<ProjectOperationRecord, "updatedAt">,
-  ): Promise<ProjectOperationRecord> {
-    const record: ProjectOperationRecord = Object.freeze({
-      ...input,
+    target: SemanticTarget,
+    operationId: string,
+    state: SemanticOperationRecord["state"],
+    input: {
+      readonly indexedPracticeCount: number;
+      readonly totalPracticeCount: number;
+      readonly attempts: number;
+      readonly createdAt: string;
+      readonly preparationId?: string;
+    },
+  ): Promise<SemanticOperationRecord> {
+    const record: SemanticOperationRecord = Object.freeze({
+      operationId,
+      targetKind: target.kind,
+      sourceId: target.sourceId,
+      targetSlotId: target.targetSlotId,
+      cacheScopeId: target.cacheScopeId,
+      artifactId: target.artifactId,
+      corpusDigest: target.corpus.indexCorpusDigest,
+      profileId: this.profile.profileId,
+      state,
+      ...(input.preparationId === undefined ? {} : { preparationId: input.preparationId }),
+      indexedPracticeCount: input.indexedPracticeCount,
+      totalPracticeCount: input.totalPracticeCount,
+      attempts: input.attempts,
+      createdAt: input.createdAt,
       updatedAt: new Date().toISOString(),
     });
     await this.journal?.upsert(record);
     return record;
   }
 
-  private async snapshot(root: StorageRoot, request: ProjectSemanticRequest) {
+  private async projectTarget(
+    root: StorageRoot,
+    request: ProjectSemanticRequest,
+  ): Promise<SemanticTarget> {
     const snapshot = await resolveProjectContext({
       store: this.store,
       storageRoot: root,
       projectRoot: request.projectRoot,
     });
     if (snapshot === undefined) throw new InvalidProjectRootError();
-    return snapshot;
+    const corpus: ContentAddressedCorpus = snapshot;
+    const cacheScopeId = this.cacheScopeId(request.cacheRoot);
+    return Object.freeze({
+      kind: "project",
+      sourceId: snapshot.projectRootId,
+      targetSlotId: this.targetSlotId("project", snapshot.projectRootId, cacheScopeId),
+      cacheScopeId,
+      artifactId: projectSemanticArtifactId(corpus, this.profile.profileId),
+      corpus,
+      cacheRoot: request.cacheRoot,
+      isCurrent: async () => {
+        const current = await resolveProjectContext({
+          store: this.store,
+          storageRoot: root,
+          projectRoot: request.projectRoot,
+        });
+        return (
+          current !== undefined &&
+          current.projectRootId === snapshot.projectRootId &&
+          current.indexCorpusDigest === corpus.indexCorpusDigest
+        );
+      },
+    });
   }
 
-  private async indexStatusForSnapshot(
-    snapshot: Awaited<ReturnType<ProjectSemanticRuntime["snapshot"]>>,
-    cacheRoot: string,
-  ): Promise<IndexStatus> {
-    const progress = new ProjectSemanticProgressService(
-      snapshot,
-      cacheRoot,
+  private async storeTarget(
+    root: StorageRoot,
+    request: StoreSemanticRequest,
+  ): Promise<SemanticTarget> {
+    const snapshot = await this.store.readEffectivePracticeSnapshot(root);
+    const corpus: ContentAddressedCorpus = Object.freeze({
+      practices: snapshot.practices,
+      indexCorpusDigest: indexCorpusDigest(snapshot.practices),
+    });
+    const cacheScopeId = this.cacheScopeId(request.cacheRoot);
+    const sourceId = ProjectSemanticRuntime.hash(["semantic-store-source/v1", root.rootPath]);
+    return Object.freeze({
+      kind: "store",
+      sourceId,
+      targetSlotId: this.targetSlotId("store", sourceId, cacheScopeId),
+      cacheScopeId,
+      artifactId: projectSemanticArtifactId(corpus, this.profile.profileId),
+      corpus,
+      cacheRoot: request.cacheRoot,
+      isCurrent: async () =>
+        indexCorpusDigest((await this.store.readEffectivePracticeSnapshot(root)).practices) ===
+        corpus.indexCorpusDigest,
+    });
+  }
+
+  private progress(target: SemanticTarget): ProjectSemanticProgressService {
+    return new ProjectSemanticProgressService(
+      target.corpus,
+      target.cacheRoot,
       this.profile,
       this.documentEmbedding,
     );
-    const status = await progress.status();
-    const artifactId = projectSemanticArtifactId(snapshot, this.profile.profileId);
-    const liveOperation = this.operations.get(artifactId);
-    const recordedOperation = await this.journal?.findByArtifact(artifactId);
-    if (status.state === "indexing" || status.state === "missing") {
-      if (
-        liveOperation !== undefined ||
-        (recordedOperation !== undefined &&
-          (recordedOperation.state === "waiting-for-source" ||
-            recordedOperation.state === "queued" ||
-            recordedOperation.state === "preparing" ||
-            recordedOperation.state === "building"))
-      ) {
-        const operationId = liveOperation?.operationId ?? recordedOperation!.operationId;
-        return Object.freeze({
-          state: "indexing",
-          profileId: this.profile.profileId,
-          operationId,
-          indexedPracticeCount:
-            status.state === "indexing"
-              ? status.indexedPracticeCount
-              : (recordedOperation?.indexedPracticeCount ?? 0),
-          totalPracticeCount:
-            status.state === "indexing"
-              ? status.totalPracticeCount
-              : (recordedOperation?.totalPracticeCount ?? snapshot.practices.length),
-        });
-      }
-      if (status.state === "missing") {
-        return Object.freeze({ state: "missing", profileId: this.profile.profileId });
-      }
-      // An untracked progress file can only arise from interrupted derived
-      // state. It is not ready, but reporting it as stale keeps index status
-      // truthful without inventing an operation handle that cannot be observed.
-      return Object.freeze({ state: "stale", profileId: this.profile.profileId });
+  }
+
+  private async indexStatusForTarget(target: SemanticTarget): Promise<IndexStatus> {
+    const status = await this.progress(target).status();
+    const live = this.operations.get(this.operationKey(target));
+    const recorded = await this.journal?.findByTarget(target.artifactId, target.cacheScopeId);
+    const operationId =
+      live?.operationId ??
+      (recorded !== undefined && isPending(recorded.state) ? recorded.operationId : undefined);
+    if ((status.state === "indexing" || status.state === "missing") && operationId !== undefined) {
+      return Object.freeze({
+        state: "indexing",
+        profileId: this.profile.profileId,
+        operationId,
+        indexedPracticeCount:
+          status.state === "indexing"
+            ? status.indexedPracticeCount
+            : (recorded?.indexedPracticeCount ?? 0),
+        totalPracticeCount:
+          status.state === "indexing"
+            ? status.totalPracticeCount
+            : (recorded?.totalPracticeCount ?? target.corpus.practices.length),
+      });
     }
+    if (status.state === "missing")
+      return Object.freeze({ state: "missing", profileId: this.profile.profileId });
+    if (status.state === "indexing")
+      return Object.freeze({ state: "stale", profileId: this.profile.profileId });
     return Object.freeze({
       state: status.state,
       profileId: this.profile.profileId,
@@ -190,65 +296,63 @@ export class ProjectSemanticRuntime
     });
   }
 
-  private async start(
-    snapshot: Awaited<ReturnType<ProjectSemanticRuntime["snapshot"]>>,
-    cacheRoot: string,
-  ): Promise<ProjectOperation> {
-    const artifactId = projectSemanticArtifactId(snapshot, this.profile.profileId);
-    const existing = this.operations.get(artifactId);
-    if (existing !== undefined) return existing;
+  private async start(target: SemanticTarget, force = false): Promise<SemanticOperation> {
+    const key = this.operationKey(target);
+    this.desiredTargetBySlot.set(target.targetSlotId, key);
+    const live = this.operations.get(key);
+    if (live !== undefined) return live;
+    const pending = this.starting.get(key);
+    if (pending !== undefined) return pending;
+    const work = this.startNew(target, force, key);
+    this.starting.set(key, work);
+    try {
+      return await work;
+    } finally {
+      if (this.starting.get(key) === work) this.starting.delete(key);
+    }
+  }
+
+  private async startNew(
+    target: SemanticTarget,
+    force: boolean,
+    key: string,
+  ): Promise<SemanticOperation> {
     await this.recovered;
-    const projectSlotId = this.projectSlotId(snapshot);
-    this.desiredArtifactBySlot.set(projectSlotId, artifactId);
-    const previous = await this.journal?.latestForSlot(projectSlotId);
-    const recovered = await this.journal?.findByArtifact(artifactId);
-    const operationId = recovered?.operationId ?? randomUUID();
-    const createdAt = recovered?.createdAt ?? new Date().toISOString();
-    const attempts = recovered?.attempts ?? 0;
+    const active = this.operations.get(key);
+    if (active !== undefined) return active;
+    const previous = await this.journal?.latestForSlot(target.targetSlotId);
+    const recovered = await this.journal?.findByTarget(target.artifactId, target.cacheScopeId);
+    const reuse = force !== true && recovered !== undefined && isPending(recovered.state);
+    const operationId = reuse ? recovered.operationId : randomUUID();
+    const createdAt = reuse ? recovered.createdAt : new Date().toISOString();
+    const attempts = reuse ? recovered.attempts : 0;
     if (
       previous !== undefined &&
-      previous.artifactId !== artifactId &&
-      (previous.state === "queued" ||
-        previous.state === "preparing" ||
-        previous.state === "building" ||
-        previous.state === "waiting-for-source")
+      previous.operationId !== operationId &&
+      isPending(previous.state)
     ) {
-      await this.record({
-        ...previous,
-        state: "superseded",
-      });
+      await this.journal?.upsert(
+        Object.freeze({ ...previous, state: "superseded", updatedAt: new Date().toISOString() }),
+      );
     }
-    await this.record({
-      operationId,
-      projectRootId: snapshot.projectRootId,
-      projectSlotId,
-      artifactId,
-      corpusDigest: snapshot.indexCorpusDigest,
-      profileId: this.profile.profileId,
-      state: "queued",
+    await this.record(target, operationId, "queued", {
       indexedPracticeCount: recovered?.indexedPracticeCount ?? 0,
-      totalPracticeCount: snapshot.practices.length,
+      totalPracticeCount: target.corpus.practices.length,
       attempts,
       createdAt,
     });
-    const desired = () => this.desiredArtifactBySlot.get(projectSlotId) === artifactId;
+    const desired = () => this.desiredTargetBySlot.get(target.targetSlotId) === key;
+    const progress = this.progress(target);
     const run = async (): Promise<"ready" | "superseded"> => {
       if (!desired()) return "superseded";
-      const progress = new ProjectSemanticProgressService(
-        snapshot,
-        cacheRoot,
+      const tracked = new ProjectSemanticProgressService(
+        target.corpus,
+        target.cacheRoot,
         this.profile,
         this.documentEmbedding,
         desired,
         async (status) => {
-          await this.record({
-            operationId,
-            projectRootId: snapshot.projectRootId,
-            projectSlotId,
-            artifactId,
-            corpusDigest: snapshot.indexCorpusDigest,
-            profileId: this.profile.profileId,
-            state: "building",
+          await this.record(target, operationId, "building", {
             indexedPracticeCount: status.indexedPracticeCount,
             totalPracticeCount: status.totalPracticeCount,
             attempts: attempts + 1,
@@ -256,168 +360,104 @@ export class ProjectSemanticRuntime
           });
         },
       );
+      const build = () => tracked.build({ force });
       try {
-        await this.record({
-          operationId,
-          projectRootId: snapshot.projectRootId,
-          projectSlotId,
-          artifactId,
-          corpusDigest: snapshot.indexCorpusDigest,
-          profileId: this.profile.profileId,
-          state: "building",
-          indexedPracticeCount: (await progress.status()).indexedPracticeCount,
-          totalPracticeCount: snapshot.practices.length,
+        await this.record(target, operationId, "building", {
+          indexedPracticeCount: (await tracked.status()).indexedPracticeCount,
+          totalPracticeCount: target.corpus.practices.length,
           attempts: attempts + 1,
           createdAt,
         });
-        const result = await progress.build();
-        if (!desired() || result.state !== "ready") return "superseded";
+        const result = await build();
+        return !desired() || result.state !== "ready" ? "superseded" : "ready";
       } catch (error) {
         if (!(error instanceof EmbeddingError) || error.code !== "embedding.not-loaded")
           throw error;
         const preparation = this.modelPreparation.beginModelPreparation();
-        await this.record({
-          operationId,
-          projectRootId: snapshot.projectRootId,
-          projectSlotId,
-          artifactId,
-          corpusDigest: snapshot.indexCorpusDigest,
-          profileId: this.profile.profileId,
-          state: "preparing",
+        await this.record(target, operationId, "preparing", {
           preparationId: preparation.preparationId,
-          indexedPracticeCount: (await progress.status()).indexedPracticeCount,
-          totalPracticeCount: snapshot.practices.length,
+          indexedPracticeCount: (await tracked.status()).indexedPracticeCount,
+          totalPracticeCount: target.corpus.practices.length,
           attempts: attempts + 1,
           createdAt,
         });
         await this.modelPreparation.waitModelPreparation(preparation.preparationId);
-        const result = await progress.build();
-        if (!desired() || result.state !== "ready") return "superseded";
+        const result = await build();
+        return !desired() || result.state !== "ready" ? "superseded" : "ready";
       }
-      return "ready";
     };
-    // Serialize distinct document targets because the fixed embedding runtime has one native slot.
     const task = this.queue
       .catch(() => undefined)
       .then(run)
       .then(async (outcome) => {
-        const status = await new ProjectSemanticProgressService(
-          snapshot,
-          cacheRoot,
-          this.profile,
-          this.documentEmbedding,
-        ).status();
-        await this.record({
-          operationId,
-          projectRootId: snapshot.projectRootId,
-          projectSlotId,
-          artifactId,
-          corpusDigest: snapshot.indexCorpusDigest,
-          profileId: this.profile.profileId,
-          state: outcome === "ready" ? "ready" : "superseded",
+        const status = await progress.status();
+        await this.record(target, operationId, outcome === "ready" ? "ready" : "superseded", {
           indexedPracticeCount: status.indexedPracticeCount,
-          totalPracticeCount: snapshot.practices.length,
+          totalPracticeCount: target.corpus.practices.length,
           attempts: attempts + 1,
           createdAt,
         });
       })
       .catch(async (error: unknown) => {
-        const status = await new ProjectSemanticProgressService(
-          snapshot,
-          cacheRoot,
-          this.profile,
-          this.documentEmbedding,
-        )
-          .status()
-          .catch(() => ({ indexedPracticeCount: 0 }));
-        await this.record({
-          operationId,
-          projectRootId: snapshot.projectRootId,
-          projectSlotId,
-          artifactId,
-          corpusDigest: snapshot.indexCorpusDigest,
-          profileId: this.profile.profileId,
-          state: "failed",
+        const status = await progress.status().catch(() => ({ indexedPracticeCount: 0 }));
+        await this.record(target, operationId, "failed", {
           indexedPracticeCount: status.indexedPracticeCount,
-          totalPracticeCount: snapshot.practices.length,
+          totalPracticeCount: target.corpus.practices.length,
           attempts: attempts + 1,
           createdAt,
         });
         throw error;
       });
     this.queue = task.catch(() => undefined);
-    const operation = Object.freeze({
-      operationId,
-      artifactId,
-      projectSlotId,
-      snapshot,
-      cacheRoot,
-      task,
-    });
-    this.operations.set(artifactId, operation);
+    const operation = Object.freeze({ operationId, key, target, task });
+    this.operations.set(key, operation);
     void task.finally(() => {
-      // Ready artifacts are discoverable by digest; retaining the operation only while it runs
-      // prevents stale daemon state from becoming a durable source of truth.
-      if (this.operations.get(artifactId) === operation) this.operations.delete(artifactId);
-      if (this.desiredArtifactBySlot.get(projectSlotId) === artifactId) {
-        this.desiredArtifactBySlot.delete(projectSlotId);
-      }
+      if (this.operations.get(key) === operation) this.operations.delete(key);
+      if (this.desiredTargetBySlot.get(target.targetSlotId) === key)
+        this.desiredTargetBySlot.delete(target.targetSlotId);
     });
     return operation;
   }
 
-  async query(
-    root: StorageRoot,
-    request: ProjectSemanticRequest,
+  private async queryTarget(
+    target: SemanticTarget,
     query: QueryRequest,
-    policy: { readonly maxWaitMs: number; readonly minCoveragePercent: number },
+    policy: QueryPolicy,
   ): Promise<ProjectSemanticQueryResult> {
-    const snapshot = await this.snapshot(root, request);
-    const progress = new ProjectSemanticProgressService(
-      snapshot,
-      request.cacheRoot,
-      this.profile,
-      this.documentEmbedding,
-    );
-    const status = await progress.status();
-    if (status.state === "ready") {
-      const paths = projectSemanticIndexPaths(request.cacheRoot, snapshot, this.profile.profileId);
+    const progress = this.progress(target);
+    const complete = async (): Promise<SemanticQueryResult> => {
+      const paths = projectSemanticIndexPaths(
+        target.cacheRoot,
+        target.corpus,
+        this.profile.profileId,
+      );
       return withProjectArtifactLease(paths.directory, async () => {
-        const services = createProjectSemanticServices(
-          snapshot,
-          request.cacheRoot,
+        const services = createContentAddressedSemanticServices(
+          target.corpus,
+          target.cacheRoot,
           this.profile,
           this.queryEmbedding,
         );
         return services.query.query(services.root, query);
       });
-    }
-    const operation = await this.start(snapshot, request.cacheRoot);
+    };
+    if ((await progress.status()).state === "ready") return complete();
+    const operation = await this.start(target);
     if (policy.maxWaitMs > 0) {
       await Promise.race([operation.task.catch(() => undefined), Bun.sleep(policy.maxWaitMs)]);
-      const afterWait = await progress.status();
-      if (afterWait.state === "ready") {
-        const paths = projectSemanticIndexPaths(
-          request.cacheRoot,
-          snapshot,
-          this.profile.profileId,
-        );
-        return withProjectArtifactLease(paths.directory, async () => {
-          const services = createProjectSemanticServices(
-            snapshot,
-            request.cacheRoot,
-            this.profile,
-            this.queryEmbedding,
-          );
-          return services.query.query(services.root, query);
-        });
+      if ((await progress.status()).state === "ready") return complete();
+    }
+    let partial: Awaited<ReturnType<ProjectSemanticProgressService["queryPartial"]>>;
+    try {
+      partial = await progress.queryPartial(query);
+    } catch (error) {
+      if (!(error instanceof EmbeddingError) || error.code !== "embedding.not-loaded") {
+        // Publication may atomically replace progress.sqlite after the status
+        // check and before opening its reader. Recover by observing ready state.
+        if ((await progress.status()).state === "ready") return complete();
+        throw error;
       }
     }
-    const partial = await progress.queryPartial(query).catch((error: unknown) => {
-      if (error instanceof EmbeddingError && error.code === "embedding.not-loaded")
-        return undefined;
-      throw error;
-    });
     if (
       partial !== undefined &&
       partial.indexedPracticeCount * 100 >= partial.totalPracticeCount * policy.minCoveragePercent
@@ -429,50 +469,86 @@ export class ProjectSemanticRuntime
         operationId: operation.operationId,
       });
     }
-    const current = await progress.status();
+    const observed = await this.indexOperation(operation.operationId);
+    if (observed?.state === "preparing")
+      return Object.freeze({ state: "preparing", preparationId: observed.preparationId });
+    const status = await progress.status();
     return Object.freeze({
       state: "indexing",
       operationId: operation.operationId,
-      indexedPracticeCount: current.indexedPracticeCount,
-      totalPracticeCount: current.totalPracticeCount,
+      indexedPracticeCount: status.indexedPracticeCount,
+      totalPracticeCount: status.totalPracticeCount,
     });
   }
 
-  async indexStatus(root: StorageRoot, request: ProjectSemanticRequest): Promise<IndexStatus> {
-    return this.indexStatusForSnapshot(await this.snapshot(root, request), request.cacheRoot);
+  private async queryCurrent(
+    resolve: () => Promise<SemanticTarget>,
+    query: QueryRequest,
+    policy: QueryPolicy,
+    attempts = 0,
+  ): Promise<ProjectSemanticQueryResult> {
+    const target = await resolve();
+    const result = await this.queryTarget(target, query, policy);
+    if (await target.isCurrent()) return result;
+    if (attempts === 0) return this.queryCurrent(resolve, query, policy, 1);
+    const latest = await resolve();
+    const operation = await this.start(latest);
+    const status = await this.progress(latest).status();
+    return Object.freeze({
+      state: "indexing",
+      operationId: operation.operationId,
+      indexedPracticeCount: status.indexedPracticeCount,
+      totalPracticeCount: status.totalPracticeCount,
+    });
   }
 
-  async buildIndex(root: StorageRoot, request: ProjectSemanticRequest): Promise<IndexOperation> {
-    const snapshot = await this.snapshot(root, request);
-    const status = await this.indexStatusForSnapshot(snapshot, request.cacheRoot);
-    if (status.state === "ready") {
+  async query(
+    root: StorageRoot,
+    request: ProjectSemanticRequest,
+    query: QueryRequest,
+    policy: QueryPolicy,
+  ): Promise<ProjectSemanticQueryResult> {
+    return this.queryCurrent(() => this.projectTarget(root, request), query, policy);
+  }
+  async queryStore(
+    root: StorageRoot,
+    request: StoreSemanticRequest,
+    query: QueryRequest,
+    policy: QueryPolicy,
+  ): Promise<ProjectSemanticQueryResult> {
+    return this.queryCurrent(() => this.storeTarget(root, request), query, policy);
+  }
+
+  private async buildTarget(target: SemanticTarget, force: boolean): Promise<IndexOperation> {
+    const status = await this.indexStatusForTarget(target);
+    if (!force && status.state === "ready")
       return Object.freeze({ operationId: randomUUID(), state: "ready", index: status });
-    }
-    const operation = await this.start(snapshot, request.cacheRoot);
-    const current = await this.journal?.findById(operation.operationId);
+    const operation = await this.start(target, force);
+    const record = await this.journal?.findById(operation.operationId);
     return this.toIndexOperation(
-      current ?? {
-        operationId: operation.operationId,
-        projectRootId: snapshot.projectRootId,
-        projectSlotId: operation.projectSlotId,
-        artifactId: operation.artifactId,
-        corpusDigest: snapshot.indexCorpusDigest,
-        profileId: this.profile.profileId,
-        state: "queued",
-        indexedPracticeCount: 0,
-        totalPracticeCount: snapshot.practices.length,
-        attempts: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
+      record ?? this.fallbackRecord(operation, "queued", 0, target.corpus.practices.length),
     );
   }
-
+  async indexStatus(root: StorageRoot, request: ProjectSemanticRequest): Promise<IndexStatus> {
+    return this.indexStatusForTarget(await this.projectTarget(root, request));
+  }
+  async indexStatusStore(root: StorageRoot, request: StoreSemanticRequest): Promise<IndexStatus> {
+    return this.indexStatusForTarget(await this.storeTarget(root, request));
+  }
+  async buildIndex(root: StorageRoot, request: ProjectSemanticRequest): Promise<IndexOperation> {
+    return this.buildTarget(await this.projectTarget(root, request), false);
+  }
   async rebuildIndex(root: StorageRoot, request: ProjectSemanticRequest): Promise<IndexOperation> {
-    // A ProjectContext artifact is content-addressed. Rebuilding the current
-    // target means revalidating/recovering that exact artifact; it never mutates
-    // a previous corpus or creates a path-bound replacement index.
-    return this.buildIndex(root, request);
+    return this.buildTarget(await this.projectTarget(root, request), true);
+  }
+  async buildStoreIndex(root: StorageRoot, request: StoreSemanticRequest): Promise<IndexOperation> {
+    return this.buildTarget(await this.storeTarget(root, request), false);
+  }
+  async rebuildStoreIndex(
+    root: StorageRoot,
+    request: StoreSemanticRequest,
+  ): Promise<IndexOperation> {
+    return this.buildTarget(await this.storeTarget(root, request), true);
   }
 
   async indexOperation(operationId: string): Promise<IndexOperation | undefined> {
@@ -480,70 +556,76 @@ export class ProjectSemanticRuntime
       (operation) => operation.operationId === operationId,
     );
     if (live !== undefined) {
-      const status = await new ProjectSemanticProgressService(
-        live.snapshot,
-        live.cacheRoot,
-        this.profile,
-        this.documentEmbedding,
-      ).status();
+      const status = await this.progress(live.target).status();
       const record = await this.journal?.findById(operationId);
       return this.toIndexOperation(
-        record ?? {
-          operationId,
-          projectRootId: live.snapshot.projectRootId,
-          projectSlotId: live.projectSlotId,
-          artifactId: live.artifactId,
-          corpusDigest: live.snapshot.indexCorpusDigest,
-          profileId: this.profile.profileId,
-          state: "building",
-          indexedPracticeCount: status.indexedPracticeCount,
-          totalPracticeCount: status.totalPracticeCount,
-          attempts: 0,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
+        record ??
+          this.fallbackRecord(
+            live,
+            "building",
+            status.indexedPracticeCount,
+            status.totalPracticeCount,
+          ),
         status,
       );
     }
     const record = await this.journal?.findById(operationId);
-    if (record === undefined) return undefined;
-    return this.toIndexOperation(record);
+    return record === undefined ? undefined : this.toIndexOperation(record);
   }
-
+  private fallbackRecord(
+    operation: SemanticOperation,
+    state: SemanticOperationRecord["state"],
+    indexedPracticeCount: number,
+    totalPracticeCount: number,
+  ): SemanticOperationRecord {
+    const now = new Date().toISOString();
+    return Object.freeze({
+      operationId: operation.operationId,
+      targetKind: operation.target.kind,
+      sourceId: operation.target.sourceId,
+      targetSlotId: operation.target.targetSlotId,
+      cacheScopeId: operation.target.cacheScopeId,
+      artifactId: operation.target.artifactId,
+      corpusDigest: operation.target.corpus.indexCorpusDigest,
+      profileId: this.profile.profileId,
+      state,
+      indexedPracticeCount,
+      totalPracticeCount,
+      attempts: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
   private toIndexOperation(
-    record: ProjectOperationRecord,
+    record: SemanticOperationRecord,
     observed?: Awaited<ReturnType<ProjectSemanticProgressService["status"]>>,
   ): IndexOperation {
     const indexedPracticeCount = observed?.indexedPracticeCount ?? record.indexedPracticeCount;
     const totalPracticeCount = observed?.totalPracticeCount ?? record.totalPracticeCount;
-    if (record.state === "ready") {
-      const index: IndexStatus = {
-        state: "ready",
-        profileId: record.profileId,
-        vectorCount: indexedPracticeCount,
-      };
+    if (record.state === "ready")
       return Object.freeze({
         operationId: record.operationId,
         state: "ready",
-        index,
+        index: {
+          state: "ready" as const,
+          profileId: record.profileId,
+          vectorCount: indexedPracticeCount,
+        },
       });
-    }
-    if (record.state === "failed") {
+    if (record.state === "failed")
       return Object.freeze({
         operationId: record.operationId,
         state: "failed",
         error: "backend.failed",
       });
-    }
-    if (record.state === "waiting-for-source" || record.state === "queued") {
+    if (record.state === "waiting-for-source" || record.state === "queued")
       return Object.freeze({
         operationId: record.operationId,
         state: record.state,
         indexedPracticeCount,
         totalPracticeCount,
       });
-    }
-    if (record.state === "preparing" && record.preparationId !== undefined) {
+    if (record.state === "preparing" && record.preparationId !== undefined)
       return Object.freeze({
         operationId: record.operationId,
         state: "preparing",
@@ -551,7 +633,6 @@ export class ProjectSemanticRuntime
         indexedPracticeCount,
         totalPracticeCount,
       });
-    }
     return Object.freeze({
       operationId: record.operationId,
       state: "building",
@@ -559,12 +640,19 @@ export class ProjectSemanticRuntime
       totalPracticeCount,
     });
   }
-
   async waitForIdle(deadline?: number): Promise<void> {
     const task = this.queue;
     if (deadline === undefined) return task;
     const remaining = deadline - Date.now();
-    if (remaining <= 0) return;
-    await Promise.race([task, Bun.sleep(remaining)]);
+    if (remaining > 0) await Promise.race([task, Bun.sleep(remaining)]);
   }
+}
+
+function isPending(state: SemanticOperationRecord["state"]): boolean {
+  return (
+    state === "waiting-for-source" ||
+    state === "queued" ||
+    state === "preparing" ||
+    state === "building"
+  );
 }

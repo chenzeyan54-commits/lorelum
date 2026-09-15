@@ -37,7 +37,11 @@ import {
   type ProjectContextResolver,
 } from "../project-context/service.js";
 import { queryResultSchema } from "./result-schema.js";
-import type { QueryPreparingResult, SemanticRuntimeClient } from "./runtime-client.js";
+import type {
+  QueryPreparingResult,
+  SemanticRuntimeClient,
+  SemanticRuntimeResult,
+} from "./runtime-client.js";
 import { DEFAULT_QUERY_SETTINGS, type QuerySettings } from "./settings.js";
 
 interface QueryIndexingResult {
@@ -97,7 +101,7 @@ function parseIntegerOption(value: unknown, min: number, max: number): number | 
 }
 
 function toQueryResult(
-  result: QueryResult | SemanticQueryResult | QueryPreparingResult | QueryIndexingResult,
+  result: QueryResult | SemanticQueryResult | SemanticRuntimeResult | QueryIndexingResult,
   project?: ProjectContextSnapshot,
 ): JsonValue {
   const context = project === undefined ? {} : { context: projectContextData(project) };
@@ -105,7 +109,9 @@ function toQueryResult(
     return {
       state: result.state,
       preparationId: result.preparationId,
-      message: result.message,
+      message:
+        ("message" in result ? result.message : undefined) ??
+        "The local model is preparing in the background. Check lore model status, then retry this query.",
       ...context,
     };
   }
@@ -303,7 +309,7 @@ export function createQueryCommand(services: QueryCommandServices): CommandDefin
                 maxWaitMs,
                 minCoveragePercent,
                 ...(project === undefined
-                  ? {}
+                  ? { cacheRoot: projectOptions.cacheRoot }
                   : {
                       projectContext: {
                         projectRoot: project.projectRootPath,
