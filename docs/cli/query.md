@@ -2,7 +2,7 @@
 
 当前可观察合同见 [retrieval query OpenSpec](../../openspec/specs/retrieval-query/spec.md)；本页说明 CLI 参数、JSON 输出与恢复操作。
 
-`lore query <text>` searches the installed Practices in the selected LocalStore and returns a small summary for each match. It defaults to local semantic retrieval; `--mode keyword` retains the offline FTS5 path.
+`lore query <text>` 在当前 query context 中检索 Practice 并返回小型 summary。默认使用本地 semantic retrieval；`--mode keyword` 保留离线 FTS5 路径。当前目录或父目录存在 `.lorelum/` 时，query context 会按父到子合并 ProjectContext；没有 marker 或传入 `--no-project` 时才是纯 LocalStore。
 
 ```sh
 # Semantic is the default. A normal query starts the Backend and automatically prepares the fixed local model when needed.
@@ -13,10 +13,15 @@ lore query "database migration rollback" --top-k 10
 lore query "database migration rollback" --mode keyword
 
 lore --store-root /path/to/isolated-store query "request validation"
+lore query "request validation" --project-root /path/to/project
+lore query "request validation" --no-project
+lore query "request validation" --cache-root /path/to/user-cache
 lore describe query
 ```
 
-The positional text is trimmed before validation. It must contain at least one non-whitespace character and may contain at most 4,096 Unicode code points after trimming. `--top-k` is optional, defaults to `5`, and accepts a decimal positive integer from `1` through `50`. `--mode` accepts `semantic` (the default) or `keyword`. The global `--store-root` option follows the same resolution rules as `get`.
+The positional text is trimmed before validation. It must contain at least one non-whitespace character and may contain at most 4,096 Unicode code points after trimming. `--top-k` is optional, defaults to `5`, and accepts a decimal positive integer from `1` through `50`. `--mode` accepts `semantic` (the default) or `keyword`. `--project-root` selects an ordinary directory directly containing `.lorelum/`; it does not require Git. `--no-project` disables layer discovery. `--cache-root` selects only user-owned derived artifacts, never source Pack files or LocalStore.
+
+Parent and child `.lorelum/` layers inherit by default. A child config adds or overrides declared fields and same-ID Practices, while unaffected parent/Store Practices stay in the candidate set. A malformed local Practice is ignored without hiding valid neighbors or a lower-priority fallback; query returns the remaining current winners and `lore context status` exposes the degraded context.
 
 ## Semantic mode
 
@@ -46,7 +51,7 @@ The successful result includes the Profile identity and how completely the activ
 
 ## Keyword mode
 
-`--mode keyword` runs directly in Engine, does not need a Backend or model, and does not access the network. It maintains its own derived FTS5 index at `indexes/keyword/v<index-version>/active.sqlite`. The index is separate from `store.sqlite`; canonical Practice rows remain the source of returned summaries. A missing, corrupt, incompatible, or history-gap keyword index is rebuilt from a consistent Store snapshot.
+`--mode keyword` runs directly in Engine, does not need a Backend or model, and does not access the network. For a ProjectContext it maintains a content-addressed FTS5 artifact under the user cache, not under `.lorelum/`; for Store-only it retains the Store-derived index path. In both cases canonical Practice rows/files remain the source of returned summaries. A missing or corrupt artifact is rebuilt from a consistent current snapshot.
 
 ## Shared result behavior
 

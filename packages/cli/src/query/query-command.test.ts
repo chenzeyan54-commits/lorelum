@@ -142,7 +142,13 @@ test("uses semantic Backend query by default and preserves semantic metadata", a
   expect(calls).toBe(1);
   expect(received).toEqual({
     root: "unused-default",
-    request: { text: "How do I verify a release?", limit: 7, mode: "semantic" },
+    request: {
+      text: "How do I verify a release?",
+      limit: 7,
+      mode: "semantic",
+      maxWaitMs: 3_000,
+      minCoveragePercent: 0,
+    },
   });
   expect(result.response.data).toEqual(semantic);
   expect(validateJsonSchema(result.response.data, result.definition.resultSchema)).toEqual([]);

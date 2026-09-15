@@ -62,6 +62,8 @@ export interface SemanticIndexDependencies {
   >;
   readonly profile: EmbeddingProfile;
   readonly embedding: EmbeddingPort;
+  /** Store-local by default; ProjectContext supplies a content-addressed artifact location. */
+  readonly paths?: (root: StorageRoot, profileId: string) => SemanticIndexPaths;
 }
 
 async function activeMetadata(path: string): Promise<SemanticIndexMetadata | undefined> {
@@ -115,13 +117,14 @@ export function createSemanticIndexService(
   dependencies: SemanticIndexDependencies,
 ): SemanticIndexService {
   const { store, profile, embedding } = dependencies;
+  const pathsFor =
+    dependencies.paths ??
+    ((root: StorageRoot, profileId: string) => semanticIndexPaths(root.rootPath, profileId));
 
   const status = async (root: StorageRoot): Promise<SemanticIndexStatus> => {
     const identity = await store.readSnapshotIdentity(root);
     try {
-      const metadata = await activeMetadata(
-        semanticIndexPaths(root.rootPath, profile.profileId).active,
-      );
+      const metadata = await activeMetadata(pathsFor(root, profile.profileId).active);
       if (metadata === undefined) return statusFor("missing", profile);
       return statusFor(stateForMetadata(metadata, identity, profile), profile, metadata);
     } catch (error) {
@@ -265,7 +268,7 @@ export function createSemanticIndexService(
   };
 
   const build = async (root: StorageRoot, force: boolean): Promise<SemanticIndexBuildResult> => {
-    const indexPaths = semanticIndexPaths(root.rootPath, profile.profileId);
+    const indexPaths = pathsFor(root, profile.profileId);
     await mkdir(indexPaths.writer, { recursive: true });
     const lock = await acquireMutationLock(indexPaths.writer);
     try {

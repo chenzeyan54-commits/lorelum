@@ -38,9 +38,19 @@ const INDEX_WRITER_DIRECTORY = "writer";
 
 type KeywordIndexConnection = SqliteConnection<typeof keywordIndexDatabaseDefinition.schema>;
 
-function paths(rootPath: string): { readonly directory: string; readonly active: string } {
+export interface PersistentKeywordIndexPaths {
+  readonly directory: string;
+  readonly active: string;
+  readonly writer: string;
+}
+
+export function persistentKeywordIndexPaths(rootPath: string): PersistentKeywordIndexPaths {
   const directory = join(rootPath, "indexes", "keyword", `v${KEYWORD_INDEX_VERSION}`);
-  return Object.freeze({ directory, active: join(directory, INDEX_FILE_NAME) });
+  return Object.freeze({
+    directory,
+    active: join(directory, INDEX_FILE_NAME),
+    writer: join(directory, INDEX_WRITER_DIRECTORY),
+  });
 }
 
 /** Serialize index publication and delta writes without blocking Store mutations. */
@@ -48,10 +58,16 @@ export async function withPersistentKeywordIndexWriter<T>(
   rootPath: string,
   work: () => Promise<T>,
 ): Promise<T> {
-  const { directory } = paths(rootPath);
-  const writerRoot = join(directory, INDEX_WRITER_DIRECTORY);
-  await mkdir(writerRoot, { recursive: true });
-  const lock = await acquireMutationLock(writerRoot);
+  return withPersistentKeywordIndexWriterAt(persistentKeywordIndexPaths(rootPath), work);
+}
+
+/** Same writer semantics at a caller-owned derived artifact location. */
+export async function withPersistentKeywordIndexWriterAt<T>(
+  paths: PersistentKeywordIndexPaths,
+  work: () => Promise<T>,
+): Promise<T> {
+  await mkdir(paths.writer, { recursive: true });
+  const lock = await acquireMutationLock(paths.writer);
   try {
     return await work();
   } finally {
@@ -176,7 +192,14 @@ function wrap(
 export async function openPersistentKeywordIndex(
   rootPath: string,
 ): Promise<PersistentKeywordIndex | undefined> {
-  const { active } = paths(rootPath);
+  return openPersistentKeywordIndexAt(persistentKeywordIndexPaths(rootPath));
+}
+
+/** Open a complete keyword artifact without assuming it belongs to a Store root. */
+export async function openPersistentKeywordIndexAt(
+  paths: PersistentKeywordIndexPaths,
+): Promise<PersistentKeywordIndex | undefined> {
+  const { active } = paths;
   try {
     await access(active);
   } catch {
@@ -205,7 +228,20 @@ export async function createPersistentKeywordIndex(
   checkpoint: KeywordIndexCheckpoint,
   documents: readonly KeywordDocument[],
 ): Promise<PersistentKeywordIndex> {
-  const { directory, active } = paths(rootPath);
+  return createPersistentKeywordIndexAt(
+    persistentKeywordIndexPaths(rootPath),
+    checkpoint,
+    documents,
+  );
+}
+
+/** Build and publish one caller-owned complete keyword artifact atomically. */
+export async function createPersistentKeywordIndexAt(
+  paths: PersistentKeywordIndexPaths,
+  checkpoint: KeywordIndexCheckpoint,
+  documents: readonly KeywordDocument[],
+): Promise<PersistentKeywordIndex> {
+  const { directory, active } = paths;
   await mkdir(directory, { recursive: true });
   const temporary = join(directory, `build-${randomUUID()}.sqlite`);
   let connection: KeywordIndexConnection | undefined;
@@ -223,7 +259,7 @@ export async function createPersistentKeywordIndex(
     stagingConnection.close();
     connection = undefined;
     await rename(temporary, active);
-    const opened = await openPersistentKeywordIndex(rootPath);
+    const opened = await openPersistentKeywordIndexAt(paths);
     if (opened === undefined || !checkpointEquals(opened.checkpoint, checkpoint)) {
       opened?.close();
       throw new KeywordIndexError("Published keyword index did not retain its checkpoint");

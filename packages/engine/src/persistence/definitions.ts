@@ -3,10 +3,17 @@ import { fileURLToPath } from "node:url";
 
 import * as keywordIndexSchema from "./schemas/keyword-index";
 import * as localStoreSchema from "./schemas/local-store";
+import * as projectCacheSchema from "./schemas/project-cache";
 import * as semanticIndexSchema from "./schemas/semantic-index";
+import * as semanticVectorCacheSchema from "./schemas/semantic-vector-cache";
 
 export interface SqliteDatabaseDefinition<Schema extends Record<string, unknown>> {
-  readonly id: "local-store" | "keyword-index" | "semantic-index";
+  readonly id:
+    | "local-store"
+    | "keyword-index"
+    | "semantic-index"
+    | "project-cache"
+    | "semantic-vector-cache";
   readonly schema: Schema;
   readonly migrationsFolder: string;
 }
@@ -35,3 +42,15 @@ export const semanticIndexDatabaseDefinition = {
   schema: semanticIndexSchema,
   migrationsFolder: migrationFolder("semantic-index"),
 } as const satisfies SqliteDatabaseDefinition<typeof semanticIndexSchema>;
+
+export const projectCacheDatabaseDefinition = {
+  id: "project-cache",
+  schema: projectCacheSchema,
+  migrationsFolder: migrationFolder("project-cache"),
+} as const satisfies SqliteDatabaseDefinition<typeof projectCacheSchema>;
+
+export const semanticVectorCacheDatabaseDefinition = {
+  id: "semantic-vector-cache",
+  schema: semanticVectorCacheSchema,
+  migrationsFolder: migrationFolder("semantic-vector-cache"),
+} as const satisfies SqliteDatabaseDefinition<typeof semanticVectorCacheSchema>;

@@ -7,6 +7,7 @@ import type { BackendService } from "./modules/backend/service";
 import { queryController } from "./modules/query/controller";
 import { indexController } from "./modules/index/controller";
 import type { IndexOperationService } from "./modules/index/operation-service";
+import type { ProjectSemanticRuntimePort } from "./modules/query/project-semantic-runtime";
 import { localBoundary, reject } from "./plugins/local-auth";
 import { BACKEND_HOST, BACKEND_PORT } from "./protocol/constants";
 
@@ -16,6 +17,7 @@ export interface CreateBackendAppOptions {
   readonly indexOperations?: IndexOperationService;
   readonly keywordQueryService: QueryService;
   readonly semanticQueryService: SemanticQueryService;
+  readonly projectSemanticRuntime?: ProjectSemanticRuntimePort;
   /** Internal test injection; production always uses the fixed IPv4 endpoint. */
   readonly host?: string;
   readonly port?: number;
@@ -55,6 +57,12 @@ export function createBackendApp(options: CreateBackendAppOptions) {
         {
           keywordQueryService: options.keywordQueryService,
           semanticQueryService: options.semanticQueryService,
+          ...(options.indexOperations === undefined
+            ? {}
+            : { indexOperations: options.indexOperations }),
+          ...(options.projectSemanticRuntime === undefined
+            ? {}
+            : { projectSemanticRuntime: options.projectSemanticRuntime }),
         },
         backend.available,
       ),

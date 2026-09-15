@@ -19,11 +19,30 @@ Lorelum 使用共享的 `~/.lorelum/config.yaml`。每个模块只读取自己�
 ```text
 ~/.lorelum/
 ├── config.yaml         # 共享用户配置，首次 start 创建
+├── cache/               # 可删除、可重建的 ProjectContext query artifact 与共享向量
 ├── run/backend/        # 私有运行记录，由服务生命周期创建和清理
 └── models/<sha256>/    # 模型缓存，首次使用时创建；停止服务后保留
 ```
 
 配置文件创建为 0600，新目录为 0700。`help`、`describe`、`backend status/stop` 和 `model status` 不会为了读取默认值创建配置。基础包的根路径解析也供默认 LocalStore root 使用；显式 `--store-root` 仍只影响 Store。
+
+## 派生 query cache
+
+项目 `.lorelum/` 和 LocalStore 都是 canonical source；keyword artifact、semantic artifact、semantic progress 与共享 embedding vector 都只存在用户级 cache，默认位置为 `~/.lorelum/cache`。因此同一仓库开多个 worktree，或两个普通目录恰好解析出相同的 active Practice 语料时，可以复用同一个 artifact，而无需把 index 写进 Git 工作区或新增 `.gitignore`。
+
+```text
+~/.lorelum/cache/
+├── semantic/v1/vector-cache.sqlite
+└── project-context/v1/
+    ├── project-cache.sqlite
+    └── artifacts/
+        ├── keyword/<artifact-id>/active.sqlite
+        └── semantic/<artifact-id>/{progress.sqlite,active.sqlite}
+```
+
+artifact ID 只来自 index 版本、Profile（semantic）和当前 active `(practiceId, contentDigest, projectionDigest)` 清单；不会包含 Git、worktree、项目路径、branch、commit、mtime、Store path 或 source provenance。`projectRootId` 仅用于把同一目录的连续编辑合并成最新 background target，不参与 artifact ID。
+
+运行 `lore cache status` 可以查看 artifact、progress、共享 vector 和字节数；运行 `lore cache prune` 会显式清理未被 query/build 使用的派生数据。清理不改 `.lorelum`、Git metadata 或 LocalStore；下次 ProjectContext query 会从当前 canonical source 重建需要的部分。若某个 artifact 正在构建或被 partial query 读取，清理会跳过它而不是中断用户操作。
 
 初始化文件不写机器绝对路径，包含固定版本的 Hugging Face 模型下载地址。未填写 URL 的已有配置也会使用默认来源；首次确实需要 embedding 的 semantic 操作会在缓存为空时自动开始下载并校验模型，不会长时间等待传输完成。安装目录仍需包含配套 native 资源。
 

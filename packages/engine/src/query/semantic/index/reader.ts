@@ -17,7 +17,7 @@ import {
   type SemanticIndexConnection,
   verifySemanticIndexIntegrity,
 } from "./database";
-import { semanticIndexPaths } from "./paths";
+import { semanticIndexPaths, type SemanticIndexPaths } from "./paths";
 
 export interface SemanticCandidate {
   readonly practiceId: string;
@@ -105,7 +105,15 @@ export async function openSemanticIndexReader(
   rootPath: string,
   profile: EmbeddingProfile,
 ): Promise<SemanticIndexReader> {
-  const path = semanticIndexPaths(rootPath, profile.profileId).active;
+  return openSemanticIndexReaderAt(semanticIndexPaths(rootPath, profile.profileId), profile);
+}
+
+/** Open one complete artifact at a caller-owned cache location. */
+export async function openSemanticIndexReaderAt(
+  paths: SemanticIndexPaths,
+  profile: EmbeddingProfile,
+): Promise<SemanticIndexReader> {
+  const path = paths.active;
   try {
     await access(path);
   } catch (error) {

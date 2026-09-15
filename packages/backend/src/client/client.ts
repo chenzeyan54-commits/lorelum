@@ -22,6 +22,7 @@ import {
   queryRequestSchema,
   queryResultSchema,
   type BackendQueryResult,
+  type ProjectSemanticRequest,
   type QueryMode,
 } from "../modules/query/model";
 import {
@@ -52,7 +53,12 @@ import type { EmbeddingResult } from "../modules/embedding/model";
 import { DEFAULT_BACKEND_SETTINGS } from "../config/model";
 import type { QueryRequest, StorageRoot } from "@lorelum/engine";
 
-export type BackendQueryRequest = QueryRequest & { readonly mode?: QueryMode };
+export type BackendQueryRequest = QueryRequest & {
+  readonly mode?: QueryMode;
+  readonly projectContext?: ProjectSemanticRequest;
+  readonly maxWaitMs?: number;
+  readonly minCoveragePercent?: number;
+};
 export interface BackendRequestOptions {
   readonly signal?: AbortSignal | undefined;
   readonly deadline?: number | undefined;

@@ -5,6 +5,8 @@ const configs = [
   "packages/engine/drizzle.local-store.config.ts",
   "packages/engine/drizzle.keyword-index.config.ts",
   "packages/engine/drizzle.semantic-index.config.ts",
+  "packages/engine/drizzle.project-cache.config.ts",
+  "packages/engine/drizzle.semantic-vector-cache.config.ts",
 ] as const;
 
 for (const config of configs) {

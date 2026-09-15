@@ -45,6 +45,18 @@ export const queryResultSchema: JsonSchema = {
     {
       type: "object",
       additionalProperties: false,
+      required: ["state", "operationId", "indexedPracticeCount", "totalPracticeCount", "message"],
+      properties: {
+        state: { const: "indexing" },
+        operationId: stringSchema,
+        indexedPracticeCount: { type: "integer" },
+        totalPracticeCount: { type: "integer" },
+        message: stringSchema,
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
       required: ["mode", "results"],
       properties: {
         mode: { const: "keyword" },
@@ -59,6 +71,9 @@ export const queryResultSchema: JsonSchema = {
         mode: { const: "semantic" },
         profileId: stringSchema,
         coverage: { enum: ["complete", "partial"] },
+        indexedPracticeCount: { type: "integer" },
+        totalPracticeCount: { type: "integer" },
+        operationId: stringSchema,
         results: resultsSchema,
       },
     },

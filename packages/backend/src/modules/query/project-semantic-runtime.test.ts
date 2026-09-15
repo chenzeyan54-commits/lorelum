@@ -1,0 +1,189 @@
+import { expect, test } from "bun:test";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { createEmbeddingProfile } from "@lorelum/engine";
+
+import { ProjectSemanticRuntime } from "./project-semantic-runtime";
+
+const encodingId = "c".repeat(64);
+
+test("builds a project semantic artifact during the query wait budget", async () => {
+  const [root, cache] = await Promise.all([
+    mkdtemp(join(tmpdir(), "lorelum-backend-project-runtime-")),
+    mkdtemp(join(tmpdir(), "lorelum-backend-project-runtime-cache-")),
+  ]);
+  try {
+    const pack = join(root, ".lorelum", "packs", "platform");
+    await mkdir(join(pack, "practices"), { recursive: true });
+    await writeFile(join(root, ".lorelum", "config.yaml"), "base: none\n");
+    await writeFile(join(pack, "pack.yaml"), "name: platform\nversion: 1.0.0\n");
+    await writeFile(
+      join(pack, "practices", "query.md"),
+      "---\nid: platform.query\ntitle: Project query\nstage: implementation\ntech_stack:\n  - typescript\napplies_when: When querying a project-local Pack.\n---\nUse an incrementally published semantic cache.\n",
+    );
+    const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
+    const runtime = new ProjectSemanticRuntime(
+      {
+        async readEffectivePracticeSnapshot() {
+          return {
+            identity: {
+              rootBinding: "test-store",
+              generation: 0,
+              effectiveRevision: 0,
+              manifestDigest: "0".repeat(64),
+            },
+            practices: [],
+          };
+        },
+      },
+      profile,
+      {
+        maxBatchSize: 8,
+        async embed(inputs) {
+          return { encodingId, vectors: inputs.map(() => [1, 0]) };
+        },
+      },
+      {
+        maxBatchSize: 1,
+        async embed(inputs) {
+          return { encodingId, vectors: inputs.map(() => [1, 0]) };
+        },
+      },
+      {
+        beginModelPreparation() {
+          throw new Error("model preparation should not be needed");
+        },
+        async waitModelPreparation() {
+          throw new Error("model preparation should not be needed");
+        },
+      },
+    );
+
+    await expect(
+      runtime.query(
+        { rootPath: join(root, "store") },
+        { projectRoot: root, cacheRoot: cache },
+        { text: "incrementally published cache" },
+        { maxWaitMs: 1_000, minCoveragePercent: 0 },
+      ),
+    ).resolves.toMatchObject({
+      mode: "semantic",
+      coverage: "complete",
+      results: [{ practiceId: "platform.query" }],
+    });
+  } finally {
+    await Promise.all([
+      rm(root, { recursive: true, force: true }),
+      rm(cache, { recursive: true, force: true }),
+    ]);
+  }
+});
+
+test("coalesces rapid edits for one directory to the latest semantic target", async () => {
+  const [root, cache] = await Promise.all([
+    mkdtemp(join(tmpdir(), "lorelum-backend-project-coalesce-")),
+    mkdtemp(join(tmpdir(), "lorelum-backend-project-coalesce-cache-")),
+  ]);
+  try {
+    const pack = join(root, ".lorelum", "packs", "platform");
+    const firstPath = join(pack, "practices", "first.md");
+    await mkdir(join(pack, "practices"), { recursive: true });
+    await writeFile(join(root, ".lorelum", "config.yaml"), "base: none\n");
+    await writeFile(join(pack, "pack.yaml"), "name: platform\nversion: 1.0.0\n");
+    for (const [name, id] of [
+      ["first", "platform.first"],
+      ["second", "platform.second"],
+    ] as const) {
+      await writeFile(
+        join(pack, "practices", `${name}.md`),
+        `---\nid: ${id}\ntitle: ${name}\nstage: implementation\ntech_stack:\n  - typescript\napplies_when: When coalescing a local target.\n---\n${name}\n`,
+      );
+    }
+    const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
+    let documentCalls = 0;
+    let releaseFirst!: () => void;
+    const firstBatch = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const runtime = new ProjectSemanticRuntime(
+      {
+        async readEffectivePracticeSnapshot() {
+          return {
+            identity: {
+              rootBinding: "test-store",
+              generation: 0,
+              effectiveRevision: 0,
+              manifestDigest: "0".repeat(64),
+            },
+            practices: [],
+          };
+        },
+      },
+      profile,
+      {
+        maxBatchSize: 1,
+        async embed(inputs) {
+          if (inputs[0]?.startsWith("Practice:")) {
+            documentCalls += 1;
+            if (documentCalls === 1) await firstBatch;
+          }
+          return { encodingId, vectors: inputs.map(() => [1, 0]) };
+        },
+      },
+      {
+        maxBatchSize: 1,
+        async embed(inputs) {
+          return { encodingId, vectors: inputs.map(() => [1, 0]) };
+        },
+      },
+      {
+        beginModelPreparation() {
+          throw new Error("model preparation should not be needed");
+        },
+        async waitModelPreparation() {
+          throw new Error("model preparation should not be needed");
+        },
+      },
+    );
+    const request = { projectRoot: root, cacheRoot: cache };
+    await expect(
+      runtime.query(
+        { rootPath: join(root, "store") },
+        request,
+        { text: "coalesce" },
+        { maxWaitMs: 0, minCoveragePercent: 100 },
+      ),
+    ).resolves.toMatchObject({ state: "indexing" });
+    for (let attempt = 0; attempt < 50 && documentCalls !== 1; attempt += 1) {
+      // eslint-disable-next-line no-await-in-loop -- bounded test synchronization.
+      await Bun.sleep(5);
+    }
+    expect(documentCalls).toBe(1);
+    const original = await Bun.file(firstPath).text();
+    await writeFile(
+      firstPath,
+      original.replace("stage: implementation", "stage: implementation\nseverity: critical"),
+    );
+    await expect(
+      runtime.query(
+        { rootPath: join(root, "store") },
+        request,
+        { text: "coalesce" },
+        { maxWaitMs: 0, minCoveragePercent: 100 },
+      ),
+    ).resolves.toMatchObject({ state: "indexing" });
+    releaseFirst();
+    await runtime.waitForIdle();
+    // The original target yields after its first batch. Its unchanged first
+    // projection is reusable, so only the missing second Practice of the
+    // latest target is embedded after the edit.
+    expect(documentCalls).toBe(2);
+  } finally {
+    await Promise.all([
+      rm(root, { recursive: true, force: true }),
+      rm(cache, { recursive: true, force: true }),
+    ]);
+  }
+});
