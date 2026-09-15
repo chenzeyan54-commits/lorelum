@@ -148,7 +148,7 @@ test("uses semantic Backend query by default and preserves semantic metadata", a
       mode: "semantic",
       maxWaitMs: 3_000,
       minCoveragePercent: 0,
-      cacheRoot: "/Users/mengchen/.lorelum/cache",
+      cacheRoot: expect.any(String),
     },
   });
   expect(result.response.data).toEqual(semantic);

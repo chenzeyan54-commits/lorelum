@@ -29,10 +29,9 @@ test("context status reports safe ProjectContext provenance without absolute sou
     );
     const output = new MemoryWriter();
     expect(
-      await run(
-        ["context", "status", "--project-root", root, "--store-root", store],
-        { stdout: output },
-      ),
+      await run(["context", "status", "--project-root", root, "--store-root", store], {
+        stdout: output,
+      }),
     ).toBe(0);
     const response = JSON.parse(output.value);
     expect(response).toMatchObject({

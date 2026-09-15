@@ -283,9 +283,7 @@ export function createValidateCommand(): CommandDefinition {
     async handler({ positionals }) {
       try {
         const root = positionals[0]!;
-        return (await isProjectRoot(root))
-          ? await validateProject(root)
-          : await validatePack(root);
+        return (await isProjectRoot(root)) ? await validateProject(root) : await validatePack(root);
       } catch (error) {
         visibleLocalizationError(error);
       }
