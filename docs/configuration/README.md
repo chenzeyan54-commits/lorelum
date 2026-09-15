@@ -1,11 +1,12 @@
-# 配置文档
+# 配置实现说明
+
+此页面向维护者，说明全局配置包、初始化和 runtime 目录的实现边界。用户应在[配置指南](https://lorelum.com/zh/docs/configuration)查看可编辑字段、环境变量和恢复步骤；不要在本目录复制这些用户说明。
 
 Lorelum 使用共享的 `~/.lorelum/config.yaml`。每个模块只读取自己负责的顶层 section；backend 在启动控制端只读取一次并把结果作为不可变快照传入 daemon。修改配置后重启 backend 才生效。
 
 配置优先级是：默认值 → YAML section → 允许的环境变量 → 内部测试注入。无效 section、未知字段、超出范围或违反大小限制都会返回 `backend.config-invalid`，不会静默回退。
 
-- [Backend 配置](backend.md)：服务启动、请求、停止的超时和环境变量。
-- [Embedding 配置](embedding.md)：显式模型路径、缓存、下载和 CPU 参数。
+- [Embedding 配置实现](embedding.md)：模型路径、缓存、下载和 CPU 参数的运行时边界。
 
 配置文件和模型缓存独立于 LocalStore；`--store-root` 不改变它们。
 

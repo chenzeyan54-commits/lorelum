@@ -20,9 +20,15 @@ Lorelum is a Bun + TypeScript monorepo for engineering-knowledge retrieval: the 
 | `packages/format` | public Practice/Pack schema, parsing, validation, localization helpers | `packages/format/AGENTS.md` |
 | `apps/site` | public landing and documentation site | `apps/site/AGENTS.md` |
 | `packages/ui` | reusable Web primitives and production design tokens | `packages/ui/AGENTS.md` |
-| `docs` | current contracts, development material, ADRs, research | `docs/AGENTS.md` |
+| `docs` | maintainer material, internal APIs, ADRs, research | `docs/AGENTS.md` |
 
 Current integrations are CLI-first: use the released CLI together with host-native Skills and Hooks. Do not introduce local MCP servers, stdio wiring, MCP tools, MCP-backed Plugin behavior, or a local MCP wrapper around `lore`. `packages/mcp` is a non-product scaffold. A remote-retrieval MCP boundary requires a separately approved design.
+
+## Documentation ownership
+
+- Decide the reader before changing documentation. A product user who needs to install, configure, operate, understand an observable result, or recover from an error reads the bilingual site under `apps/site/content/docs/`; update the matching English and Chinese pages only when that user-facing guidance changes.
+- `docs/` is for maintainers: internal APIs, implementation and ABI details, architecture rationale, source/build verification, and operational evidence. Do not move such material into the site merely because the same code change has a user-facing aspect.
+- A user guide and a maintainer document may both exist when they serve those distinct readers. They must not restate the same workflow or contract: link across the boundary instead. If a root document is fully equivalent to a site guide after a migration, delete the root copy and repair its inbound links.
 
 For visual or component work, read [DESIGN.md](./DESIGN.md) first. Reusable Web components and production tokens belong in `packages/ui`; routes, copy, data, and page-specific composition belong to the consuming application. Run `bun run design:lint` after changing `DESIGN.md`.
 
@@ -62,7 +68,8 @@ Match verification to the changed boundary. New behavior ships with colocated `b
 - Product and user entry: [README.md](./README.md)
 - Human contribution process: [CONTRIBUTING.md](./CONTRIBUTING.md)
 - Current capability specs: [openspec/specs](./openspec/specs/)
-- Current CLI/API/configuration/development contracts: [docs](./docs/)
+- Public user documentation: [site content](./apps/site/content/docs/)
+- Maintainer documentation and internal APIs: [docs](./docs/)
 - Architecture decisions and lifecycle: [docs/adr/README.md](./docs/adr/README.md)
 - Current agent-integration scope: [agent-integration spec](./openspec/specs/agent-integration/spec.md)
 - Archived changes are provenance only: [openspec/changes/archive](./openspec/changes/archive/)

@@ -68,3 +68,5 @@ backend:
 ```
 
 Each value is an integer from 1 to 120000 milliseconds. `LORELUM_BACKEND_STARTUP_TIMEOUT_MS`, `LORELUM_BACKEND_REQUEST_TIMEOUT_MS`, and `LORELUM_BACKEND_SHUTDOWN_TIMEOUT_MS` override YAML. Startup covers service and native runtime; request covers one request; shutdown covers unload and stop.
+
+Model-file download time is controlled by the embedding download settings above, not the native-runtime startup budget. Backend reads these settings once when it starts, so changing YAML or environment variables does not change an already-running instance; restart Backend to apply them. `backend status`, `backend stop`, and model commands never write your configuration file.

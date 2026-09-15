@@ -85,3 +85,5 @@ backend:
 - `LORELUM_BACKEND_SHUTDOWN_TIMEOUT_MS`
 
 startup 控制服务与 native runtime 启动，request 控制单次请求，shutdown 控制卸载与停止。模型文件的下载时间由上面的下载设置控制。
+
+Backend 只在启动时读取一次这些设置。修改 YAML 或环境变量不会改变正在运行的实例；重启 Backend 后才会生效。`backend status`、`backend stop` 和 model 命令不会写入配置文件。
