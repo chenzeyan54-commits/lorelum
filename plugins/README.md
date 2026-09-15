@@ -2,7 +2,7 @@
 
 Each direct child of this directory is an independently installable Plugin artifact for one host. It contains the host-specific lifecycle integration, context rendering, Skills, and distribution metadata; it is not a shared Engine layer.
 
-`lorelum/` is the current Codex Plugin, published as `lorelum@lorelum` and shown as **Lorelum**. It calls the public `lore` CLI for Pack metadata. It must not import Engine packages, read LocalStore files directly, or reproduce retrieval and ranking behavior.
+`lorelum/` is the current Codex Plugin, published as `lorelum@lorelum-plugins` and shown as **Lorelum**. It calls the public `lore` CLI for Pack metadata. It must not import Engine packages, read LocalStore files directly, or reproduce retrieval and ranking behavior.
 
 ## Current integration boundary
 

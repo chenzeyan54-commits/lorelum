@@ -1,6 +1,6 @@
 # Lorelum
 
-Lorelum's Codex integration makes installed Knowledge Packs discoverable in a compact context catalog, then lets Codex retrieve full Practices only when they are relevant to the task or decision. The Plugin is displayed as **Lorelum** and is distributed in the `lorelum` marketplace, so the public selector is `lorelum@lorelum`.
+Lorelum's Codex integration makes installed Knowledge Packs discoverable in a compact context catalog, then lets Codex retrieve full Practices only when they are relevant to the task or decision. The Plugin is displayed as **Lorelum** and is distributed in the `lorelum-plugins` marketplace, so the public selector is `lorelum@lorelum-plugins`.
 
 ## Scope
 
@@ -20,14 +20,29 @@ Add the official marketplace once, then install the Plugin:
 
 ```sh
 codex plugin marketplace add lorelum/lorelum
-codex plugin add lorelum@lorelum
+codex plugin add lorelum@lorelum-plugins
 ```
+
+### Migrate an earlier alpha installation
+
+Earlier alpha versions used `lorelum@lorelum`. Remove that Plugin and marketplace source before
+adding the current source, so Codex has one authoritative Lorelum source:
+
+```sh
+codex plugin remove lorelum@lorelum
+codex plugin marketplace remove lorelum
+codex plugin marketplace add lorelum/lorelum
+codex plugin add lorelum@lorelum-plugins
+```
+
+The [alpha release-note template](../../scripts/release/release-notes.md#codex-plugin-marketplace-migration)
+includes the same migration for packaged releases.
 
 When a newer Plugin version is available, refresh the marketplace and reinstall the selector:
 
 ```sh
-codex plugin marketplace upgrade lorelum
-codex plugin add lorelum@lorelum
+codex plugin marketplace upgrade lorelum-plugins
+codex plugin add lorelum@lorelum-plugins
 ```
 
 After an install or update, start a new Codex task so its Skill and Hook configuration are loaded. If Codex asks you to review Hooks, review and trust the current `hooks/hooks.json`; changes to that file require a new trust decision.

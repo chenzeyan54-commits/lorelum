@@ -33,7 +33,7 @@ interface MarketplaceConfig {
   readonly plugins: readonly MarketplaceEntry[];
 }
 
-test("public marketplace exposes the lorelum Plugin from its matching root", async () => {
+test("public marketplace exposes the lorelum Plugin from its distinct marketplace namespace", async () => {
   const [manifest, marketplace] = await Promise.all([
     readFile(join(import.meta.dir, "../.codex-plugin/plugin.json"), "utf8").then(
       (content) => JSON.parse(content) as PluginManifest,
@@ -60,7 +60,7 @@ test("public marketplace exposes the lorelum Plugin from its matching root", asy
       readFile(join(import.meta.dir, "..", assetPath), "utf8"),
     ),
   );
-  expect(marketplace.name).toBe("lorelum");
+  expect(marketplace.name).toBe("lorelum-plugins");
   expect(marketplace.plugins).toEqual([
     {
       name: "lorelum",
@@ -69,4 +69,5 @@ test("public marketplace exposes the lorelum Plugin from its matching root", asy
       category: "Productivity",
     },
   ]);
+  expect(`${manifest.name}@${marketplace.name}`).toBe("lorelum@lorelum-plugins");
 });

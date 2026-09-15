@@ -1,9 +1,4 @@
-# plugin-distribution Specification
-
-## Purpose
-为 Lorelum Codex Plugin 保持唯一、可安装且可维护的公开身份，同时确保 Plugin 只编排宿主上下文，不复制核心检索 runtime。
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Single public Plugin identity
 公开 Codex marketplace SHALL 使用名称 `lorelum-plugins`，并且 SHALL 只暴露一个 ID 为 `lorelum` 的 Lorelum Codex Plugin。该 Plugin SHALL 保持显示名 **Lorelum**、源目录 `plugins/lorelum/` 和公开 selector `lorelum@lorelum-plugins`。marketplace namespace、Plugin ID、source root 和 selector MUST 各自指向这一份唯一的公开分发来源；它们不得通过同名约束被混为一个身份。
@@ -21,10 +16,3 @@ alpha 迁移后，公开文档和开发流程 MUST 只使用 `lorelum-plugins`�
 #### Scenario: Distribution keeps the Plugin identity stable
 - **WHEN** Codex 从 `lorelum-plugins` 解析 Lorelum Plugin
 - **THEN** marketplace metadata SHALL 解析到 `plugins/lorelum/`，Plugin manifest ID SHALL 为 `lorelum`，且用户可见显示名 SHALL 为 **Lorelum**
-
-### Requirement: Plugin runtime boundary
-Plugin 的 Skill 和 Hook SHALL 在新任务或明确 lifecycle event 中调用已安装的 `lore` CLI；它们 MUST 不启动、打包、配置或调用本地 MCP server，也 MUST 不持有 Store、Backend 或排序实现。
-
-#### Scenario: New coding task begins
-- **WHEN** 宿主为新的 coding task 装配 Lorelum 上下文
-- **THEN** Plugin MAY 通过 Skill/Hook 引导 CLI 检索，但 MUST 保持检索状态和错误语义由 CLI 负责

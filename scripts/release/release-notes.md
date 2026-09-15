@@ -28,6 +28,12 @@ The Windows installer adds `$env:LOCALAPPDATA\Lorelum\bin` to the current user's
 
 CLI behavior, Pack formats, local Store data, indexes, and retrieval results may change before the first stable release. Automatic migration is not guaranteed. Use an isolated Store root when evaluating an upgrade.
 
+#### Codex Plugin marketplace migration
+
+The Codex Plugin marketplace is `lorelum-plugins`. Earlier alpha installations using
+`lorelum@lorelum` must remove the old Plugin and marketplace source, then add the current
+`lorelum/lorelum` source and install `lorelum@lorelum-plugins`.
+
 ### Verification
 
 The release workflow verifies every uploaded checksum, unpacks each archive, checks the CLI and native runtime version commands, and exercises the packaged Backend start/status lifecycle on its matching runner.

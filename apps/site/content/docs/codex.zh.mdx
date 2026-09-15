@@ -23,10 +23,22 @@ Plugin 不内置、安装或更新 CLI。它使用本地 Store 中已安装的 P
 
 ```sh
 codex plugin marketplace add lorelum/lorelum
-codex plugin add lorelum@lorelum
+codex plugin add lorelum@lorelum-plugins
 ```
 
 按 Codex 提示审阅 Plugin 的 Hook，再启动新任务。Hook 执行 `lore pack list --details` 获取 Pack 元数据。
+
+### 迁移早期 alpha 安装
+
+早期 alpha 使用 `lorelum@lorelum`。安装当前 selector 前，请先移除旧 Plugin 和 marketplace source，
+确保 Codex 只保留一个 Lorelum source：
+
+```sh
+codex plugin remove lorelum@lorelum
+codex plugin marketplace remove lorelum
+codex plugin marketplace add lorelum/lorelum
+codex plugin add lorelum@lorelum-plugins
+```
 
 ## 检索如何发生
 
@@ -45,8 +57,8 @@ Hook 本身不查询、不安装 Pack，也不加载模型。Skill 发起 semant
 ## 更新
 
 ```sh
-codex plugin marketplace upgrade lorelum
-codex plugin add lorelum@lorelum
+codex plugin marketplace upgrade lorelum-plugins
+codex plugin add lorelum@lorelum-plugins
 ```
 
 若 Codex 提示 Hook 发生变化，请重新审阅，再启动新任务。CLI 和 Pack 仍需分别更新。

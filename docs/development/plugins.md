@@ -1,6 +1,6 @@
 # Plugin development
 
-This guide is for maintainers developing the **Lorelum** Codex Plugin from a checkout. It deliberately separates a user's public marketplace installation from a checkout-backed development installation: they share the same public selector, `lorelum@lorelum`, but must not be enabled together.
+This guide is for maintainers developing the **Lorelum** Codex Plugin from a checkout. It deliberately separates a user's public marketplace installation from a checkout-backed development installation: they share the same public selector, `lorelum@lorelum-plugins`, but must not be enabled together.
 
 ## Source and contract boundary
 
@@ -34,28 +34,28 @@ The result should contain `hookSpecificOutput.additionalContext` headed `Lorelum
 
 ## Checkout-backed install and hot reload
 
-The repository marketplace at `.agents/plugins/marketplace.json` is a public marketplace definition, but `codex plugin marketplace add` also accepts the current checkout as a local source. Do not configure that local source alongside the remote `lorelum` marketplace: both expose `lorelum@lorelum` and would make the active source ambiguous.
+The repository marketplace at `.agents/plugins/marketplace.json` is a public marketplace definition, but `codex plugin marketplace add` also accepts the current checkout as a local source. Do not configure that local source alongside the remote `lorelum-plugins` marketplace: both expose `lorelum@lorelum-plugins` and would make the active source ambiguous.
 
-First inspect configured marketplaces. If the public `lorelum` marketplace is already configured, remove that source before adding the local checkout; remove the installed Plugin first only if Codex requires it:
+First inspect configured marketplaces. If the public `lorelum-plugins` marketplace is already configured, remove that source before adding the local checkout; remove the installed Plugin first only if Codex requires it:
 
 ```sh
 codex plugin marketplace list
-codex plugin remove lorelum@lorelum
-codex plugin marketplace remove lorelum
+codex plugin remove lorelum@lorelum-plugins
+codex plugin marketplace remove lorelum-plugins
 codex plugin marketplace add "$PWD"
 ```
 
 Install the Plugin from the checkout-backed marketplace:
 
 ```sh
-codex plugin add lorelum@lorelum
+codex plugin add lorelum@lorelum-plugins
 ```
 
 For each local Plugin iteration, update the development-only cachebuster and reinstall. The helper replaces any old suffix with one timestamped suffix; it does not change the public Plugin identity.
 
 ```sh
 python3 "$HOME/.codex/skills/.system/plugin-creator/scripts/update_plugin_cachebuster.py" plugins/lorelum
-codex plugin add lorelum@lorelum
+codex plugin add lorelum@lorelum-plugins
 ```
 
-Start a new Codex task after reinstalling, and re-trust Hooks whenever `hooks/hooks.json` changes. Do not commit the cachebuster version: set the manifest back to the intended release version before committing. To return to the public source, remove the local `lorelum` marketplace, add `lorelum/lorelum`, and reinstall `lorelum@lorelum`.
+Start a new Codex task after reinstalling, and re-trust Hooks whenever `hooks/hooks.json` changes. Do not commit the cachebuster version: set the manifest back to the intended release version before committing. To return to the public source, remove the local `lorelum-plugins` marketplace, add `lorelum/lorelum`, and reinstall `lorelum@lorelum-plugins`.

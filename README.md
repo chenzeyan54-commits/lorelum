@@ -153,7 +153,7 @@ For Codex, after installing the CLI and a Pack:
 
 ```sh
 codex plugin marketplace add lorelum/lorelum
-codex plugin add lorelum@lorelum
+codex plugin add lorelum@lorelum-plugins
 ```
 
 Review the Hook when prompted, then start a new task. The Hook reads installed Pack metadata with `lore pack list --details`; the Skill decides when to make its targeted semantic query and read Practices. The Plugin does not bundle the CLI. Other command-capable agents use the generic Lorelum Skill, which establishes a Pack Catalog with `lore pack list --details` only when the current context does not already contain one.

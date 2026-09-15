@@ -23,10 +23,22 @@ Add the marketplace and install the Plugin:
 
 ```sh
 codex plugin marketplace add lorelum/lorelum
-codex plugin add lorelum@lorelum
+codex plugin add lorelum@lorelum-plugins
 ```
 
 Review the Plugin's Hook when Codex requests it, then start a new task. The Hook executes `lore pack list --details` to obtain Pack metadata.
+
+### Migrate an earlier alpha installation
+
+Earlier alpha versions used `lorelum@lorelum`. Remove that Plugin and marketplace source before
+installing the current selector:
+
+```sh
+codex plugin remove lorelum@lorelum
+codex plugin marketplace remove lorelum
+codex plugin marketplace add lorelum/lorelum
+codex plugin add lorelum@lorelum-plugins
+```
 
 ## How retrieval works
 
@@ -45,8 +57,8 @@ In a new task, ask Codex to use Lorelum before defining an implementation or ver
 ## Update
 
 ```sh
-codex plugin marketplace upgrade lorelum
-codex plugin add lorelum@lorelum
+codex plugin marketplace upgrade lorelum-plugins
+codex plugin add lorelum@lorelum-plugins
 ```
 
 Review changed Hooks if Codex requests it, and start a new task. CLI and Pack updates remain separate.

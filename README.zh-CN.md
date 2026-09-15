@@ -152,7 +152,7 @@ Codex 用户安装 CLI 和 Pack 后运行：
 
 ```sh
 codex plugin marketplace add lorelum/lorelum
-codex plugin add lorelum@lorelum
+codex plugin add lorelum@lorelum-plugins
 ```
 
 按提示审阅 Hook，再启动新任务。Hook 通过 `lore pack list --details` 读取已安装 Pack 的元数据，Skill 判断何时查询并读取 Practice。Plugin 不内置 CLI。
