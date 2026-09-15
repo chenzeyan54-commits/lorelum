@@ -12,6 +12,7 @@ import {
   type SemanticIndexService,
   type SemanticQueryService,
 } from "../query/semantic";
+import { projectSemanticIndexDatabaseDefinition } from "../persistence/definitions";
 import { projectSemanticIndexPaths } from "./cache";
 import type { ProjectContextSnapshot } from "./types";
 
@@ -69,6 +70,7 @@ export function createProjectSemanticServices(
     profile,
     embedding,
     paths,
+    definition: projectSemanticIndexDatabaseDefinition,
     store: {
       async readSnapshotIdentity() {
         return identity;
@@ -89,6 +91,7 @@ export function createProjectSemanticServices(
     profile,
     embedding,
     paths,
+    definition: projectSemanticIndexDatabaseDefinition,
     store: {
       async readSnapshotIdentity() {
         return identity;

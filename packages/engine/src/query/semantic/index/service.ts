@@ -36,6 +36,7 @@ import {
   readSemanticIndexMetadata,
   readSemanticIndexVector,
   type SemanticIndexConnection,
+  type SemanticIndexDatabaseDefinition,
   verifySemanticIndexIntegrity,
 } from "./database";
 import { planIncrementalSemanticIndex } from "./incremental";
@@ -64,9 +65,13 @@ export interface SemanticIndexDependencies {
   readonly embedding: EmbeddingPort;
   /** Store-local by default; ProjectContext supplies a content-addressed artifact location. */
   readonly paths?: (root: StorageRoot, profileId: string) => SemanticIndexPaths;
+  readonly definition?: SemanticIndexDatabaseDefinition;
 }
 
-async function activeMetadata(path: string): Promise<SemanticIndexMetadata | undefined> {
+async function activeMetadata(
+  path: string,
+  definition: SemanticIndexDatabaseDefinition,
+): Promise<SemanticIndexMetadata | undefined> {
   try {
     await access(path);
   } catch (error) {
@@ -77,7 +82,7 @@ async function activeMetadata(path: string): Promise<SemanticIndexMetadata | und
   }
   let connection: SemanticIndexConnection | undefined;
   try {
-    connection = openSqliteConnection(path, semanticIndexDatabaseDefinition.schema, {
+    connection = openSqliteConnection(path, definition.schema, {
       readonly: true,
     });
     verifySemanticIndexIntegrity(connection);
@@ -117,6 +122,7 @@ export function createSemanticIndexService(
   dependencies: SemanticIndexDependencies,
 ): SemanticIndexService {
   const { store, profile, embedding } = dependencies;
+  const definition = dependencies.definition ?? semanticIndexDatabaseDefinition;
   const pathsFor =
     dependencies.paths ??
     ((root: StorageRoot, profileId: string) => semanticIndexPaths(root.rootPath, profileId));
@@ -124,7 +130,7 @@ export function createSemanticIndexService(
   const status = async (root: StorageRoot): Promise<SemanticIndexStatus> => {
     const identity = await store.readSnapshotIdentity(root);
     try {
-      const metadata = await activeMetadata(pathsFor(root, profile.profileId).active);
+      const metadata = await activeMetadata(pathsFor(root, profile.profileId).active, definition);
       if (metadata === undefined) return statusFor("missing", profile);
       return statusFor(stateForMetadata(metadata, identity, profile), profile, metadata);
     } catch (error) {
@@ -162,8 +168,8 @@ export function createSemanticIndexService(
     let connection: SemanticIndexConnection | undefined;
     let published = false;
     try {
-      connection = openSqliteConnection(staging, semanticIndexDatabaseDefinition.schema);
-      initializeSemanticIndex(connection, metadata, documents, vectors);
+      connection = openSqliteConnection(staging, definition.schema);
+      initializeSemanticIndex(connection, metadata, documents, vectors, definition);
       verifySemanticIndexIntegrity(connection);
       const written = readSemanticIndexMetadata(connection);
       if (
@@ -206,7 +212,7 @@ export function createSemanticIndexService(
     let published = false;
     try {
       await copyFile(indexPaths.active, staging);
-      connection = openSqliteConnection(staging, semanticIndexDatabaseDefinition.schema);
+      connection = openSqliteConnection(staging, definition.schema);
       verifySemanticIndexIntegrity(connection);
       const stagedMetadata = readSemanticIndexMetadata(connection);
       if (
@@ -275,7 +281,7 @@ export function createSemanticIndexService(
       const current = await store.readSnapshotIdentity(root);
       let existing: SemanticIndexMetadata | undefined;
       try {
-        existing = await activeMetadata(indexPaths.active);
+        existing = await activeMetadata(indexPaths.active, definition);
       } catch (error) {
         if (!(error instanceof SemanticIndexError)) throw error;
       }

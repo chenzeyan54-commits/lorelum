@@ -3,7 +3,10 @@ import { join } from "node:path";
 
 import { acquireMutationLock } from "../local-store/storage/mutation-lock";
 import { openSqliteConnection } from "../persistence/database/connection";
-import { semanticIndexDatabaseDefinition } from "../persistence/definitions";
+import {
+  projectSemanticIndexDatabaseDefinition,
+  semanticProgressIndexDatabaseDefinition,
+} from "../persistence/definitions";
 import { semanticVectors } from "../persistence/schemas/semantic-index";
 import { validateEmbeddingBatch, type EmbeddingPort } from "../query/semantic/encoding";
 import { SemanticIndexError, SemanticIndexQueryError } from "../query/semantic/errors";
@@ -87,7 +90,7 @@ function openProgress(
   snapshot: ProjectContextSnapshot,
   profile: EmbeddingProfile,
 ): SemanticIndexConnection {
-  const connection = openSqliteConnection(path, semanticIndexDatabaseDefinition.schema);
+  const connection = openSqliteConnection(path, semanticProgressIndexDatabaseDefinition.schema);
   try {
     verifySemanticIndexIntegrity(connection);
     const metadata = readSemanticIndexMetadata(connection);
@@ -123,9 +126,15 @@ async function ensureProgress(
       await rm(path, { force: true }).catch(() => undefined);
     }
   }
-  const connection = openSqliteConnection(path, semanticIndexDatabaseDefinition.schema);
+  const connection = openSqliteConnection(path, semanticProgressIndexDatabaseDefinition.schema);
   try {
-    initializeSemanticIndex(connection, metadataFor(targetIdentity(snapshot), profile, 0), [], []);
+    initializeSemanticIndex(
+      connection,
+      metadataFor(targetIdentity(snapshot), profile, 0),
+      [],
+      [],
+      semanticProgressIndexDatabaseDefinition,
+    );
     verifySemanticIndexIntegrity(connection);
     return connection;
   } catch (error) {
@@ -195,7 +204,11 @@ export class ProjectSemanticProgressService {
   async status(): Promise<ProjectSemanticProgressStatus> {
     if (await exists(this.paths.active)) {
       try {
-        const reader = await openSemanticIndexReaderAt(this.paths, this.profile);
+        const reader = await openSemanticIndexReaderAt(
+          this.paths,
+          this.profile,
+          projectSemanticIndexDatabaseDefinition,
+        );
         try {
           return Object.freeze({
             state: "ready",
@@ -320,6 +333,7 @@ export class ProjectSemanticProgressService {
       const reader = await openSemanticIndexReaderAt(
         progressPaths(this.cacheRoot, this.snapshot, this.profile),
         this.profile,
+        semanticProgressIndexDatabaseDefinition,
       );
       try {
         const batch = await this.embedding.embed([input.text]);

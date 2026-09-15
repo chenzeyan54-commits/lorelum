@@ -7,7 +7,10 @@ import { KeywordIndexError } from "../errors";
 import { acquireMutationLock } from "../../local-store/storage/mutation-lock";
 import { openSqliteConnection, type SqliteConnection } from "../../persistence/database/connection";
 import { migrateSqlite } from "../../persistence/database/migrator";
-import { keywordIndexDatabaseDefinition } from "../../persistence/definitions";
+import {
+  keywordIndexDatabaseDefinition,
+  type SqliteDatabaseDefinition,
+} from "../../persistence/definitions";
 import { keywordIndexMetadata } from "../../persistence/schemas/keyword-index";
 import {
   KEYWORD_INDEX_VERSION,
@@ -37,6 +40,9 @@ const INDEX_FILE_NAME = "active.sqlite";
 const INDEX_WRITER_DIRECTORY = "writer";
 
 type KeywordIndexConnection = SqliteConnection<typeof keywordIndexDatabaseDefinition.schema>;
+type KeywordIndexDatabaseDefinition = SqliteDatabaseDefinition<
+  typeof keywordIndexDatabaseDefinition.schema
+>;
 
 export interface PersistentKeywordIndexPaths {
   readonly directory: string;
@@ -198,6 +204,7 @@ export async function openPersistentKeywordIndex(
 /** Open a complete keyword artifact without assuming it belongs to a Store root. */
 export async function openPersistentKeywordIndexAt(
   paths: PersistentKeywordIndexPaths,
+  definition: KeywordIndexDatabaseDefinition = keywordIndexDatabaseDefinition,
 ): Promise<PersistentKeywordIndex | undefined> {
   const { active } = paths;
   try {
@@ -207,8 +214,8 @@ export async function openPersistentKeywordIndexAt(
   }
   let connection: KeywordIndexConnection | undefined;
   try {
-    connection = openSqliteConnection(active, keywordIndexDatabaseDefinition.schema);
-    migrateSqlite(connection, keywordIndexDatabaseDefinition);
+    connection = openSqliteConnection(active, definition.schema);
+    migrateSqlite(connection, definition);
     // WAL is a SQLite file-mode setting, outside Drizzle's relational schema API.
     connection.client.exec("PRAGMA journal_mode = WAL");
     return wrap(connection, readCheckpoint(connection));
@@ -240,18 +247,16 @@ export async function createPersistentKeywordIndexAt(
   paths: PersistentKeywordIndexPaths,
   checkpoint: KeywordIndexCheckpoint,
   documents: readonly KeywordDocument[],
+  definition: KeywordIndexDatabaseDefinition = keywordIndexDatabaseDefinition,
 ): Promise<PersistentKeywordIndex> {
   const { directory, active } = paths;
   await mkdir(directory, { recursive: true });
   const temporary = join(directory, `build-${randomUUID()}.sqlite`);
   let connection: KeywordIndexConnection | undefined;
   try {
-    const stagingConnection = openSqliteConnection(
-      temporary,
-      keywordIndexDatabaseDefinition.schema,
-    );
+    const stagingConnection = openSqliteConnection(temporary, definition.schema);
     connection = stagingConnection;
-    migrateSqlite(stagingConnection, keywordIndexDatabaseDefinition);
+    migrateSqlite(stagingConnection, definition);
     stagingConnection.orm.transaction(() => {
       insertKeywordDocuments(stagingConnection.client, documents);
       writeInitialCheckpoint(stagingConnection, checkpoint);
@@ -259,7 +264,7 @@ export async function createPersistentKeywordIndexAt(
     stagingConnection.close();
     connection = undefined;
     await rename(temporary, active);
-    const opened = await openPersistentKeywordIndexAt(paths);
+    const opened = await openPersistentKeywordIndexAt(paths, definition);
     if (opened === undefined || !checkpointEquals(opened.checkpoint, checkpoint)) {
       opened?.close();
       throw new KeywordIndexError("Published keyword index did not retain its checkpoint");

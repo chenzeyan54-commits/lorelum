@@ -1,6 +1,7 @@
 import { mkdir, rm } from "node:fs/promises";
 
 import { KeywordIndexError } from "../query/errors";
+import { projectKeywordIndexDatabaseDefinition } from "../persistence/definitions";
 import {
   createPersistentKeywordIndexAt,
   openPersistentKeywordIndexAt,
@@ -31,7 +32,7 @@ async function openOrBuild(
   return withPersistentKeywordIndexWriterAt(paths, async () => {
     let existing: PersistentKeywordIndex | undefined;
     try {
-      existing = await openPersistentKeywordIndexAt(paths);
+      existing = await openPersistentKeywordIndexAt(paths, projectKeywordIndexDatabaseDefinition);
       if (existing !== undefined && currentArtifact(existing, snapshot)) return existing;
       existing?.close();
       existing = undefined;
@@ -44,6 +45,7 @@ async function openOrBuild(
       paths,
       { rootBinding: snapshot.indexCorpusDigest, effectiveRevision: 0 },
       snapshot.practices.map(projectKeywordPractice),
+      projectKeywordIndexDatabaseDefinition,
     );
   });
 }

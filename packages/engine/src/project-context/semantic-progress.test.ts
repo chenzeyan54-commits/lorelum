@@ -147,3 +147,69 @@ test("reuses shared vectors when a new ProjectContext artifact keeps the same pr
     ]);
   }
 });
+
+test("shared vectors never cross an embedding Profile or changed semantic projection", async () => {
+  const { root, cache } = await setup();
+  try {
+    const resolve = () =>
+      resolveProjectContext({
+        startDirectory: root,
+        storageRoot: { rootPath: join(root, "store") },
+        store: {
+          async readEffectivePracticeSnapshot() {
+            return { practices: [] };
+          },
+        },
+      });
+    const first = await resolve();
+    if (first === undefined) throw new Error("Expected ProjectContext");
+    const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
+    await new ProjectSemanticProgressService(first, cache, profile, {
+      maxBatchSize: 4,
+      async embed(inputs) {
+        return { encodingId, vectors: inputs.map(() => [1, 0]) };
+      },
+    }).build();
+
+    const otherEncodingId = "c".repeat(64);
+    const otherProfile = createEmbeddingProfile({ encodingId: otherEncodingId, dimensions: 2 });
+    let incompatibleProfileEmbeds = 0;
+    await new ProjectSemanticProgressService(first, cache, otherProfile, {
+      maxBatchSize: 4,
+      async embed(inputs) {
+        incompatibleProfileEmbeds += inputs.filter((input) => input.startsWith("Practice:")).length;
+        return { encodingId: otherEncodingId, vectors: inputs.map(() => [1, 0]) };
+      },
+    }).build();
+    expect(incompatibleProfileEmbeds).toBe(2);
+
+    const changedPractice = join(
+      root,
+      ".lorelum",
+      "packs",
+      "platform",
+      "practices",
+      "platform.first.md",
+    );
+    await writeFile(
+      changedPractice,
+      `${await Bun.file(changedPractice).text()}changed projection text\n`,
+    );
+    const changed = await resolve();
+    if (changed === undefined) throw new Error("Expected changed ProjectContext");
+    let changedProjectionEmbeds = 0;
+    await new ProjectSemanticProgressService(changed, cache, profile, {
+      maxBatchSize: 4,
+      async embed(inputs) {
+        changedProjectionEmbeds += inputs.filter((input) => input.startsWith("Practice:")).length;
+        return { encodingId, vectors: inputs.map(() => [1, 0]) };
+      },
+    }).build();
+    expect(changedProjectionEmbeds).toBe(1);
+  } finally {
+    await Promise.all([
+      rm(root, { recursive: true, force: true }),
+      rm(cache, { recursive: true, force: true }),
+    ]);
+  }
+});

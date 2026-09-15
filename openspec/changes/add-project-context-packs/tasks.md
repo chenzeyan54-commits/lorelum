@@ -8,10 +8,10 @@
 
 ## 2. Content-addressed derived caches and keyword artifacts
 
-- [ ] 2.1 新增 `semantic-vector-cache`、`semantic-progress-index`、`project-cache`、`project-keyword-index`、`project-semantic-index` 的 persistence definitions、Drizzle schemas/configs/migrations；更新 `bun run db:generate`、release migration asset 与测试，验证 fresh/open/idempotent migration history。
-- [ ] 2.2 实现用户级 shared vector cache、ProjectContext artifact catalog 和 index records；vector key 使用 `(profileId, projectionDigest)`，keyword/semantic artifact ID 使用有域分隔的 SHA-256 active `(practiceId, contentDigest, projectionDigest)` 内容清单，不得包含 Git、directory path、Store root、branch、commit 或 provenance。以 SQLite tests 验证 source path、Practice body 和错误 Profile/projection 不会被持久化或复用。
+- [x] 2.1 新增 `semantic-vector-cache`、`semantic-progress-index`、`project-cache`、`project-keyword-index`、`project-semantic-index` 的 persistence definitions、Drizzle schemas/configs/migrations；更新 `bun run db:generate`、release migration asset 与测试，验证 fresh/open/idempotent migration history。
+- [x] 2.2 实现用户级 shared vector cache、ProjectContext artifact catalog 和 index records；vector key 使用 `(profileId, projectionDigest)`，keyword/semantic artifact ID 使用有域分隔的 SHA-256 active `(practiceId, contentDigest, projectionDigest)` 内容清单，不得包含 Git、directory path、Store root、branch、commit 或 provenance。以 SQLite tests 验证 source path、Practice body 和错误 Profile/projection 不会被持久化或复用。
 - [ ] 2.3 实现 keyword artifact 的 FTS5 migration、staging publication、metadata/integrity 验证、内容相同目录 reuse 与 OS lock protected prune；以 integration tests 验证两个普通目录相同语料零重建、单 Practice 修改仅更新必要 document、损坏/孤立 cache 安全恢复。
-- [ ] 2.4 增加 `lore cache status` 和 `lore cache prune` command/result schema；验证只删除未被 operation 或 partial query 使用的 derived artifact/progress/vector，且 cache 清理不会写入项目 source 或 LocalStore。
+- [x] 2.4 增加 `lore cache status` 和 `lore cache prune` command/result schema；验证只删除未被 operation 或 partial query 使用的 derived artifact/progress/vector，且 cache 清理不会写入项目 source 或 LocalStore。
 
 ## 3. Persistent semantic targets, progress, and query coverage
 

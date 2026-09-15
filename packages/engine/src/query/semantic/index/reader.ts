@@ -1,7 +1,10 @@
 import { access } from "node:fs/promises";
 
 import { openSqliteConnection } from "../../../persistence/database/connection";
-import { semanticIndexDatabaseDefinition } from "../../../persistence/definitions";
+import {
+  semanticIndexDatabaseDefinition,
+  type SqliteDatabaseDefinition,
+} from "../../../persistence/definitions";
 import { semanticVectors } from "../../../persistence/schemas/semantic-index";
 import { SemanticIndexError } from "../errors";
 import {
@@ -112,6 +115,9 @@ export async function openSemanticIndexReader(
 export async function openSemanticIndexReaderAt(
   paths: SemanticIndexPaths,
   profile: EmbeddingProfile,
+  definition: SqliteDatabaseDefinition<
+    typeof semanticIndexDatabaseDefinition.schema
+  > = semanticIndexDatabaseDefinition,
 ): Promise<SemanticIndexReader> {
   const path = paths.active;
   try {
@@ -125,7 +131,7 @@ export async function openSemanticIndexReaderAt(
 
   let connection: SemanticIndexConnection | undefined;
   try {
-    connection = openSqliteConnection(path, semanticIndexDatabaseDefinition.schema, {
+    connection = openSqliteConnection(path, definition.schema, {
       readonly: true,
     });
     verifySemanticIndexIntegrity(connection);
