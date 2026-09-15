@@ -1,5 +1,7 @@
 # Semantic index 命令
 
+当前可观察合同见 [semantic index OpenSpec](../../openspec/specs/semantic-index/spec.md)；本页说明 CLI 状态、命令和恢复操作。
+
 `lore index status/build/rebuild` 管理指定 LocalStore 的 semantic index。`build/rebuild` 会按需启动本地 Backend；实际需要 embedding 而固定模型缺失时，Backend 自动开始或加入下载，并在模型 ready 后继续同一条 index operation。`status` 保持只读且不启动服务。`lore query` 默认会使用这个 index，`--mode keyword` 则保留独立的离线路径。
 
 在当前 worktree 验收这组命令时，先按[开发指南的 normal workflow](../development/README.md#normal-development-workflow)选择源码或编译路径；不要用全局 `lore` 或其他 worktree 的 binary 验证当前改动。

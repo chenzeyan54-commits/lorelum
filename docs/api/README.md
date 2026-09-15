@@ -1,6 +1,6 @@
 # Local backend API
 
-本目录描述本地 backend HTTP 合同。接口只绑定 `127.0.0.1`，统一使用 `/internal/v1` 路由前缀；它是本机控制面，不是公开网络 API。默认模型的下载来源由 embedding 配置管理；首次实际需要 embedding 的请求可以自动开始或加入一次后台准备，显式 load 用于等待、重试和观察它。
+本目录描述 [backend runtime](../../openspec/specs/backend-runtime/spec.md) 的本地 HTTP adapter。接口只绑定 `127.0.0.1`，统一使用 `/internal/v1` 路由前缀；它是本机控制面，不是公开网络 API。默认模型的下载来源由 embedding 配置管理；首次实际需要 embedding 的请求可以自动开始或加入一次后台准备，显式 load 用于等待、重试和观察它。
 
 当前内部协议版本为 3。客户端必须先通过 unauthenticated identity challenge 验证实例，再对受保护接口发送 `Authorization: Bearer <runtime-secret>`。HTTP 请求不能带 `Origin`，`Host` 必须匹配实际 loopback authority。
 

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-07
 - **Status:** Proposed
-- **Related:** ADR 0002, ADR 0004, ADR 0007, [Issue #59](https://github.com/lorelum/lorelum/issues/59)（LocalStore 点查与服务组装）, [Issue #60](https://github.com/lorelum/lorelum/issues/60)（QueryService 与 FTS5）, [Issue #57](https://github.com/lorelum/lorelum/issues/57)（关键词检索研究）, [Issue #58](https://github.com/lorelum/lorelum/issues/58)（ORM 研究）, [LocalStore 读取与 Query 基础设计](../plans/local-store-read-and-query-foundation.md), [Query 分阶段规划](../plans/query-roadmap.md)
+- **Related:** ADR 0002, ADR 0004, ADR 0007, [Issue #59](https://github.com/lorelum/lorelum/issues/59)（LocalStore 点查与服务组装）, [Issue #60](https://github.com/lorelum/lorelum/issues/60)（QueryService 与 FTS5）, [Issue #57](https://github.com/lorelum/lorelum/issues/57)（关键词检索研究）, [Issue #58](https://github.com/lorelum/lorelum/issues/58)（ORM 研究）, [Practice read](../../openspec/specs/practice-read/spec.md), [Retrieval query](../../openspec/specs/retrieval-query/spec.md)
 
 ## Context
 
@@ -148,5 +148,5 @@ Engine 成为 get 和 query 的真实业务入口。Engine 拥有 query 请求�
 - [ADR 0002: Bun/TypeScript toolchain](./0002-bun-typescript-toolchain.md)
 - [ADR 0004: Agent-first CLI protocol](./0004-agent-first-cli-protocol.md)
 - [ADR 0007: Engine LocalStore storage & lifecycle contract](./0007-engine-local-store.md)
-- [LocalStore 读取架构与 Query 基础设计](../plans/local-store-read-and-query-foundation.md)
-- [Lorelum Query 分阶段实施规划](../plans/query-roadmap.md)
+- [Practice read](../../openspec/specs/practice-read/spec.md)
+- [Retrieval query](../../openspec/specs/retrieval-query/spec.md)

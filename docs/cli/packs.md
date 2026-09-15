@@ -2,6 +2,8 @@
 
 Pack mutations operate on one LocalStore. Use the global `--store-root <path>` option to select an isolated Store for development or automation; otherwise the CLI uses the user-level default Store.
 
+当前 release 选择、install/update 边界以 [pack-management spec](../../openspec/specs/pack-management/spec.md) 为准；本文说明命令、参数和 JSON result 的使用方式。
+
 ```sh
 # Install the latest Registry release selected by the Registry contract.
 lore pack install agentic-coding

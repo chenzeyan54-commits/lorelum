@@ -2,6 +2,8 @@
 
 Use these scenarios to review the observable behavior of Lorelum's generic and Codex Skills. They validate the public retrieval contract without requiring the two host-specific Skill documents to use identical wording.
 
+[Agent integration](../../openspec/specs/agent-integration/spec.md) owns the host retrieval flow. [Retrieval query](../../openspec/specs/retrieval-query/spec.md), [local model runtime](../../openspec/specs/local-model-runtime/spec.md), and [semantic index](../../openspec/specs/semantic-index/spec.md) own the CLI readiness and recovery states exercised below.
+
 ## Generic Skill: Catalog already in context
 
 **Given:** the current task context already contains a usable `lore pack list --details` result.

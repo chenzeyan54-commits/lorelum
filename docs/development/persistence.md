@@ -4,6 +4,8 @@ Use this guide when changing SQLite persistence in `@lorelum/engine`. It explain
 
 This is an internal development guide. It does not change Pack format, CLI, or Backend contracts.
 
+[Practice read](../../openspec/specs/practice-read/spec.md) owns canonical LocalStore recovery behavior, and [semantic index](../../openspec/specs/semantic-index/spec.md) owns derived-index safety. This guide records the implementation and maintenance rules used to uphold those contracts.
+
 ## Persistence model
 
 Engine has three independent SQLite database kinds. They use one shared persistence foundation, but remain separate files because their lifecycles differ.

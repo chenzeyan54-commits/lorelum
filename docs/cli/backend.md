@@ -1,5 +1,7 @@
 # Backend 命令
 
+当前可观察合同见 [backend runtime OpenSpec](../../openspec/specs/backend-runtime/spec.md)；本页说明 CLI 生命周期命令与输出细节。
+
 `lore backend start/status/stop` 管理固定监听 `127.0.0.1:26186` 的本地后台服务。命令不使用 LocalStore，`--store-root` 不改变服务地址、模型或配置来源。
 
 ## 启动

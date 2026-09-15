@@ -6,6 +6,8 @@ Lorelum's Codex integration makes installed Knowledge Packs discoverable in a co
 
 This integration is intentionally CLI-first. It uses the released `lore` executable, the Lorelum Skill, and the Codex Hook; it does not run a local MCP server or expose local MCP tools. Do not add MCP as a local convenience or performance optimization. MCP is reserved for a separately approved future platform remote-retrieval service.
 
+The current host integration contract is [agent-integration](../../openspec/specs/agent-integration/spec.md); this guide explains Codex setup and recovery without defining a second retrieval contract.
+
 ## Prerequisites
 
 The Plugin requires Lorelum CLI v0.1.0-alpha.1 or later, available as `lore` on `PATH`. That public alpha introduces the `lore hook codex` ABI used by the Plugin. Bun and Node are not ordinary-user prerequisites: the installed Plugin invokes the compiled `lore` executable directly.

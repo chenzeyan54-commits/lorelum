@@ -1,6 +1,8 @@
 # Read an installed Practice
 
-`lore get <practice-id>` retrieves one complete canonical Practice by its exact ID from the selected LocalStore. The public command contract was agreed in [issue #49](https://github.com/lorelum/lorelum/issues/49); the Engine point-read path and its consistency boundary are described in [ADR 0011](../adr/0011-local-store-point-read-and-query-boundary.md).
+当前可观察合同见 [practice read OpenSpec](../../openspec/specs/practice-read/spec.md)；本页说明 CLI 参数、JSON 输出与恢复操作。
+
+`lore get <practice-id>` retrieves one complete canonical Practice by its exact ID from the selected LocalStore. The public command contract was agreed in [issue #49](https://github.com/lorelum/lorelum/issues/49); ADR 0011 preserves historical reasoning for the point-read consistency boundary.
 
 ```sh
 lore pack list

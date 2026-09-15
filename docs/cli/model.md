@@ -1,5 +1,7 @@
 # Model 命令
 
+当前可观察合同见 [local model runtime OpenSpec](../../openspec/specs/local-model-runtime/spec.md)；本页说明 CLI 操作和进度输出。
+
 Model 命令控制本地 embedding service，不依赖 LocalStore，也不会因为 `--store-root` 改变模型来源。backend 必须先由 `lore backend start` 启动。
 
 ## `lore model load`

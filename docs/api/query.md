@@ -1,5 +1,7 @@
 # Query API
 
+当前可观察合同见 [retrieval query OpenSpec](../../openspec/specs/retrieval-query/spec.md)；本页说明 Backend HTTP adapter 的请求与响应细节。
+
 `POST /internal/v1/query` uses the Backend's local authentication boundary. The controller itself does not start a download; the CLI runtime starts or joins model preparation only after an otherwise-valid semantic query reaches `embedding.not-loaded`. Omitting `mode` selects semantic retrieval; callers that need the offline keyword path must send `mode: "keyword"` explicitly.
 
 请求 body：

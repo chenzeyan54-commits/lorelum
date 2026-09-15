@@ -1,6 +1,6 @@
 # vllm-mlx：Lorelum 本地 embedding 选型调研
 
-调研时间：2026-09-11，Asia/Shanghai。仅查阅一手文档、发布元数据、源码与测试；未安装候选依赖、下载模型权重或运行推理。本文的性能与资源结论不包含本机实测。对应[第二阶段计划](../plans/local-backend-stage-2-design.md)。
+调研时间：2026-09-11，Asia/Shanghai。仅查阅一手文档、发布元数据、源码与测试；未安装候选依赖、下载模型权重或运行推理。本文的性能与资源结论不包含本机实测。当前运行时边界见 [local model runtime](../../openspec/specs/local-model-runtime/spec.md) 与 [native runtime artifact](../../openspec/specs/native-runtime-artifact/spec.md)。
 
 ## 结论
 

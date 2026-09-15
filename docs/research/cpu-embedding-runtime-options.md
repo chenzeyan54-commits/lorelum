@@ -1,6 +1,6 @@
 # CPU embedding：更小量化与 llama.cpp 候选
 
-选型已收口：用户确认采用 **llama.cpp + Q4_0 CPU**，停止本轮框架与量化调研，GPU 留待后续。以下保留当时的比较结果和建议；实施以[第二阶段接入计划](../plans/local-backend-stage-2-design.md)为准。
+选型已收口：用户确认采用 **llama.cpp + Q4_0 CPU**，停止本轮框架与量化调研，GPU 留待后续。以下保留当时的比较结果和建议；当前行为以 [local model runtime](../../openspec/specs/local-model-runtime/spec.md) 与 [native runtime artifact](../../openspec/specs/native-runtime-artifact/spec.md) 为准。
 
 2026-09-11。用户已确定本阶段采用 CPU 路线，GPU 不再作为接入前置验证。后续获准的 [llama.cpp CPU 对照已完成](./llama-cpu-validation.md)：Q8 与显式全四位 Q4_0 有温和性能和内存收益，Q4_K_M 不适合作为默认。下文保留选型前的候选资料；实际结果以补测报告为准。
 

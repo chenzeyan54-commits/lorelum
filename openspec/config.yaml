@@ -1,0 +1,56 @@
+schema: spec-driven
+
+context: |
+  Language: Chinese
+  All artifacts must be written in Chinese.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+  Lorelum is a CLI-first local product. Current local integrations use the compiled CLI,
+  host Skills, and Hooks; local MCP, stdio servers, MCP tools, and MCP-backed Plugins are
+  out of scope. The root AGENTS.md and openspec/specs/agent-integration/spec.md are current
+  authority for that boundary.
+  Current capability contracts belong in openspec/specs after an accepted migration. ADRs
+  preserve accepted architectural decisions and their supersession status. docs/cli,
+  docs/api, docs/configuration, site documentation, development guides, and research keep
+  their existing audiences and must not become competing behavior contracts.
+  openspec/changes/archive is historical evidence. Do not read it for
+  ordinary planning or implementation unless the user requests historical investigation or
+  provenance; verify any historical claim against current specs, ADRs, code, and tests.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+rules:
+  proposal:
+    - State whether a change records existing behavior or introduces new product behavior.
+    - Do not promote Proposed ADRs, roadmap items, or historical plans into accepted scope.
+  specs:
+    - Specify only current, observable behavior with SHALL/MUST requirements and scenarios.
+    - Keep CLI-first boundaries and do not introduce a local MCP surface.
+  design:
+    - Separate observed evidence, migration decisions, and deferred work.
+    - Give each migrated requirement a current code or test source.
+  tasks:
+    - Mark a task complete only after its named artifact and verification are complete.
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
+operations:
+  archive:
+    guidance:
+      - Sync only reviewed delta specs and verify the resulting current specs before archiving.
+      - Preserve historical source material without treating it as current contract.

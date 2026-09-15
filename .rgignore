@@ -1,0 +1,4 @@
+# Historical OpenSpec material is intentionally available by path, but is not default exploration context.
+openspec/changes/archive/
+# Provenance copied into an active change is historical source material, not proposal context.
+openspec/changes/*/provenance/

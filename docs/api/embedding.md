@@ -1,5 +1,7 @@
 # Embedding 模型 API
 
+当前可观察合同见 [local model runtime OpenSpec](../../openspec/specs/local-model-runtime/spec.md)；本页说明 Backend HTTP adapter 的模型状态、准备和编码细节。
+
 模型接口复用 backend 的本地认证边界。模型资源准备、native 启动和编码由同一个 service 管理；重复 load 不会创建第二个下载或 native 进程。
 
 ## ModelStatus

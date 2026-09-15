@@ -1,6 +1,6 @@
 # Keyword query: quality and performance baseline
 
-This records the request-local baseline from the [LocalStore read-and-query foundation](../plans/local-store-read-and-query-foundation.md), not a comparison with MiniSearch or semantic retrieval. Issue #63 adds a persistent derived FTS5 index; its benchmark now reports `query-first-build` and `query-reuse` separately. Both scripts use isolated temporary Stores and remove them afterwards. They never open the user's default Store. No external Pack content is checked into this repository.
+This records the request-local baseline for [Practice read](../../openspec/specs/practice-read/spec.md), not a comparison with MiniSearch or semantic retrieval. Issue #63 adds a persistent derived FTS5 index; its benchmark now reports `query-first-build` and `query-reuse` separately. Both scripts use isolated temporary Stores and remove them afterwards. They never open the user's default Store. No external Pack content is checked into this repository.
 
 ## Reproduce
 

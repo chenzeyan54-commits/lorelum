@@ -2,6 +2,8 @@
 
 This is the first Codex integration for Lorelum. It brings relevant engineering Practices into Codex when they can inform a task or decision, without loading every rule at once. Its progressive-disclosure flow is:
 
+The current host integration contract is [agent-integration](../../openspec/specs/agent-integration/spec.md); this README explains the Codex-specific distribution and operating model.
+
 1. A compact **Installed Pack Catalog** makes the locally available Knowledge Packs discoverable.
 2. The Lorelum Skill uses that catalog as a relevance hint, not as the full engineering rules or a hard filter.
 3. At a material task, decision, verification, recovery, or completion moment, Codex uses one targeted natural-language semantic query before deciding retrieval is not worth attempting.

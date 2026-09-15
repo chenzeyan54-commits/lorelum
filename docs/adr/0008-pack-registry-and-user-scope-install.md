@@ -114,5 +114,4 @@ Registry/source/Pack/Store errors 在 CLI 边界映射为 install 命令声明�
 - ADR 0003 — Practice/Pack format and validation semantics.
 - ADR 0004 — agent-first CLI JSON protocol.
 - ADR 0007 — LocalStore lifecycle, idempotency, recovery and commit semantics.
-- `docs/plans/lorelum-packs-repository-plan.md` — public Catalog vs project-authored source.
-- `docs/plans/agentic-coding-pack-plan.md` — planned Practice content architecture.
+- Pack source planning belongs in the companion `lorelum/lorelum-packs` repository rather than this repository's current capability contracts.

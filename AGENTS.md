@@ -4,9 +4,9 @@
 
 ## Module guidance
 
-When a task develops or changes one of the following areas, read and prioritize that module's `AGENTS.md`. Read README files, current contracts, ADRs, plans, tests, or source only when the task needs them; do not recursively load the repository merely because a file may be relevant.
+When a task develops or changes one of the following areas, read and prioritize that module's `AGENTS.md`. Read README files, current specs/contracts, ADRs, active changes, tests, or source only when the task needs them; do not recursively load the repository merely because a file may be relevant.
 
-When sources conflict, distinguish the current request and accepted rules from observations. Current user authorization defines task scope; current CLI/API/configuration/development contracts and non-superseded Accepted ADRs define repository intent; code and tests show the current state; plans, summaries, and research may provide context but do not silently define current behavior.
+When sources conflict, distinguish the current request and accepted rules from observations. Current user authorization defines task scope; an explicitly selected active change, current specs, current CLI/API/configuration/development contracts, and non-superseded Accepted ADRs define repository intent; code and tests show the current state; plans, summaries, research, and archived changes may provide context but do not silently define current behavior.
 
 ## Project and product boundaries
 
@@ -20,7 +20,7 @@ Lorelum is a Bun + TypeScript monorepo for engineering-knowledge retrieval: the 
 | `packages/format` | public Practice/Pack schema, parsing, validation, localization helpers | `packages/format/AGENTS.md` |
 | `apps/site` | public landing and documentation site | `apps/site/AGENTS.md` |
 | `packages/ui` | reusable Web primitives and production design tokens | `packages/ui/AGENTS.md` |
-| `docs` | current contracts, development material, ADRs, plans, research | `docs/AGENTS.md` |
+| `docs` | current contracts, development material, ADRs, research | `docs/AGENTS.md` |
 
 Current integrations are CLI-first: use the released CLI together with host-native Skills and Hooks. Do not introduce local MCP servers, stdio wiring, MCP tools, MCP-backed Plugin behavior, or a local MCP wrapper around `lore`. `packages/mcp` is a non-product scaffold. A remote-retrieval MCP boundary requires a separately approved design.
 
@@ -51,12 +51,20 @@ Match verification to the changed boundary. New behavior ships with colocated `b
 - Do not run package-publish commands or publish to a public registry. Check dependency licenses before adding or upgrading dependencies; do not add GPL/AGPL dependencies to this Apache-2.0 core without maintainer approval.
 - Before every commit or push, inspect the staged file list and diff, scan for secrets and private runtime data, and exclude local outputs, caches, logs, credentials, generated media, and machine-specific artifacts unless explicitly required.
 
+### Change scale and OpenSpec
+
+- **Small — execute directly, without OpenSpec.** It preserves current behavior and contracts within an existing boundary; documentation or current-spec edits that only correct facts, links, wording, examples, or formatting without changing a requirement or scenario are small.
+- **Large — write an OpenSpec proposal first.** This includes any observable or cross-boundary contract/default/error change; architecture, ownership, lifecycle, integration, security/privacy, persistence, release, or platform change; and any cross-package or unresolved design decision.
+- **If uncertain, treat it as large.** Do not split a coupled large decision into nominally small edits.
+
 ## Canonical references
 
 - Product and user entry: [README.md](./README.md)
 - Human contribution process: [CONTRIBUTING.md](./CONTRIBUTING.md)
+- Current capability specs: [openspec/specs](./openspec/specs/)
 - Current CLI/API/configuration/development contracts: [docs](./docs/)
 - Architecture decisions and lifecycle: [docs/adr/README.md](./docs/adr/README.md)
-- Current agent-integration scope: [docs/plans/agent-integration-scope.md](./docs/plans/agent-integration-scope.md)
+- Current agent-integration scope: [agent-integration spec](./openspec/specs/agent-integration/spec.md)
+- Archived changes are provenance only: [openspec/changes/archive](./openspec/changes/archive/)
 
 When a task is ambiguous, inspect the relevant module guidance and canonical sources before asking. Ask only when the unresolved fact changes authorization, public contract, acceptance criteria, or a material architecture direction; continue independent, authorized investigation and verification in the meantime.

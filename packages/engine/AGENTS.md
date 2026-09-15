@@ -38,4 +38,6 @@
 - [Engine persistence and Drizzle](../../docs/development/persistence.md)
 - [LocalStore ADR](../../docs/adr/0007-engine-local-store.md)
 - [Query CLI contract](../../docs/cli/query.md)
-- [Semantic Query dependency boundaries](../../docs/plans/semantic-query-v1-dependency-boundaries.md)
+- [Practice Read spec](../../openspec/specs/practice-read/spec.md)
+- [Semantic Index spec](../../openspec/specs/semantic-index/spec.md)
+- [Retrieval Query spec](../../openspec/specs/retrieval-query/spec.md)

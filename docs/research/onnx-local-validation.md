@@ -2,7 +2,7 @@
 
 结论：**在本机 Apple M4 / 32 GiB / macOS arm64 上，固定 Granite 97M R2 的 ONNX CPU 路线通过正确性与起步性能标准，适合进入接入规划。** 必须隔离推理执行，并把原生库作为分发资源；不能直接在 Elysia 主线程运行，也不能只交付未经资源处理的单文件。
 
-本次获准执行最小验证，未改产品代码、生产依赖、用户 Store 或用户 config。[结构化结果](./onnx-validation/results.json)保留模型资源摘要、版本、两轮测量与采样口径；[接入计划](../plans/local-backend-stage-2-design.md)基于这些实测更新。
+本次获准执行最小验证，未改产品代码、生产依赖、用户 Store 或用户 config。[结构化结果](./onnx-validation/results.json)保留模型资源摘要、版本、两轮测量与采样口径；当前运行时边界见 [local model runtime](../../openspec/specs/local-model-runtime/spec.md) 与 [native runtime artifact](../../openspec/specs/native-runtime-artifact/spec.md)。
 
 后续 [CPU INT8 补测](./onnx-cpu-quantization-validation.md)：512-token 单条吞吐提升约 13%–28%，常驻 RSS 降低约 42%–48%；小型合成检索集未见指标下降，但不代表量化无损。本轮 FP32 RSS 超过原先 1.5 GiB 假设，原内存结果不能视为稳定上界。
 

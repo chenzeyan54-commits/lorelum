@@ -1,5 +1,7 @@
 # Backend 控制 API
 
+当前 Backend control 合同见 [backend runtime](../../openspec/specs/backend-runtime/spec.md)；关联的 retrieval 行为分别见 [retrieval query](../../openspec/specs/retrieval-query/spec.md)、[semantic index](../../openspec/specs/semantic-index/spec.md) 和 [local model runtime](../../openspec/specs/local-model-runtime/spec.md)。本页只说明 HTTP adapter。
+
 所有路径都以 `/internal/v1` 开头。identity 是唯一不要求 Bearer credential 的接口；其余接口必须通过本次 daemon 的 runtime secret 认证。
 
 ## Identity
@@ -12,7 +14,7 @@
 {
   "instanceId": "3c6c8d9e-3b52-4e66-a8f5-0a4b8c2e4f7b",
   "buildIdentity": "…",
-  "protocolVersion": 1,
+  "protocolVersion": 3,
   "proof": "…"
 }
 ```

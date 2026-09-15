@@ -7,6 +7,7 @@ This is the index for day-to-day development topics that do not belong in the pr
 - [Local backend API](../api/README.md)
 - [CLI command index](../cli/README.md)
 - [Backend configuration](../configuration/README.md)
+- [Current OpenSpec capability contracts](../../openspec/specs/)
 - [Environment and dependencies](../../CONTRIBUTING.md#development-environment)
 - [Tests and CI](../../CONTRIBUTING.md#testing--ci)
 - [Issues, branches, and PRs](../../CONTRIBUTING.md#development-workflow)
@@ -25,10 +26,11 @@ This is the index for day-to-day development topics that do not belong in the pr
 - [Keyword query quality and performance baseline](./keyword-query-benchmark.md)
 - [Site deployment workflow](./site-deploy.md)
 
-## Design records and remaining plans
+## Current engineering contracts
 
-- [Query roadmap (Chinese)](../plans/query-roadmap.md) - delivered capabilities, the current runtime-coordination stage, and evidence-gated later work. Use the CLI documents for the shipped semantic query contract.
-- [Local resident backend design (Chinese)](../plans/local-backend-service-design.md) - the historical first-stage lifecycle and Store-isolation design. For current commands and model behavior, use the CLI documents above.
+- [OpenSpec capability contracts](../../openspec/specs/) - begin implementation and validation here; CLI/API documents add command and protocol details.
+- [Backend runtime](../../openspec/specs/backend-runtime/spec.md)、[Practice read](../../openspec/specs/practice-read/spec.md)、[CLI distribution](../../openspec/specs/cli-distribution/spec.md) 和 [native runtime artifact](../../openspec/specs/native-runtime-artifact/spec.md) cover the current boundaries formerly scattered across design plans.
+- Future roadmap and unapproved proposals are archived design context until a new active OpenSpec change explicitly accepts them.
 
 ## Local CLI and multiple worktrees
 
@@ -180,7 +182,7 @@ if (effective !== undefined) {
 
 Use `getEffectivePractice` for an exact ID, `readEffectivePractices` for one full consistent corpus, and `open` when the caller explicitly needs the full artifact audit. Both point and corpus reads validate the SQLite rows they return; only `open` hashes installed artifacts. `getEffectivePractice` and `open` can converge pending operation journals; `readEffectivePractices` does not add that write-recovery step. Invalid IDs throw `InvalidPracticeIdError` before I/O; missing IDs return `undefined`; inconsistent or busy Stores throw `StoreRecoveryRequiredError` or `StoreBusyError`. Do not turn these errors into an empty result.
 
-See [ADR 0011](../adr/0011-local-store-point-read-and-query-boundary.md) for the consistency boundary and query lifecycle.
+See [ADR 0011](../adr/0011-local-store-point-read-and-query-boundary.md) for historical reasoning about the LocalStore consistency boundary. It remains Proposed and is not the sole current query-lifecycle entry; use the relevant [OpenSpec capability spec](../../openspec/specs/) and current code/tests for shipped behavior.
 
 ## QueryService Engine API
 

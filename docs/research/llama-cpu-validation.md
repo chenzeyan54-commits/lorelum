@@ -1,6 +1,6 @@
 # llama.cpp CPU：Q8 与 Q4 最小验证
 
-选型已收口：用户确认采用 **llama.cpp + Q4_0 CPU**，停止本轮框架与量化调研，GPU 留待后续。以下保留当时的比较结果和建议；实施以[第二阶段接入计划](../plans/local-backend-stage-2-design.md)为准。
+选型已收口：用户确认采用 **llama.cpp + Q4_0 CPU**，停止本轮框架与量化调研，GPU 留待后续。以下保留当时的比较结果和建议；当前行为以 [local model runtime](../../openspec/specs/local-model-runtime/spec.md) 与 [native runtime artifact](../../openspec/specs/native-runtime-artifact/spec.md) 为准。
 
 2026-09-11。结论：本机 llama.cpp 的 Q8_0 和显式全四位 Q4_0 值得作为 CPU 接入候选。单条 512-token 编码较本轮 ONNX INT8 有温和提升，512-token 配置下进程 RSS 更低；默认 Q4_K_M 反而更慢，且文件没有明显缩小。本阶段已选定 llama.cpp Q4_0；Q8_0 保留为量化质量对照，不同时交付两套 runtime。
 
