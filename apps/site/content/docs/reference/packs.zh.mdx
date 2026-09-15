@@ -25,7 +25,9 @@ lore pack list --details
 lore pack list agentic-coding
 ```
 
-第一条列出已安装 Pack，`--details` 加上发现所需的元数据，指定 Pack 名则列出其中的 Practice。把结果中的 ID 传给 [get](./get)。
+第一条列出已安装 Pack，并在每个 Pack 上返回当前本机 `packRoot`；`--details` 加上发现所需的元数据，也会返回 Pack locator。指定 Pack 名则列出其中的 Practice，并在 `pack` object 上返回 `packRoot`。把结果中的 ID 传给 [get](./get)。Practice 摘要刻意不重复每条 Practice 或资源路径。
+
+`packRoot` 适合调用方已经明确选择一个 Pack 后进行浏览或维护；它不会进入 query 结果，但 Codex Pack Catalog 会为每个已安装 Pack 提供它。Catalog 仍不会自动加载或枚举 Pack 资源。locator 只属于本次命令 Store snapshot 中的 artifact。发生 mutation 后，应重新运行 `pack list` 或 `get`，不能从 Pack 名或 Store 布局推导新 root。详见 [Pack 格式](./pack-format)。
 
 ## 更新和移除
 
@@ -42,7 +44,7 @@ lore pack remove <pack-name>
 lore validate /path/to/pack
 ```
 
-校验检查 Pack 并报告本地化状态，适合[创建 Pack](../create-pack) 时使用。退出码为 `0`、`1` 或 `2`；具体诊断与命令错误的区别见结果和 `lore describe validate`。
+校验检查 Pack 并报告本地化状态，也会报告非法资源目录和 `resource:` target，但不会执行 Pack script。适合[创建 Pack](../create-pack)时使用；完整资源边界见 [Pack 格式](./pack-format)。退出码为 `0`、`1` 或 `2`；具体诊断与命令错误的区别见结果和 `lore describe validate`。
 
 ## 选择 Store
 

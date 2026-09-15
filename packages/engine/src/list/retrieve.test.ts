@@ -40,27 +40,43 @@ function effectivePractice(
 }
 
 const packs: readonly InstalledPackSummary[] = [
-  { name: "zeta", version: "0.2.0" },
-  { name: "alpha", version: "0.1.0" },
-  { name: "empty-pack", version: "0.3.0" },
+  { name: "zeta", version: "0.2.0", packRoot: "/packs/zeta" },
+  { name: "alpha", version: "0.1.0", packRoot: "/packs/alpha" },
+  { name: "empty-pack", version: "0.3.0", packRoot: "/packs/empty-pack" },
 ];
 
 const packDetails: readonly InstalledPackDetails[] = [
   {
     name: "zeta",
     version: "0.2.0",
+    packRoot: "/packs/zeta",
     description: "Zeta guidance",
     applies_to: ["typescript"],
   },
-  { name: "alpha", version: "0.1.0" },
+  { name: "alpha", version: "0.1.0", packRoot: "/packs/alpha" },
 ];
 
 describe("retrievePacks", () => {
   test("counts Practices by source claim and sorts Packs by name", () => {
     const packsWithExtras = [
-      { name: "zeta", version: "0.2.0", storageKey: "p-zeta" },
-      { name: "alpha", version: "0.1.0", storageKey: "p-alpha" },
-      { name: "empty-pack", version: "0.3.0", storageKey: "p-empty-pack" },
+      {
+        name: "zeta",
+        version: "0.2.0",
+        packRoot: "/packs/zeta",
+        storageKey: "p-zeta",
+      },
+      {
+        name: "alpha",
+        version: "0.1.0",
+        packRoot: "/packs/alpha",
+        storageKey: "p-alpha",
+      },
+      {
+        name: "empty-pack",
+        version: "0.3.0",
+        packRoot: "/packs/empty-pack",
+        storageKey: "p-empty-pack",
+      },
     ] as unknown as readonly InstalledPackSummary[];
 
     const result = retrievePacks({
@@ -73,9 +89,14 @@ describe("retrievePacks", () => {
     });
 
     expect(result.packs).toEqual([
-      { name: "alpha", version: "0.1.0", practiceCount: 2 },
-      { name: "empty-pack", version: "0.3.0", practiceCount: 0 },
-      { name: "zeta", version: "0.2.0", practiceCount: 2 },
+      { name: "alpha", version: "0.1.0", packRoot: "/packs/alpha", practiceCount: 2 },
+      {
+        name: "empty-pack",
+        version: "0.3.0",
+        packRoot: "/packs/empty-pack",
+        practiceCount: 0,
+      },
+      { name: "zeta", version: "0.2.0", packRoot: "/packs/zeta", practiceCount: 2 },
     ]);
     expect(Object.isFrozen(result.packs)).toBe(true);
     expect("storageKey" in result.packs[0]!).toBe(false);
@@ -88,10 +109,11 @@ describe("retrievePackDetails", () => {
 
     expect(result).toEqual({
       packs: [
-        { name: "alpha", version: "0.1.0" },
+        { name: "alpha", version: "0.1.0", packRoot: "/packs/alpha" },
         {
           name: "zeta",
           version: "0.2.0",
+          packRoot: "/packs/zeta",
           description: "Zeta guidance",
           applies_to: ["typescript"],
         },
@@ -117,7 +139,7 @@ describe("retrievePackPractices", () => {
     });
 
     expect(result).toEqual({
-      pack: { name: "alpha", version: "0.1.0" },
+      pack: { name: "alpha", version: "0.1.0", packRoot: "/packs/alpha" },
       practices: [
         {
           id: "react.a-api",
@@ -160,7 +182,7 @@ describe("retrievePackPractices", () => {
         effectivePractices: [effectivePractice("react.api", ["alpha"])],
       }),
     ).toEqual({
-      pack: { name: "empty-pack", version: "0.3.0" },
+      pack: { name: "empty-pack", version: "0.3.0", packRoot: "/packs/empty-pack" },
       practices: [],
     });
   });

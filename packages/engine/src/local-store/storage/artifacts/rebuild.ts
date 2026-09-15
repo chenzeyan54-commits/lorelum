@@ -89,6 +89,7 @@ function mergeSources(sources: readonly PracticeSource[]): readonly EffectivePra
       pack: Object.freeze({ name: packName, version: "0.0.0" }),
       sources: Object.freeze(packSources),
       decisions: Object.freeze([]),
+      resources: Object.freeze([]),
     };
     reconciled = reconcileEffectivePractices(reconciled.sources, candidate);
   }

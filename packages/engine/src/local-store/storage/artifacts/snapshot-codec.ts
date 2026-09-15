@@ -1,9 +1,14 @@
 import { lstat, opendir, readFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 
-import { parseFrontmatter, parseYaml, type ValidationIssue } from "@lorelum/format";
+import {
+  PACK_RESOURCE_ROOTS,
+  parseFrontmatter,
+  parseYaml,
+  type ValidationIssue,
+} from "@lorelum/format";
 
-import { createPackCandidate, type PackCandidate } from "../../model";
+import { createPackCandidate, type PackCandidate, type PackResource } from "../../model";
 
 import { SnapshotFormatError } from "../errors";
 
@@ -45,6 +50,18 @@ async function discoverPractices(
   if (depth > limits.maxDirectoryDepth) {
     throw new SnapshotFormatError(directory, "practices directory exceeds the depth budget");
   }
+  let metadata;
+  try {
+    metadata = await lstat(directory);
+  } catch (error) {
+    throw new SnapshotFormatError(directory, "cannot inspect practices directory", error);
+  }
+  if (metadata.isSymbolicLink()) {
+    throw new SnapshotFormatError(directory, "symbolic links are not allowed in a snapshot");
+  }
+  if (!metadata.isDirectory()) {
+    throw new SnapshotFormatError(directory, "practices root is not a directory");
+  }
   budget.directories += 1;
   if (budget.directories > limits.maxDirectories) {
     throw new SnapshotFormatError(directory, "snapshot exceeds the directory budget");
@@ -80,12 +97,69 @@ async function discoverPractices(
   return paths.sort();
 }
 
-async function readSnapshotFile(
+async function discoverResourceFiles(
+  directory: string,
+  limits: PackDirectoryLimits,
+  budget: DecodeBudget,
+  depth = 0,
+): Promise<string[]> {
+  if (depth > limits.maxDirectoryDepth) {
+    throw new SnapshotFormatError(directory, "resource directory exceeds the depth budget");
+  }
+  let metadata;
+  try {
+    metadata = await lstat(directory);
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
+      return [];
+    }
+    throw new SnapshotFormatError(directory, "cannot inspect resource directory", error);
+  }
+  if (metadata.isSymbolicLink()) {
+    throw new SnapshotFormatError(directory, "symbolic links are not allowed in a snapshot");
+  }
+  if (!metadata.isDirectory()) {
+    throw new SnapshotFormatError(directory, "resource root is not a directory");
+  }
+  budget.directories += 1;
+  if (budget.directories > limits.maxDirectories) {
+    throw new SnapshotFormatError(directory, "snapshot exceeds the directory budget");
+  }
+  let directoryHandle;
+  try {
+    directoryHandle = await opendir(directory);
+  } catch (error) {
+    throw new SnapshotFormatError(directory, "cannot read resource directory", error);
+  }
+  const paths: string[] = [];
+  /* eslint-disable no-await-in-loop -- recursive discovery follows one bounded directory stream */
+  for await (const entry of directoryHandle) {
+    budget.entries += 1;
+    if (budget.entries > limits.maxEntries) {
+      throw new SnapshotFormatError(directory, "snapshot exceeds the directory-entry budget");
+    }
+    const path = join(directory, entry.name);
+    if (entry.isSymbolicLink()) {
+      throw new SnapshotFormatError(directory, "symbolic links are not allowed in a snapshot");
+    }
+    if (entry.isDirectory()) {
+      paths.push(...(await discoverResourceFiles(path, limits, budget, depth + 1)));
+    } else if (entry.isFile()) {
+      paths.push(path);
+    } else {
+      throw new SnapshotFormatError(directory, "resources may contain only regular files");
+    }
+  }
+  /* eslint-enable no-await-in-loop */
+  return paths.sort();
+}
+
+async function readSnapshotBytes(
   snapshotPath: string,
   path: string,
   limits: PackDirectoryLimits,
   budget: DecodeBudget,
-): Promise<string> {
+): Promise<Uint8Array> {
   try {
     const metadata = await lstat(path);
     if (metadata.isSymbolicLink()) {
@@ -105,7 +179,7 @@ async function readSnapshotFile(
     if (budget.totalBytes > limits.maxTotalBytes) {
       throw new SnapshotFormatError(snapshotPath, "snapshot exceeds the total byte budget");
     }
-    return contents.toString("utf8");
+    return contents;
   } catch (error) {
     if (error instanceof SnapshotFormatError) throw error;
     throw new SnapshotFormatError(
@@ -114,6 +188,15 @@ async function readSnapshotFile(
       error,
     );
   }
+}
+
+async function readSnapshotFile(
+  snapshotPath: string,
+  path: string,
+  limits: PackDirectoryLimits,
+  budget: DecodeBudget,
+): Promise<string> {
+  return (await readSnapshotBytes(snapshotPath, path, limits, budget)).toString();
 }
 
 async function decodePracticeFiles(
@@ -128,6 +211,25 @@ async function decodePracticeFiles(
     practices.push(await decodePracticeFile(snapshotPath, path, limits, budget));
   }
   return practices;
+}
+
+async function decodeResourceFiles(
+  snapshotPath: string,
+  resourcePaths: readonly string[],
+  limits: PackDirectoryLimits,
+  budget: DecodeBudget,
+): Promise<PackResource[]> {
+  const resources: PackResource[] = [];
+  for (const path of resourcePaths) {
+    resources.push(
+      Object.freeze({
+        sourcePath: relativePath(snapshotPath, path),
+        // eslint-disable-next-line no-await-in-loop -- decoding shares one total-byte budget
+        bytes: await readSnapshotBytes(snapshotPath, path, limits, budget),
+      }),
+    );
+  }
+  return resources;
 }
 
 async function decodeDecisions(
@@ -208,6 +310,14 @@ export async function decodeSnapshot(
   }
   const practicePaths = await discoverPractices(join(snapshotPath, "practices"), limits, budget);
   const practices = await decodePracticeFiles(snapshotPath, practicePaths, limits, budget);
+  const resourcePaths: string[] = [];
+  for (const directory of PACK_RESOURCE_ROOTS) {
+    resourcePaths.push(
+      // eslint-disable-next-line no-await-in-loop -- discovery shares one bounded directory budget
+      ...(await discoverResourceFiles(join(snapshotPath, directory), limits, budget)),
+    );
+  }
+  resourcePaths.sort();
   const sourcePaths: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const [index, practice] of practices.entries()) {
     const practicePath = practicePaths[index];
@@ -230,5 +340,6 @@ export async function decodeSnapshot(
     practices,
     decisions: await decodeDecisions(snapshotPath, limits, budget),
   };
-  return Object.freeze(createPackCandidate(input, sourcePaths));
+  const resources = await decodeResourceFiles(snapshotPath, resourcePaths, limits, budget);
+  return Object.freeze(createPackCandidate(input, sourcePaths, resources));
 }

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -96,9 +96,13 @@ function sourcePaths(input: UnvalidatedPackInput): Record<string, string> {
   return paths;
 }
 
-function candidate(name: string, practices: Record<string, string>): PackCandidate {
+function candidate(
+  name: string,
+  practices: Record<string, string>,
+  resources: readonly { sourcePath: string; bytes: Uint8Array }[] = [],
+): PackCandidate {
   const input = packInput(name, practices);
-  return createPackCandidate(input, sourcePaths(input)).candidate;
+  return createPackCandidate(input, sourcePaths(input), resources).candidate;
 }
 
 const platform = { "platform.api": "Use APIs.\n", "platform.auth": "Authenticate.\n" };
@@ -182,6 +186,45 @@ test("reindex rebuilds a store whose SQLite was deleted", async () => {
     expect(reindexed.effectiveRevision).toBeGreaterThan(0);
     const practices = await store.readEffectivePractices(root);
     expect(practices.map((p) => p.practiceId)).toEqual(["platform.api", "platform.auth"]);
+  });
+});
+
+test("reindex re-decodes and retains raw Pack resources from the sealed artifact", async () => {
+  await withRoot(async (root) => {
+    const store = createLocalStore();
+    const installed = await store.install(
+      root,
+      candidate(
+        "platform",
+        {
+          "platform.api":
+            "Read [the compatibility matrix](resource:references/api-compatibility.md).\n",
+        },
+        [
+          {
+            sourcePath: "references/api-compatibility.md",
+            bytes: new Uint8Array([0, 255, 7]),
+          },
+        ],
+      ),
+    );
+    await rm(sqlitePath(root.rootPath), { force: true });
+
+    const reindexed = await store.reindex(root);
+    expect(reindexed.effectiveRevision).toBeGreaterThan(installed.effectiveRevision);
+    const entry = (await readManifest(root.rootPath)).packs[0]!;
+    const resourcePath = join(
+      root.rootPath,
+      "packs",
+      entry.storageKey,
+      entry.artifactDigest,
+      "references",
+      "api-compatibility.md",
+    );
+    expect([...(await readFile(resourcePath))]).toEqual([0, 255, 7]);
+    expect((await store.readEffectivePractices(root))[0]?.practice.body).toContain(
+      "resource:references/api-compatibility.md",
+    );
   });
 });
 
@@ -548,7 +591,13 @@ test("legacy reset rebuilds the SQLite projection from retained Pack artifacts w
     await writeFile(legacyJournal, "not JSON", "utf8");
 
     const opened = await store.open(root);
-    expect(opened.packs).toEqual([{ name: "platform", version: "1.0.0" }]);
+    expect(opened.packs).toEqual([
+      {
+        name: "platform",
+        version: "1.0.0",
+        packRoot: expect.stringContaining("/packs/p-platform/"),
+      },
+    ]);
     expect(opened.effectivePractices.map((practice) => practice.practiceId)).toEqual([
       "platform.api",
       "platform.auth",

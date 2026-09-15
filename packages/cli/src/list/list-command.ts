@@ -24,10 +24,11 @@ const stringArraySchema: JsonSchema = { type: "array", items: stringSchema };
 const installedPackSchema: JsonSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["name", "version", "practiceCount"],
+  required: ["name", "version", "packRoot", "practiceCount"],
   properties: {
     name: stringSchema,
     version: stringSchema,
+    packRoot: stringSchema,
     practiceCount: { type: "integer" },
   },
 };
@@ -35,8 +36,8 @@ const installedPackSchema: JsonSchema = {
 const packSummarySchema: JsonSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["name", "version"],
-  properties: { name: stringSchema, version: stringSchema },
+  required: ["name", "version", "packRoot"],
+  properties: { name: stringSchema, version: stringSchema, packRoot: stringSchema },
 };
 
 const listedPracticeSchema: JsonSchema = {
@@ -53,10 +54,11 @@ const listedPracticeSchema: JsonSchema = {
 const richPackSchema: JsonSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["name", "version", "appliesTo"],
+  required: ["name", "version", "packRoot", "appliesTo"],
   properties: {
     name: stringSchema,
     version: stringSchema,
+    packRoot: stringSchema,
     description: stringSchema,
     appliesTo: stringArraySchema,
   },
@@ -118,6 +120,7 @@ function toPackListData(result: ListPacksResult): JsonValue {
     packs: result.packs.map((pack) => ({
       name: pack.name,
       version: pack.version,
+      packRoot: pack.packRoot,
       practiceCount: pack.practiceCount,
     })),
   };
@@ -130,6 +133,7 @@ function toRichPackListData(result: ListPackDetailsResult): JsonValue {
     packs: result.packs.map((pack) => ({
       name: pack.name,
       version: pack.version,
+      packRoot: pack.packRoot,
       ...(pack.description === undefined ? {} : { description: pack.description }),
       appliesTo: [...(pack.applies_to ?? [])],
     })),
@@ -140,7 +144,11 @@ function toPracticeCatalogData(result: ListPackPracticesResult): JsonValue {
   return {
     generation: result.generation,
     effectiveRevision: result.effectiveRevision,
-    pack: { name: result.pack.name, version: result.pack.version },
+    pack: {
+      name: result.pack.name,
+      version: result.pack.version,
+      packRoot: result.pack.packRoot,
+    },
     practices: result.practices.map((practice) => ({
       id: practice.id,
       title: practice.title,

@@ -31,6 +31,17 @@ export interface PracticeSource {
   canonicalPractice: CanonicalPractice;
 }
 
+/**
+ * One verified non-Practice file retained in a Pack artifact. `sourcePath` is
+ * Pack-root-relative and `bytes` preserves the file exactly, including binary
+ * assets. Resources deliberately do not participate in canonical Practice
+ * content or retrieval reconciliation.
+ */
+export interface PackResource {
+  sourcePath: string;
+  readonly bytes: Uint8Array;
+}
+
 /** The deduplicated Practice presented to the future retrieval layer. */
 export interface EffectivePractice {
   practiceId: string;
@@ -50,6 +61,7 @@ export interface PackCandidate {
   pack: PackSnapshot;
   sources: readonly PracticeSource[];
   decisions: readonly DecisionNode[];
+  resources: readonly PackResource[];
 }
 
 /** Changes to Effective Practices resulting from one source-set reconciliation. */

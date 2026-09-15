@@ -28,6 +28,8 @@ license: CC-BY-4.0
 
 Pack 名称是稳定的 kebab-case 标识，版本遵循语义化版本规则。许可证应根据你要分发的内容选择。
 
+这只是最小可用目录。Pack 还需要详细 reference、可复用模板或显式 helper script 时，请按完整的 [Pack 格式参考](./reference/pack-format)组织，不要再设计另一份附件清单。
+
 ## 2. 编写一条 Practice
 
 在 `practices/verify-user-flow.md` 中写入：
@@ -69,6 +71,8 @@ lore validate ./team-engineering
 检查 `data.pack.valid` 和 `data.pack.diagnostics`，发布前修复错误。验证发现问题时，命令可以返回成功响应并退出 `1`。验证、格式化和本地化命令见[编写命令](./reference/authoring)。
 
 格式验证不能代替内容评审。还需要判断 Agent 能否识别触发条件、执行指导中的动作，并理解建议的适用边界。
+
+使用 `references/`、`assets/` 或 `scripts/` 的 Pack，校验还会检查资源树和 `resource:` link；它不会运行 script 或安装依赖。详见[Pack 格式](./reference/pack-format#发布前校验)。
 
 ## 4. 测试发行产物
 

@@ -1,4 +1,4 @@
 {
   "title": "Commands",
-  "pages": ["query", "get", "packs", "indexing", "model", "backend", "authoring"]
+  "pages": ["query", "get", "packs", "pack-format", "indexing", "model", "backend", "authoring"]
 }

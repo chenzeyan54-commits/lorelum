@@ -45,6 +45,17 @@ const effective: EffectivePractice = {
   ],
 };
 
+const located = {
+  effectivePractice: effective,
+  sources: [
+    {
+      packName: "sample",
+      sourcePath: "practices/exact.md",
+      packRoot: "/verified-store/packs/p-sample/example",
+    },
+  ],
+};
+
 async function invoke(args: readonly string[], store: GetCommandServices["store"]) {
   const stdout = {
     value: "",
@@ -75,11 +86,11 @@ async function invoke(args: readonly string[], store: GetCommandServices["store"
 test("returns the verified snapshot once with complete content and compact provenance", async () => {
   let reads = 0;
   const result = await invoke(["get", practice.id], {
-    async getEffectivePractice(root, id) {
+    async getEffectivePracticeWithPackRoots(root, id) {
       reads++;
       expect(root.rootPath).toBe("unused-default");
       expect(id).toBe(practice.id);
-      return effective;
+      return located;
     },
   });
   expect(reads).toBe(1);
@@ -87,7 +98,13 @@ test("returns the verified snapshot once with complete content and compact prove
   expect(result.response.data).toEqual({
     practice,
     contentDigest,
-    sources: [{ packName: "sample", sourcePath: "practices/exact.md" }],
+    sources: [
+      {
+        packName: "sample",
+        sourcePath: "practices/exact.md",
+        packRoot: "/verified-store/packs/p-sample/example",
+      },
+    ],
   });
   expect(validateJsonSchema(result.response.data, result.definition.resultSchema)).toEqual([]);
 });
@@ -97,9 +114,9 @@ test.each([
   { args: ["get", practice.id, "--store-root=relative-store"] },
 ])("resolves explicit Store root for %j", async ({ args }) => {
   const result = await invoke(args, {
-    async getEffectivePractice(root) {
+    async getEffectivePracticeWithPackRoots(root) {
       expect(root.rootPath).toBe(resolve("relative-store"));
-      return effective;
+      return located;
     },
   });
   expect(result.exitCode).toBe(0);
@@ -120,7 +137,7 @@ test.each(
 )("rejects invalid input before opening a Store: %j", async ({ args }) => {
   let opens = 0;
   const result = await invoke(args, {
-    async getEffectivePractice() {
+    async getEffectivePracticeWithPackRoots() {
       opens++;
       throw new Error("must not open");
     },
@@ -135,7 +152,7 @@ test.each(
 
 test("does not match ID prefixes or titles", async () => {
   const result = await invoke(["get", "sample.exact"], {
-    async getEffectivePractice() {
+    async getEffectivePracticeWithPackRoots() {
       return undefined;
     },
   });
@@ -150,7 +167,7 @@ test.each([
   [new CliError("undeclared.error", "internal-path"), "runtime.unexpected"],
 ] as const)("maps Store errors without exposing details: %s", async (error, code) => {
   const result = await invoke(["get", practice.id], {
-    async getEffectivePractice() {
+    async getEffectivePracticeWithPackRoots() {
       throw error;
     },
   });
@@ -161,7 +178,7 @@ test.each([
 
 test("publishes get arguments, schema, error allowlist, and exit codes through discovery", () => {
   const definition = createGetCommand({
-    store: { getEffectivePractice: async () => undefined },
+    store: { getEffectivePracticeWithPackRoots: async () => undefined },
     storageRoot: { rootPath: "unused-default" },
   });
   expect(describeCommand("get")).toMatchObject({

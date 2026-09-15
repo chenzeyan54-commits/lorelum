@@ -34,9 +34,9 @@ After an install or update, start a new Codex task so its Skill and Hook configu
 
 ## What it injects
 
-At `SessionStart` events including `compact`, the Hook calls `lore hook codex` and injects an **Installed Pack Catalog**. The catalog contains Pack names, versions, descriptions when available, and declared stack scope. It is routing metadata, not full Practice guidance, and it may be truncated to fit the host context budget.
+At `SessionStart` events including `compact`, the Hook calls `lore hook codex` and injects an **Installed Pack Catalog**. The catalog contains Pack names, versions, descriptions when available, declared stack scope, and each current `packRoot`. It is Pack-level routing data, not full Practice guidance or a resource listing, and it may be truncated to fit the host context budget.
 
-The Lorelum Skill uses the catalog as a relevance hint. Missing or omitted Pack metadata does not establish that no relevant guidance exists. At a material task, planning, high-risk-boundary, verification, recovery, or completion moment where guidance may help, the Skill runs one targeted natural-language semantic query before deciding retrieval is not worth attempting. Before applying a Practice or saying that a plan follows it, Codex reads the complete Practice with `lore get <practice-id>`. The Hook remains metadata-only: it never automatically runs `lore query` or `lore get`.
+The Lorelum Skill uses the catalog as a relevance hint and can use a known Pack's root for Pack-level browsing. Missing or omitted Pack metadata does not establish that no relevant guidance exists. At a material task, planning, high-risk-boundary, verification, recovery, or completion moment where guidance may help, the Skill runs one targeted natural-language semantic query before deciding retrieval is not worth attempting. Before applying a Practice or saying that a plan follows it, Codex reads the complete Practice with `lore get <practice-id>` and preserves its source root when resolving a linked resource. The Hook never automatically runs `lore query` or `lore get`.
 
 ## Troubleshooting
 

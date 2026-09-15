@@ -28,6 +28,8 @@ license: CC-BY-4.0
 
 The Pack name is a stable kebab-case identifier. Its version uses semantic versioning. Choose a license appropriate to the content you are distributing.
 
+This is the smallest useful directory. When the Pack also needs detailed references, reusable templates, or explicit helper scripts, follow the complete [Pack format reference](./reference/pack-format) instead of inventing another attachment manifest.
+
 ## 2. Write one Practice
 
 Add the following to `practices/verify-user-flow.md`:
@@ -69,6 +71,8 @@ lore validate ./team-engineering
 Inspect `data.pack.valid` and `data.pack.diagnostics`. Fix errors before release. A successful invocation can exit `1` when validation finds problems; see [Authoring commands](./reference/authoring) for validation, formatting, and localization.
 
 Validation checks the format. To assess the guidance itself, ask whether an agent can recognize the trigger, take the specified actions, and understand where the advice stops applying.
+
+For a Pack that uses `references/`, `assets/`, or `scripts/`, validation also checks the resource tree and `resource:` links without running scripts or installing dependencies. See [Pack format](./reference/pack-format#Validate-before-release).
 
 ## 4. Test the released artifact
 

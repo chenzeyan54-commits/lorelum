@@ -15,7 +15,13 @@ const result = {
     anti_patterns: [],
   },
   contentDigest: "0".repeat(64),
-  sources: [{ packName: "example", sourcePath: "practices/read.md" }],
+  sources: [
+    {
+      packName: "example",
+      sourcePath: "practices/read.md",
+      packRoot: "/verified/store/packs/p-example/current",
+    },
+  ],
 };
 
 test("requires normalized fields even when the author omitted them", () => {

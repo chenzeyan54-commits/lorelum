@@ -22,11 +22,11 @@ Use these scenarios to review the observable behavior of Lorelum's generic and C
 
 ## Codex Skill: Hook-injected Catalog
 
-**Given:** SessionStart injected an Installed Pack Catalog.
+**Given:** SessionStart injected an Installed Pack Catalog that includes each listed Pack's `packRoot` but no resource list or Practice body.
 
 **When:** the Agent reaches a material decision.
 
-**Expected:** reuse the injected Catalog, do not rerun `lore pack list --details`, issue a targeted natural-language semantic query, then read any Practice it will use in full.
+**Expected:** reuse the injected Catalog, including a Pack root when that Pack context is already clear; do not rerun `lore pack list --details`, issue a targeted natural-language semantic query, then read any Practice it will use in full. For a resource link on a selected Practice, preserve the matching source root rather than silently choosing another Catalog entry.
 
 ## Semantic preparation
 

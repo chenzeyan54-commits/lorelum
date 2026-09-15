@@ -17,7 +17,7 @@ import { resolveInvocationStorageRoot } from "../store/storage-root.js";
 import { getResultSchema } from "./result-schema.js";
 
 export interface GetCommandServices {
-  readonly store: Pick<LocalStore, "getEffectivePractice">;
+  readonly store: Pick<LocalStore, "getEffectivePracticeWithPackRoots">;
   readonly storageRoot: StorageRoot;
 }
 
@@ -40,8 +40,8 @@ export function createGetCommand(services: GetCommandServices): CommandDefinitio
       if (id === undefined || !ID_REGEX.test(id)) throw invalidInvocationError();
       const root = resolveInvocationStorageRoot(invocation.options.storeRoot, services.storageRoot);
       try {
-        const effective = await services.store.getEffectivePractice(root, id);
-        if (effective === undefined) {
+        const result = await services.store.getEffectivePracticeWithPackRoots(root, id);
+        if (result === undefined) {
           throw new CliError(
             cliErrorCodes.practiceNotFound,
             "The requested Practice was not found in the selected local Store.",
@@ -49,11 +49,12 @@ export function createGetCommand(services: GetCommandServices): CommandDefinitio
         }
         return {
           data: {
-            practice: effective.practice,
-            contentDigest: effective.contentDigest,
-            sources: effective.sources.map(({ packName, sourcePath }) => ({
+            practice: result.effectivePractice.practice,
+            contentDigest: result.effectivePractice.contentDigest,
+            sources: result.sources.map(({ packName, sourcePath, packRoot }) => ({
               packName,
               sourcePath,
+              packRoot,
             })),
           },
         };

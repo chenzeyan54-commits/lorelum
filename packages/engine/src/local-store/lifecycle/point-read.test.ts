@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -12,6 +12,7 @@ import {
   type StorageRoot,
 } from "../index";
 import { createPackCandidate, type PackCandidate } from "../model";
+import { getEffectivePracticeWithPackRoots } from "./open";
 import {
   clearOperationJournal,
   createOperationJournalRecord,
@@ -51,7 +52,11 @@ async function withRoot(run: (root: StorageRoot) => Promise<void>): Promise<void
   }
 }
 
-function candidate(name: string, practices: Record<string, string>): PackCandidate {
+function candidate(
+  name: string,
+  practices: Record<string, string>,
+  resources: PackCandidate["resources"] = [],
+): PackCandidate {
   const input: UnvalidatedPackInput = {
     pack: { name, version: "1.0.0" },
     practices: Object.entries(practices).map(([id, body]) => ({
@@ -68,7 +73,7 @@ function candidate(name: string, practices: Record<string, string>): PackCandida
   const paths = Object.fromEntries(
     Object.keys(practices).map((id) => [id, `practices/${id.replaceAll(".", "/")}.md`]),
   );
-  return createPackCandidate(input, paths).candidate;
+  return createPackCandidate(input, paths, resources).candidate;
 }
 
 test("point read returns exactly the full snapshot Practice with deterministic source order", async () => {
@@ -87,6 +92,114 @@ test("point read returns exactly the full snapshot Practice with deterministic s
 
     expect(point).toEqual(full);
     expect(point?.sources.map((source) => source.packName)).toEqual(["alpha", "zebra"]);
+  });
+});
+
+test("locator point read returns verified roots for every selected source", async () => {
+  await withRoot(async (root) => {
+    const store = createLocalStore();
+    const practiceId = "platform.api";
+    await store.install(root, candidate("zebra", { [practiceId]: "Use APIs.\n" }));
+    await store.install(root, candidate("alpha", { [practiceId]: "Use APIs.\n" }));
+
+    const located = await store.getEffectivePracticeWithPackRoots(root, practiceId);
+    expect(located?.effectivePractice.practiceId).toBe(practiceId);
+    expect(located?.sources.map(({ packName, sourcePath }) => ({ packName, sourcePath }))).toEqual([
+      { packName: "alpha", sourcePath: "practices/platform/api.md" },
+      { packName: "zebra", sourcePath: "practices/platform/api.md" },
+    ]);
+    for (const source of located?.sources ?? []) {
+      // eslint-disable-next-line no-await-in-loop -- each independently returned locator is verified
+      await expect(access(join(source.packRoot, source.sourcePath))).resolves.toBeNull();
+    }
+  });
+});
+
+test("locator point read validates selected artifacts but not unrelated Packs", async () => {
+  await withRoot(async (root) => {
+    const store = createLocalStore();
+    await store.install(root, candidate("platform", { "platform.api": "Use APIs.\n" }));
+    await store.install(root, candidate("other", { "other.api": "Other guidance.\n" }));
+    const manifest = await readManifest(root.rootPath);
+    const other = manifest.packs.find((entry) => entry.packName === "other")!;
+    await writeFile(
+      join(
+        root.rootPath,
+        "packs",
+        other.storageKey,
+        other.artifactDigest,
+        "practices/other/api.md",
+      ),
+      "Tampered artifact.\n",
+    );
+
+    await expect(
+      store.getEffectivePracticeWithPackRoots(root, "platform.api"),
+    ).resolves.toMatchObject({
+      effectivePractice: { practiceId: "platform.api" },
+      sources: [{ packName: "platform" }],
+    });
+
+    const platform = manifest.packs.find((entry) => entry.packName === "platform")!;
+    await writeFile(
+      join(
+        root.rootPath,
+        "packs",
+        platform.storageKey,
+        platform.artifactDigest,
+        "practices/platform/api.md",
+      ),
+      "Tampered artifact.\n",
+    );
+    await expect(
+      store.getEffectivePracticeWithPackRoots(root, "platform.api"),
+    ).rejects.toBeInstanceOf(StoreRecoveryRequiredError);
+  });
+});
+
+test("locator point read maps a missing selected artifact to recovery required", async () => {
+  await withRoot(async (root) => {
+    const store = createLocalStore();
+    await store.install(root, candidate("platform", { "platform.api": "Use APIs.\n" }));
+    const manifest = await readManifest(root.rootPath);
+    const platform = manifest.packs.find((entry) => entry.packName === "platform")!;
+    await rm(join(root.rootPath, "packs", platform.storageKey, platform.artifactDigest), {
+      recursive: true,
+      force: true,
+    });
+
+    await expect(
+      store.getEffectivePracticeWithPackRoots(root, "platform.api"),
+    ).rejects.toBeInstanceOf(StoreRecoveryRequiredError);
+  });
+});
+
+test("locator point read retries when a resource-only upgrade collects its first artifact", async () => {
+  await withRoot(async (root) => {
+    const store = createLocalStore();
+    const practiceId = "platform.api";
+    const first = candidate("platform", { [practiceId]: "Use APIs.\n" }, [
+      { sourcePath: "references/api.md", bytes: new TextEncoder().encode("first\n") },
+    ]);
+    const second = candidate("platform", { [practiceId]: "Use APIs.\n" }, [
+      { sourcePath: "references/api.md", bytes: new TextEncoder().encode("second\n") },
+    ]);
+    await store.install(root, first);
+
+    let snapshotCount = 0;
+    const located = await getEffectivePracticeWithPackRoots(root.rootPath, practiceId, {
+      afterSnapshot: async () => {
+        snapshotCount += 1;
+        if (snapshotCount === 1) await store.upgrade(root, second);
+      },
+    });
+
+    expect(snapshotCount).toBe(2);
+    expect(located?.effectivePractice.contentDigest).toBe(first.sources[0]?.contentDigest);
+    expect(located?.sources).toHaveLength(1);
+    expect(
+      await readFile(join(located?.sources[0]?.packRoot ?? "", "references/api.md"), "utf8"),
+    ).toBe("second\n");
   });
 });
 

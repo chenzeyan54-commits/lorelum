@@ -33,6 +33,17 @@ export class InvalidSourcePathError extends Error {
   }
 }
 
+/** Candidate resource metadata violates LocalStore's Pack-root path contract. */
+export class InvalidResourcePathError extends Error {
+  constructor(
+    readonly sourcePath: string,
+    readonly reason: string,
+  ) {
+    super(`Pack resource path "${sourcePath}" is invalid: ${reason}`);
+    this.name = "InvalidResourcePathError";
+  }
+}
+
 /** A source passed back from storage does not match its canonical metadata. */
 export class InvalidPracticeSourceError extends Error {
   constructor(

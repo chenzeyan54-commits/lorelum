@@ -54,8 +54,27 @@ import { withStoreMutation } from "./mutation";
  */
 export interface ColdOpenResult {
   manifest: InstalledPacksManifest;
-  packDetails: readonly PackSnapshot[];
+  packDetails: readonly VerifiedPackArtifact[];
   effectivePractices: readonly EffectivePractice[];
+}
+
+/** One active Pack artifact validated against the manifest and its projection. */
+interface VerifiedPackArtifact {
+  readonly pack: PackSnapshot;
+  readonly packRoot: string;
+}
+
+/** A source locator bound to the verified Pack artifact that supplied it. */
+export interface EffectivePracticeSourceLocator {
+  readonly packName: string;
+  readonly sourcePath: string;
+  readonly packRoot: string;
+}
+
+/** A point-read Practice plus source-specific Pack artifact locators. */
+export interface EffectivePracticeWithPackRoots {
+  readonly effectivePractice: EffectivePractice;
+  readonly sources: readonly EffectivePracticeSourceLocator[];
 }
 
 /** A verified Store snapshot identity used to bind a derived query index. */
@@ -88,7 +107,13 @@ interface ConsistentSnapshot<T> {
   readonly value: T;
 }
 
+/** Internal deterministic scheduling seam for lifecycle concurrency tests. */
+interface EffectivePracticeLocatorReadHooks {
+  readonly afterSnapshot?: () => Promise<void>;
+}
+
 const MAX_OPEN_RETRIES = 3;
+const MAX_LOCATOR_READ_RETRIES = 3;
 
 /** ADR 0007 §8: cold open reports every inconsistency as recovery required. */
 function translateStoreErrors(error: unknown): never {
@@ -134,7 +159,7 @@ async function verifyArtifactsAndSources(
   rootPath: string,
   manifest: InstalledPacksManifest,
   effectivePractices: readonly EffectivePractice[],
-): Promise<readonly PackSnapshot[]> {
+): Promise<readonly VerifiedPackArtifact[]> {
   const expectedSources = new Map<string, { digest: string }>();
   const packDetails = await Promise.all(
     manifest.packs.map(async (entry) => {
@@ -157,7 +182,7 @@ async function verifyArtifactsAndSources(
           digest: practice.contentDigest,
         });
       }
-      return projection.pack;
+      return Object.freeze({ pack: projection.pack, packRoot: artifactDir });
     }),
   );
 
@@ -177,6 +202,102 @@ async function verifyArtifactsAndSources(
     throw new StoreRecoveryRequiredError("sealed projections contain sources absent from SQLite");
   }
   return Object.freeze(packDetails);
+}
+
+async function verifyEffectivePracticeSources(
+  rootPath: string,
+  manifest: InstalledPacksManifest,
+  effectivePractice: EffectivePractice,
+): Promise<readonly EffectivePracticeSourceLocator[]> {
+  const entriesByName = new Map(manifest.packs.map((entry) => [entry.packName, entry]));
+  const artifactChecks = new Map<
+    string,
+    Promise<{ readonly packRoot: string; readonly projection: SnapshotProjection }>
+  >();
+
+  async function readVerifiedArtifact(packName: string): Promise<{
+    readonly packRoot: string;
+    readonly projection: SnapshotProjection;
+  }> {
+    const existing = artifactChecks.get(packName);
+    if (existing !== undefined) return existing;
+    const entry = entriesByName.get(packName);
+    if (entry === undefined) {
+      throw new StoreRecoveryRequiredError(`source references inactive Pack ${packName}`);
+    }
+    const check = (async () => {
+      try {
+        const packRoot = artifactPath(rootPath, entry.storageKey, entry.artifactDigest);
+        if ((await calculateArtifactDigest(packRoot)) !== entry.artifactDigest) {
+          throw new StoreRecoveryRequiredError(`artifact digest mismatch for ${entry.storageKey}`);
+        }
+        const projection = await readSealedProjection(packRoot);
+        if (
+          projection.pack.name !== entry.packName ||
+          projection.pack.version !== entry.packVersion
+        ) {
+          throw new StoreRecoveryRequiredError(
+            `projection metadata differs from the manifest for ${entry.storageKey}`,
+          );
+        }
+        return Object.freeze({ packRoot, projection });
+      } catch (error) {
+        if (error instanceof StoreRecoveryRequiredError) throw error;
+        throw new StoreRecoveryRequiredError(
+          `cannot verify sealed artifact for ${entry.storageKey}`,
+        );
+      }
+    })();
+    artifactChecks.set(packName, check);
+    return check;
+  }
+
+  return Object.freeze(
+    await Promise.all(
+      effectivePractice.sources.map(async (source) => {
+        const artifact = await readVerifiedArtifact(source.packName);
+        const projectionSource = artifact.projection.practices.find(
+          (practice) => practice.sourcePath === source.sourcePath,
+        );
+        if (
+          projectionSource === undefined ||
+          projectionSource.id !== source.practiceId ||
+          projectionSource.contentDigest !== source.contentDigest ||
+          projectionSource.canonicalContent !== source.canonicalPractice.canonicalContent
+        ) {
+          throw new StoreRecoveryRequiredError(
+            `source ${source.packName}/${source.sourcePath} does not reconcile with its sealed projection`,
+          );
+        }
+        return Object.freeze({
+          packName: source.packName,
+          sourcePath: source.sourcePath,
+          packRoot: artifact.packRoot,
+        });
+      }),
+    ),
+  );
+}
+
+function metadataEqual(
+  left: StoreMetadataSnapshot | undefined,
+  right: StoreMetadataSnapshot | undefined,
+): boolean {
+  return (
+    left?.generation === right?.generation && left?.effectiveRevision === right?.effectiveRevision
+  );
+}
+
+/** Re-read after artifact I/O so returned locators belong to one current snapshot. */
+async function isCurrentConsistentSnapshot(
+  rootPath: string,
+  expected: ConsistentSnapshot<unknown>,
+): Promise<boolean> {
+  const actual = await readConsistentSnapshot(rootPath, () => undefined, undefined);
+  return (
+    manifestsEqual(actual.manifest, expected.manifest) &&
+    metadataEqual(actual.metadata, expected.metadata)
+  );
 }
 
 /**
@@ -257,7 +378,7 @@ async function verifyColdOpenSnapshot(rootPath: string): Promise<ColdOpenResult>
         );
       }
 
-      let packDetails: readonly PackSnapshot[];
+      let packDetails: readonly VerifiedPackArtifact[];
       try {
         packDetails = await verifyArtifactsAndSources(
           rootPath,
@@ -616,4 +737,50 @@ export async function getEffectivePractice(
       undefined,
     ).then((snapshot) => snapshot.value),
   );
+}
+
+/**
+ * Read one Practice and source-scoped Pack roots from one consistent Store
+ * snapshot. Unlike the metadata-only point read, this validates every active
+ * Pack artifact that supplied the returned Practice before exposing a local
+ * locator; it deliberately does not audit unrelated Pack artifacts.
+ */
+export async function getEffectivePracticeWithPackRoots(
+  rootPath: string,
+  practiceId: string,
+  hooks: EffectivePracticeLocatorReadHooks = {},
+): Promise<EffectivePracticeWithPackRoots | undefined> {
+  if (!ID_REGEX.test(practiceId)) throw new InvalidPracticeIdError();
+  return readWithJournalRecovery(rootPath, async () => {
+    for (let attempt = 0; attempt < MAX_LOCATOR_READ_RETRIES; attempt++) {
+      const snapshot = await readConsistentSnapshot(
+        rootPath,
+        (repository, metadata) => repository.readPractice(metadata, practiceId),
+        undefined,
+      );
+      if (snapshot.value === undefined) return undefined;
+
+      if (hooks.afterSnapshot !== undefined) {
+        // eslint-disable-next-line no-await-in-loop -- test scheduling mirrors a mutation after the read
+        await hooks.afterSnapshot();
+      }
+
+      let sources: readonly EffectivePracticeSourceLocator[];
+      try {
+        // eslint-disable-next-line no-await-in-loop -- each locator must be bound to its snapshot
+        sources = await verifyEffectivePracticeSources(rootPath, snapshot.manifest, snapshot.value);
+      } catch (error) {
+        // A completed upgrade may collect the old artifact while this command
+        // is verifying it. Retry only when the Store has actually advanced;
+        // a stable bad artifact is still recovery-required.
+        // eslint-disable-next-line no-await-in-loop -- snapshot confirmation is part of this retry
+        if (await isCurrentConsistentSnapshot(rootPath, snapshot)) throw error;
+        continue;
+      }
+      // eslint-disable-next-line no-await-in-loop -- locator verification precedes the snapshot fence
+      if (!(await isCurrentConsistentSnapshot(rootPath, snapshot))) continue;
+      return Object.freeze({ effectivePractice: snapshot.value, sources });
+    }
+    throw new StoreBusyError("LocalStore changed while resolving Pack locators");
+  });
 }

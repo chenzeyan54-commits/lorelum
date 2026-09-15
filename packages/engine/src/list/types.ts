@@ -12,6 +12,7 @@ export type ListedPractice = Readonly<
 export interface ListedPack {
   readonly name: string;
   readonly version: string;
+  readonly packRoot: string;
   readonly practiceCount: number;
 }
 

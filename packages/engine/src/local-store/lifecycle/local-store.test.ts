@@ -84,9 +84,10 @@ function candidate(
   name: string,
   practices: Record<string, string>,
   metadata: PackMetadata = {},
+  resources: readonly { sourcePath: string; bytes: Uint8Array }[] = [],
 ): PackCandidate {
   const input = packInput(name, practices, metadata);
-  return createPackCandidate(input, sourcePaths(input)).candidate;
+  return createPackCandidate(input, sourcePaths(input), resources).candidate;
 }
 
 const platform = { "platform.api": "Use APIs.\n", "platform.auth": "Authenticate.\n" };
@@ -114,7 +115,13 @@ test("fresh store open + install + reopen round-trips state", async () => {
 
     const reopened = await store.open(root);
     expect(reopened.generation).toBe(1);
-    expect(reopened.packs).toEqual([{ name: "platform", version: "1.0.0" }]);
+    expect(reopened.packs).toEqual([
+      {
+        name: "platform",
+        version: "1.0.0",
+        packRoot: expect.stringContaining("/packs/p-platform/"),
+      },
+    ]);
     expect(reopened.effectivePractices.map((p) => p.practiceId)).toEqual([
       "platform.api",
       "platform.auth",
@@ -123,7 +130,7 @@ test("fresh store open + install + reopen round-trips state", async () => {
   });
 });
 
-test("open exposes minimal installed Pack summaries in manifest order", async () => {
+test("open exposes verified installed Pack locators in manifest order", async () => {
   await withRoot(async (root) => {
     const store = createLocalStore();
     await store.install(root, candidate("platform", platform));
@@ -131,8 +138,12 @@ test("open exposes minimal installed Pack summaries in manifest order", async ()
 
     const opened = await store.open(root);
     expect(opened.packs).toEqual([
-      { name: "platform", version: "1.0.0" },
-      { name: "web", version: "1.0.0" },
+      {
+        name: "platform",
+        version: "1.0.0",
+        packRoot: expect.stringContaining("/packs/p-platform/"),
+      },
+      { name: "web", version: "1.0.0", packRoot: expect.stringContaining("/packs/p-web/") },
     ]);
     expect(Object.isFrozen(opened.packs)).toBe(true);
     expect(Object.isFrozen(opened.packs[0])).toBe(true);
@@ -159,10 +170,11 @@ test("readInstalledPackDetails returns verified Pack metadata without widening o
         {
           name: "platform",
           version: "1.0.0",
+          packRoot: expect.stringContaining("/packs/p-platform/"),
           description: "Platform engineering guidance.",
           applies_to: ["typescript", "bun"],
         },
-        { name: "web", version: "1.0.0" },
+        { name: "web", version: "1.0.0", packRoot: expect.stringContaining("/packs/p-web/") },
       ],
     });
     expect(Object.isFrozen(details)).toBe(true);
@@ -171,8 +183,12 @@ test("readInstalledPackDetails returns verified Pack metadata without widening o
     expect(Object.isFrozen(details.packs[0]?.applies_to)).toBe(true);
 
     expect((await store.open(root)).packs).toEqual([
-      { name: "platform", version: "1.0.0" },
-      { name: "web", version: "1.0.0" },
+      {
+        name: "platform",
+        version: "1.0.0",
+        packRoot: expect.stringContaining("/packs/p-platform/"),
+      },
+      { name: "web", version: "1.0.0", packRoot: expect.stringContaining("/packs/p-web/") },
     ]);
   });
 });
@@ -272,6 +288,84 @@ test("upgrade replaces sources and removes old ones", async () => {
     const practices = await store.readEffectivePractices(root);
     expect(practices.map((p) => p.practiceId)).toEqual(["platform.api"]);
     expect(practices[0]?.practice.body).toBe("Use APIs with retries.\n");
+  });
+});
+
+test("a resource-only upgrade replaces the artifact without advancing retrieval revision", async () => {
+  await withRoot(async (root) => {
+    const store = createLocalStore();
+    const practices = {
+      "platform.api":
+        "Read [the compatibility matrix](resource:references/api-compatibility.md).\n",
+    };
+    const first = await store.install(
+      root,
+      candidate("platform", practices, {}, [
+        {
+          sourcePath: "references/api-compatibility.md",
+          bytes: new TextEncoder().encode("v1 compatibility\n"),
+        },
+      ]),
+    );
+    const upgraded = await store.upgrade(
+      root,
+      candidate("platform", practices, {}, [
+        {
+          sourcePath: "references/api-compatibility.md",
+          bytes: new TextEncoder().encode("v2 compatibility\n"),
+        },
+      ]),
+    );
+
+    expect(upgraded.artifactDigest).not.toBe(first.artifactDigest);
+    expect(upgraded.generation).toBe(first.generation + 1);
+    expect(upgraded.effectiveRevision).toBe(first.effectiveRevision);
+    expect(upgraded.delta).toEqual({ added: [], changed: [], invalidated: [] });
+    expect((await store.readEffectivePractices(root))[0]?.practice.body).toBe(
+      practices["platform.api"],
+    );
+
+    const entry = (await readManifest(root.rootPath)).packs[0]!;
+    const resourcePath = join(
+      artifactPath(root.rootPath, entry.storageKey, entry.artifactDigest),
+      "references",
+      "api-compatibility.md",
+    );
+    expect(await readFile(resourcePath, "utf8")).toBe("v2 compatibility\n");
+  });
+});
+
+test("changing a Practice resource target follows existing content-digest revision behavior", async () => {
+  await withRoot(async (root) => {
+    const store = createLocalStore();
+    const resources = [
+      { sourcePath: "references/api-v1.md", bytes: new TextEncoder().encode("v1\n") },
+      { sourcePath: "references/api-v2.md", bytes: new TextEncoder().encode("v2\n") },
+    ];
+    const first = await store.install(
+      root,
+      candidate(
+        "platform",
+        { "platform.api": "Read [v1](resource:references/api-v1.md).\n" },
+        {},
+        resources,
+      ),
+    );
+    const firstDigest = (await store.readEffectivePractices(root))[0]?.contentDigest;
+    const upgraded = await store.upgrade(
+      root,
+      candidate(
+        "platform",
+        { "platform.api": "Read [v2](resource:references/api-v2.md).\n" },
+        {},
+        resources,
+      ),
+    );
+
+    expect(upgraded.generation).toBe(first.generation + 1);
+    expect(upgraded.effectiveRevision).toBe(first.effectiveRevision + 1);
+    expect(upgraded.delta).toEqual({ added: [], changed: ["platform.api"], invalidated: [] });
+    expect((await store.readEffectivePractices(root))[0]?.contentDigest).not.toBe(firstDigest);
   });
 });
 

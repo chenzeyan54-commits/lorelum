@@ -78,7 +78,10 @@ function packEntries(practiceCount = 29): TreeEntry[] {
       ),
     );
   }
-  entries.push(entry("ignored.bin", "not materialized", practiceCount + 3));
+  entries.push(entry("references/api.md", "API compatibility reference.\n", practiceCount + 3));
+  entries.push(entry("assets/template.bin", new Uint8Array([0, 1, 2, 255]), practiceCount + 4));
+  entries.push(entry("scripts/check.ts", "console.log('check');\n", practiceCount + 5));
+  entries.push(entry("ignored.bin", "not materialized", practiceCount + 6));
   return entries.reverse();
 }
 
@@ -211,6 +214,17 @@ test("materializes many Pack blobs with one exact acquisition and one local batc
     for (const [index, contents] of practiceContents.entries()) {
       expect(contents).toBe(`Practice ${index}\n`);
     }
+    expect(await Bun.file(join(source.directory, "references", "api.md")).text()).toBe(
+      "API compatibility reference.\n",
+    );
+    expect(
+      new Uint8Array(
+        await Bun.file(join(source.directory, "assets", "template.bin")).arrayBuffer(),
+      ),
+    ).toEqual(new Uint8Array([0, 1, 2, 255]));
+    expect(await Bun.file(join(source.directory, "scripts", "check.ts")).text()).toBe(
+      "console.log('check');\n",
+    );
     expect(await Bun.file(join(source.directory, "ignored.bin")).exists()).toBe(false);
 
     expect(git.calls).toHaveLength(5);
@@ -219,7 +233,7 @@ test("materializes many Pack blobs with one exact acquisition and one local batc
     const fetched = inputLines(git.callsFor("fetch")[0]!);
     const read = inputLines(git.callsFor("cat-file")[0]!);
     expect(fetched).toEqual(read);
-    expect(fetched).toHaveLength(31);
+    expect(fetched).toHaveLength(34);
     expect(git.callsFor("fetch")[0]?.args).toContain("fetch.negotiationAlgorithm=noop");
     expect(git.callsFor("fetch")[0]?.args).toContain("--filter=blob:none");
     expect(git.callsFor("fetch")[0]?.args).toContain("--no-auto-gc");
@@ -240,10 +254,22 @@ test("production runner materializes a filtered local Git remote through batch s
   const sourceRepository = join(parent, "source");
   const remoteRepository = join(parent, "remote.git");
   await mkdir(join(sourceRepository, release.path, "practices"), { recursive: true });
+  await mkdir(join(sourceRepository, release.path, "references"), { recursive: true });
+  await mkdir(join(sourceRepository, release.path, "assets"), { recursive: true });
+  await mkdir(join(sourceRepository, release.path, "scripts"), { recursive: true });
   await setupGit(sourceRepository, ["init", "-b", "main"]);
   await writeFile(
     join(sourceRepository, release.path, "pack.yaml"),
     "name: agentic-coding\nversion: 0.2.0\n",
+  );
+  await writeFile(join(sourceRepository, release.path, "references", "guide.md"), "Guide.\n");
+  await writeFile(
+    join(sourceRepository, release.path, "assets", "template.bin"),
+    Buffer.from([0, 255]),
+  );
+  await writeFile(
+    join(sourceRepository, release.path, "scripts", "check.ts"),
+    "console.log('ok');\n",
   );
   await writeFile(
     join(sourceRepository, release.path, "practices", "需求.md"),
@@ -286,6 +312,17 @@ test("production runner materializes a filtered local Git remote through batch s
     );
     expect(await Bun.file(join(source.directory, "practices", "需求.md")).text()).toBe(
       "Unicode Practice from a promisor remote.\n",
+    );
+    expect(await Bun.file(join(source.directory, "references", "guide.md")).text()).toBe(
+      "Guide.\n",
+    );
+    expect(
+      new Uint8Array(
+        await Bun.file(join(source.directory, "assets", "template.bin")).arrayBuffer(),
+      ),
+    ).toEqual(new Uint8Array([0, 255]));
+    expect(await Bun.file(join(source.directory, "scripts", "check.ts")).text()).toBe(
+      "console.log('ok');\n",
     );
     expect(await Bun.file(join(source.directory, "decisions.yaml")).exists()).toBe(false);
     expect(await Bun.file(join(source.directory, "ignored.bin")).exists()).toBe(false);
@@ -415,6 +452,32 @@ test.each([
   {
     name: "duplicate materialized path",
     entries: [entry("pack.yaml", "one", 1), entry("pack.yaml", "two", 2)],
+  },
+])("rejects $name before object acquisition", async ({ entries }) => {
+  const git = new FakeGit(entries);
+  await expect(materializeRegistryRelease(release, repository, git.run)).rejects.toMatchObject({
+    code: "source.invalid",
+  });
+  expect(git.callsFor("fetch")).toHaveLength(0);
+  expect(git.callsFor("cat-file")).toHaveLength(0);
+  expect(await Bun.file(git.temporaryRoot()).exists()).toBe(false);
+});
+
+test.each([
+  {
+    name: "an unsafe resource path",
+    entries: [entry("pack.yaml", "fixture", 1), entry("references/unsupported*.md", "fixture", 2)],
+  },
+  {
+    name: "a resource root that is a file",
+    entries: [entry("pack.yaml", "fixture", 1), entry("assets", "fixture", 2)],
+  },
+  {
+    name: "a non-regular resource file",
+    entries: [
+      entry("pack.yaml", "fixture", 1),
+      entry("scripts/check.py", "target", 2, { mode: "120000" }),
+    ],
   },
 ])("rejects $name before object acquisition", async ({ entries }) => {
   const git = new FakeGit(entries);

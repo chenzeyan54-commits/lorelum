@@ -108,6 +108,73 @@ test("validate reports stale localization as a completed finding", async () => {
   }
 });
 
+test("validate reports resource targets structurally and never executes Pack scripts", async () => {
+  const root = await fixture();
+  try {
+    await rm(join(root, "i18n"), { recursive: true, force: true });
+    const marker = join(root, "script-was-run");
+    await mkdir(join(root, "references"), { recursive: true });
+    await mkdir(join(root, "scripts"), { recursive: true });
+    await writeFile(join(root, "references", "api.md"), "Reference material.\n");
+    await writeFile(join(root, "scripts", "helper.sh"), `#!/bin/sh\ntouch "${marker}"\n`);
+    await writeFile(
+      join(root, "practices", "requirements", "goal.md"),
+      "---\nid: sample.goal\ntitle: Goal\nstage: requirements\ntech_stack: [sample]\napplies_when: when a goal is being clarified\n---\n\nRead [the reference](resource:references/api.md).\n",
+    );
+
+    const valid = new MemoryWriter();
+    expect(await run(["validate", root], { registry, stdout: valid })).toBe(0);
+    expect(JSON.parse(valid.value).data.pack).toMatchObject({ valid: true });
+    await expect(Bun.file(marker).exists()).resolves.toBe(false);
+
+    await writeFile(
+      join(root, "practices", "requirements", "goal.md"),
+      "---\nid: sample.goal\ntitle: Goal\nstage: requirements\ntech_stack: [sample]\napplies_when: when a goal is being clarified\n---\n\nRead [the missing reference](resource:references/missing.md).\n",
+    );
+    const invalid = new MemoryWriter();
+    expect(await run(["validate", root], { registry, stdout: invalid })).toBe(1);
+    expect(JSON.parse(invalid.value).data.pack).toMatchObject({
+      valid: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          code: "resource-target-missing",
+          path: expect.stringMatching(/^practices\/requirements\/goal\.md:\d+:\d+$/),
+        }),
+      ]),
+    });
+    await expect(Bun.file(marker).exists()).resolves.toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("validate turns unsafe resource directories into structural diagnostics", async () => {
+  const root = await fixture();
+  try {
+    if (!(await canCreateSymlinks())) return;
+    await writeFile(join(root, "resource-target"), "not a directory\n");
+    await symlink(join(root, "resource-target"), join(root, "assets"));
+    const output = new MemoryWriter();
+    expect(await run(["validate", root], { registry, stdout: output })).toBe(1);
+    const response = JSON.parse(output.value);
+    expect(response.ok).toBe(true);
+    expect(response.data.pack).toEqual({
+      valid: false,
+      diagnostics: [
+        expect.objectContaining({
+          level: "error",
+          code: "snapshot.invalid",
+          path: "assets",
+          message: "Pack directory structure is invalid.",
+        }),
+      ],
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("rejects localized runtime frontmatter and keeps format error allowlists narrow", async () => {
   const root = await fixture();
   try {

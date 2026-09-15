@@ -54,8 +54,12 @@ export const getResultSchema: JsonSchema = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["packName", "sourcePath"],
-        properties: { packName: stringSchema, sourcePath: stringSchema },
+        required: ["packName", "sourcePath", "packRoot"],
+        properties: {
+          packName: stringSchema,
+          sourcePath: stringSchema,
+          packRoot: stringSchema,
+        },
       },
     },
   },

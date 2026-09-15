@@ -2,7 +2,11 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { defaultPackDirectoryLimits, isPracticeSourcePath } from "@lorelum/engine";
+import {
+  defaultPackDirectoryLimits,
+  isPackResourcePath,
+  isPracticeSourcePath,
+} from "@lorelum/engine";
 import type { RegistryRelease } from "@lorelum/format";
 
 import { CliError, cliErrorCodes } from "../runtime/errors.js";
@@ -150,7 +154,17 @@ async function readResolvedCommit(
 }
 
 function isConsumedPackPath(path: string): boolean {
-  return path === "pack.yaml" || path === "decisions.yaml" || isPracticeSourcePath(path);
+  return (
+    path === "pack.yaml" ||
+    path === "decisions.yaml" ||
+    isPracticeSourcePath(path) ||
+    isPackResourcePath(path)
+  );
+}
+
+/** A requested resource root is never an ignorable foreign file. */
+function isResourceTreePath(path: string): boolean {
+  return /^(?:references|assets|scripts)(?:\/|$)/u.test(path);
 }
 
 function parseSourceTree(output: Uint8Array, sourcePath: string): SourceBlob[] {
@@ -172,6 +186,13 @@ function parseSourceTree(output: Uint8Array, sourcePath: string): SourceBlob[] {
     if (match === null) throw sourceInvalid();
     if (!path.startsWith(prefix)) throw sourceInvalid();
     const relativePath = path.slice(prefix.length);
+    // Unknown Pack-root files remain intentionally out of the release
+    // allowlist. A file inside a resource root is different: its root was
+    // selected for materialization, so a malformed name must fail rather than
+    // silently changing the source Pack before the decoder sees it.
+    if (isResourceTreePath(relativePath) && !isPackResourcePath(relativePath)) {
+      throw sourceInvalid();
+    }
     if (!isConsumedPackPath(relativePath)) continue;
     if (!["100644", "100755"].includes(match[1]!) || match[2] !== "blob") {
       throw sourceInvalid();
@@ -208,6 +229,9 @@ async function inspectSourceTree(
       `${sourcePath}/pack.yaml`,
       `${sourcePath}/decisions.yaml`,
       `${sourcePath}/practices`,
+      `${sourcePath}/references`,
+      `${sourcePath}/assets`,
+      `${sourcePath}/scripts`,
     ],
     { outputLimit: MAX_SOURCE_TREE_LISTING_BYTES },
   );

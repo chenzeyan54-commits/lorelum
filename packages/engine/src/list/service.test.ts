@@ -30,7 +30,7 @@ async function removeStoreRoot(rootPath: string): Promise<void> {
   /* eslint-enable no-await-in-loop */
 }
 
-async function writeLocalListPack(directory: string): Promise<string> {
+async function writeLocalListPack(directory: string, resourceContents?: string): Promise<string> {
   const packRoot = join(directory, "local-list-pack");
   const practices = join(packRoot, "practices", "react");
   await mkdir(practices, { recursive: true });
@@ -74,6 +74,10 @@ async function writeLocalListPack(directory: string): Promise<string> {
       "",
     ].join("\n"),
   );
+  if (resourceContents !== undefined) {
+    await mkdir(join(packRoot, "references"), { recursive: true });
+    await writeFile(join(packRoot, "references", "api.md"), resourceContents);
+  }
   return packRoot;
 }
 
@@ -105,7 +109,14 @@ test("ListService reads the Pack catalog and a selected Pack through LocalStore"
     expect(packsResult).toEqual({
       generation: 1,
       effectiveRevision: 1,
-      packs: [{ name: "local-list-fixture", version: "0.1.0", practiceCount: 2 }],
+      packs: [
+        {
+          name: "local-list-fixture",
+          version: "0.1.0",
+          packRoot: expect.stringContaining("/packs/p-local-list-fixture/"),
+          practiceCount: 2,
+        },
+      ],
     });
     expect(Object.isFrozen(packsResult)).toBe(true);
     expect(Object.isFrozen(packsResult.packs)).toBe(true);
@@ -114,7 +125,11 @@ test("ListService reads the Pack catalog and a selected Pack through LocalStore"
     expect(practicesResult).toEqual({
       generation: 1,
       effectiveRevision: 1,
-      pack: { name: "local-list-fixture", version: "0.1.0" },
+      pack: {
+        name: "local-list-fixture",
+        version: "0.1.0",
+        packRoot: expect.stringContaining("/packs/p-local-list-fixture/"),
+      },
       practices: [
         {
           id: "react.a-state",
@@ -141,6 +156,7 @@ test("ListService reads the Pack catalog and a selected Pack through LocalStore"
         {
           name: "local-list-fixture",
           version: "0.1.0",
+          packRoot: expect.stringContaining("/packs/p-local-list-fixture/"),
           description: "Local list service fixture.",
           applies_to: ["react", "typescript"],
         },
@@ -193,6 +209,38 @@ test("ListService honors a per-call storageRoot override", async () => {
   }
 });
 
+test("Pack catalog locators advance with a resource-only update", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "lorelum-list-resources-"));
+  const storageRoot: StorageRoot = { rootPath: join(directory, "store") };
+  try {
+    const packRoot = await writeLocalListPack(directory, "first resource bytes\n");
+    const store = createLocalStore();
+    const first = await decodePackDirectory(packRoot);
+    await store.install(storageRoot, first.candidate, first.diagnostics);
+    const service = createListService({ store, storageRoot });
+    const firstList = await service.list();
+    const firstDetails = await service.listPackDetails();
+    const firstCatalog = await service.listPack({ packName: "local-list-fixture" });
+
+    await writeFile(join(packRoot, "references", "api.md"), "second resource bytes\n");
+    const second = await decodePackDirectory(packRoot);
+    const upgraded = await store.upgrade(storageRoot, second.candidate, second.diagnostics);
+    expect(upgraded).toMatchObject({ generation: 2, effectiveRevision: 1 });
+
+    const secondList = await service.list();
+    const secondDetails = await service.listPackDetails();
+    const secondCatalog = await service.listPack({ packName: "local-list-fixture" });
+    expect(secondList).toMatchObject({ generation: 2, effectiveRevision: 1 });
+    expect(secondDetails).toMatchObject({ generation: 2, effectiveRevision: 1 });
+    expect(secondCatalog).toMatchObject({ generation: 2, effectiveRevision: 1 });
+    expect(secondList.packs[0]?.packRoot).not.toBe(firstList.packs[0]?.packRoot);
+    expect(secondDetails.packs[0]?.packRoot).not.toBe(firstDetails.packs[0]?.packRoot);
+    expect(secondCatalog.pack.packRoot).not.toBe(firstCatalog.pack.packRoot);
+  } finally {
+    await removeStoreRoot(directory);
+  }
+});
+
 test("ListService succeeds with an empty fresh LocalStore", async () => {
   const directory = await mkdtemp(join(tmpdir(), "lorelum-list-empty-"));
   const storageRoot: StorageRoot = { rootPath: join(directory, "store") };
@@ -217,7 +265,7 @@ test("ListService maps missing and blank Pack names to UnknownPackError", async 
     store: fakeStore({
       generation: 1,
       effectiveRevision: 2,
-      packs: [{ name: "platform", version: "1.0.0" }],
+      packs: [{ name: "platform", version: "1.0.0", packRoot: "/packs/platform" }],
       effectivePractices: [],
     }),
   });

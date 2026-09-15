@@ -1,5 +1,8 @@
 import {
+  buildReport,
   parsePackInput,
+  validateResourceLinks,
+  validateResourcePath,
   validateParsedPack,
   type Pack,
   type UnvalidatedPackInput,
@@ -7,9 +10,9 @@ import {
 } from "@lorelum/format";
 
 import { canonicalizePractice } from "./canonical-practice";
-import { InvalidSourcePathError, PackValidationError } from "./errors";
+import { InvalidResourcePathError, InvalidSourcePathError, PackValidationError } from "./errors";
 import { deepFreeze } from "./freeze";
-import type { PackCandidate, PackSnapshot, PracticeSource } from "./types";
+import type { PackCandidate, PackResource, PackSnapshot, PracticeSource } from "./types";
 
 function isWindowsReservedPathSegment(segment: string): boolean {
   const baseName = segment.split(".", 1)[0]?.toLowerCase();
@@ -52,6 +55,11 @@ export function isPracticeSourcePath(path: string): boolean {
   );
 }
 
+/** Verify a Pack-root-relative resource path without resolving it on disk. */
+export function isPackResourcePath(path: string): boolean {
+  return validateResourcePath(path).valid;
+}
+
 function snapshotPack(pack: Pack): PackSnapshot {
   const snapshot = structuredClone(pack);
   return deepFreeze(snapshot) as PackSnapshot;
@@ -61,6 +69,7 @@ function snapshotPack(pack: Pack): PackSnapshot {
 export function createPackCandidate(
   input: UnvalidatedPackInput,
   sourcePathsByPracticeId: Readonly<Record<string, string>>,
+  resources: readonly PackResource[] = [],
 ): { candidate: PackCandidate; diagnostics: readonly ValidationIssue[] } {
   const parsed = parsePackInput(input);
   if (!parsed.ok) throw new PackValidationError(parsed.report);
@@ -104,11 +113,46 @@ export function createPackCandidate(
     sourcePaths.add(source.sourcePath);
   }
 
+  const resourcePaths = new Set<string>();
+  const resourceSnapshots = resources.map((resource) => {
+    const pathValidation = validateResourcePath(resource.sourcePath);
+    if (!pathValidation.valid) {
+      throw new InvalidResourcePathError(resource.sourcePath, pathValidation.reason);
+    }
+    if (!(resource.bytes instanceof Uint8Array)) {
+      throw new InvalidResourcePathError(resource.sourcePath, "contents are not raw bytes");
+    }
+    if (resourcePaths.has(resource.sourcePath)) {
+      throw new InvalidResourcePathError(resource.sourcePath, "duplicate path");
+    }
+    resourcePaths.add(resource.sourcePath);
+    return Object.freeze({
+      sourcePath: resource.sourcePath,
+      // Copy source bytes so callers cannot alter a candidate before it is
+      // materialized into its immutable snapshot.
+      bytes: new Uint8Array(resource.bytes),
+    });
+  });
+
+  const availableResourcePaths = new Set(resourceSnapshots.map((resource) => resource.sourcePath));
+  const resourceLinkIssues = sources.flatMap((source) =>
+    validateResourceLinks(source.canonicalPractice.practice.body ?? "", {
+      sourcePath: source.sourcePath,
+      availablePaths: availableResourcePaths,
+    }),
+  );
+  if (resourceLinkIssues.length > 0) {
+    throw new PackValidationError(
+      buildReport([...report.warnings, ...report.infos, ...resourceLinkIssues]),
+    );
+  }
+
   return {
     candidate: Object.freeze({
       pack: snapshotPack(pack),
       sources: Object.freeze(sources),
       decisions: Object.freeze(decisions.map((decision) => deepFreeze(structuredClone(decision)))),
+      resources: Object.freeze(resourceSnapshots),
     }),
     diagnostics: [...report.warnings, ...report.infos],
   };

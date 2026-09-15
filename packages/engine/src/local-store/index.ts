@@ -16,6 +16,8 @@ export {
   type StoreSnapshotIdentity,
   type EffectivePracticeSnapshot,
   type EffectivePracticeChangeSnapshot,
+  type EffectivePracticeSourceLocator,
+  type EffectivePracticeWithPackRoots,
 } from "./lifecycle/local-store";
 
 export {
@@ -45,6 +47,7 @@ export {
 export {
   PackValidationError,
   PracticeConflictError,
+  InvalidResourcePathError,
   InvalidSourcePathError,
   InvalidPracticeSourceError,
 } from "./model/errors";
@@ -55,7 +58,8 @@ export type {
   PackCandidate,
   EffectivePractice,
   RevisionDelta,
+  PackResource,
   PracticeSource,
 } from "./model/types";
 
-export { isPracticeSourcePath } from "./model/candidate";
+export { isPackResourcePath, isPracticeSourcePath } from "./model/candidate";

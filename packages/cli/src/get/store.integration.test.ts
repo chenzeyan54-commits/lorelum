@@ -29,6 +29,7 @@ async function install(
   rootName = "store",
   body = "Complete guidance.\n",
   practiceId = id,
+  resourceContents?: string,
 ) {
   const packPath = join(directory, packName);
   await mkdir(join(packPath, "practices"), { recursive: true });
@@ -52,6 +53,10 @@ anti_patterns:
 ---
 ${body}`,
   );
+  if (resourceContents !== undefined) {
+    await mkdir(join(packPath, "references"), { recursive: true });
+    await writeFile(join(packPath, "references", "api.md"), resourceContents);
+  }
   const decoded = await decodePackDirectory(packPath);
   const root = { rootPath: join(directory, rootName) };
   await createLocalStore().install(root, decoded.candidate, decoded.diagnostics);
@@ -84,7 +89,6 @@ async function get(directory: string, rootName = "store", practiceId = id) {
   expect(existsSync(unusedRoot)).toBe(false);
   expect(stderr.value).toBe("");
   expect(stdout.value.trim().split("\n")).toHaveLength(1);
-  expect(stdout.value).not.toContain(directory);
   const response = JSON.parse(stdout.value);
   if (response.ok) expect(validateJsonSchema(response.data, definition.resultSchema)).toEqual([]);
   return { exitCode, response, output: stdout.value };
@@ -111,11 +115,26 @@ test("returns canonical defaults, author order and merged sources independent of
       ],
     });
     expect(result.response.data.sources).toEqual([
-      { packName: "a-pack", sourcePath: "practices/read.md" },
-      { packName: "z-pack", sourcePath: "practices/read.md" },
+      {
+        packName: "a-pack",
+        sourcePath: "practices/read.md",
+        packRoot: expect.stringContaining("/packs/p-a-pack/"),
+      },
+      {
+        packName: "z-pack",
+        sourcePath: "practices/read.md",
+        packRoot: expect.stringContaining("/packs/p-z-pack/"),
+      },
     ]);
-    expect(result.output).toBe((await get(directory, "reverse")).output);
-    expect(result.output).toBe((await get(directory)).output);
+    const reverse = await get(directory, "reverse");
+    expect(reverse.response.data).toMatchObject({
+      practice: result.response.data.practice,
+      contentDigest: result.response.data.contentDigest,
+      sources: [
+        { packName: "a-pack", sourcePath: "practices/read.md" },
+        { packName: "z-pack", sourcePath: "practices/read.md" },
+      ],
+    });
     expect(result.response.data.contentDigest).toBe(before.effectivePractices[0]!.contentDigest);
     expect(await readFile(join(root.rootPath, "installed-packs.json"), "utf8")).toBe(manifest);
     const after = await createLocalStore().open(root);
@@ -168,7 +187,7 @@ test.each(["artifact", "sqlite"] as const)(
   },
 );
 
-test("does not audit the artifact when the requested Practice is present", async () => {
+test("requires a valid selected artifact before returning a source locator", async () => {
   await withDirectory(async (directory) => {
     const root = await install(directory);
     const artifactRoot = join(root.rootPath, "packs/p-sample");
@@ -176,8 +195,41 @@ test("does not audit the artifact when the requested Practice is present", async
     expect(digest).toBeDefined();
     await writeFile(join(artifactRoot, digest!, "practices/read.md"), "Changed artifact.\n");
     const result = await get(directory, "store", id);
-    expect(result.exitCode).toBe(0);
-    expect(result.response.data.practice.id).toBe(id);
+    expect(result.exitCode).toBe(2);
+    expect(result.response.error.code).toBe("store.recovery-required");
+  });
+});
+
+test("resource-only upgrade returns a new locator without changing Practice content", async () => {
+  await withDirectory(async (directory) => {
+    const root = await install(
+      directory,
+      "resource-pack",
+      "store",
+      "Complete guidance.\n",
+      id,
+      "first resource bytes\n",
+    );
+    const first = await get(directory);
+    expect(first.exitCode).toBe(0);
+    const firstSource = first.response.data.sources[0];
+    expect(firstSource.packRoot).toEqual(expect.stringContaining("/packs/p-resource-pack/"));
+
+    const packPath = join(directory, "resource-pack");
+    await writeFile(join(packPath, "references", "api.md"), "second resource bytes\n");
+    const decoded = await decodePackDirectory(packPath);
+    const upgraded = await createLocalStore().upgrade(root, decoded.candidate, decoded.diagnostics);
+    expect(upgraded.effectiveRevision).toBe(1);
+
+    const second = await get(directory);
+    expect(second.exitCode).toBe(0);
+    const secondSource = second.response.data.sources[0];
+    expect(second.response.data.contentDigest).toBe(first.response.data.contentDigest);
+    expect(secondSource.packRoot).not.toBe(firstSource.packRoot);
+    expect(existsSync(firstSource.packRoot)).toBe(false);
+    expect(await readFile(join(secondSource.packRoot, "references", "api.md"), "utf8")).toBe(
+      "second resource bytes\n",
+    );
   });
 });
 

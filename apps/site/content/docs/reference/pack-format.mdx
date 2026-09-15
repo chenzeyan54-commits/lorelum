@@ -1,0 +1,72 @@
+---
+title: Pack format
+description: The complete file format for a Lorelum Knowledge Pack, including on-demand resources.
+---
+
+A Knowledge Pack is a versioned directory of independently retrievable Practices and optional supporting resources. Start with [Create a Pack](../create-pack) for a small first Pack; use this page when you need the complete format and resource rules.
+
+## Directory layout
+
+```text
+<pack-root>/
+├── pack.yaml
+├── practices/
+│   └── **/*.md
+├── decisions.yaml                 # optional
+├── references/                    # optional
+├── assets/                        # optional
+├── scripts/                       # optional
+└── i18n/                          # authoring-only localized companions
+```
+
+`pack.yaml` identifies the Pack and its version. Every canonical runtime Practice lives under `practices/` and has the required Practice frontmatter. `decisions.yaml`, when present, supplies the existing decision graph. `i18n/` remains companion material for human review rather than a second runtime Pack.
+
+The three resource directories are ordinary Pack content, not a separate attachment system:
+
+| Directory | Use it for | Do not use it for |
+| --- | --- | --- |
+| `references/` | Detailed rules, evidence, compatibility matrices, field definitions, or long runbooks that a Practice needs only in some cases. | The only statement of a fact required to make the Practice's immediate decision. |
+| `assets/` | Templates, checklists, configuration skeletons, starter files, or other material a caller copies into its task output. | A writable workspace inside the installed Pack. |
+| `scripts/` | Repeated, deterministic diagnostics, checks, or conversions that a caller may explicitly run. | Install hooks, implicit dependency setup, credentials, or automatic network work. |
+
+Each resource is preserved with the Pack's selected artifact. Resources are not separate searchable objects: their bytes do not enter Practice ranking or semantic/keyword indexes.
+
+## Link a resource from a Practice
+
+Use an ordinary Markdown link with a `resource:` target. The path after `resource:` is relative to the Pack root, not to the Practice file:
+
+```markdown
+Read the [API compatibility matrix](resource:references/api-compatibility.md) when the change has a public API boundary.
+
+Copy the [review report template](resource:assets/api-review-report.md) to the task workspace before completing it.
+
+For a repeatable diagnostic, run the [public API checker](resource:scripts/check-public-api/main.py) with the inputs described below.
+```
+
+A resource target must start with `references/`, `assets/`, or `scripts/` and resolve to a regular file in the same Pack. It cannot escape the Pack root or use a symlink, fragment, query, or platform- unsafe path. Normal web links, normal relative Markdown links, inline code, and code examples keep their usual meaning.
+
+Keep the immediate judgment in the Practice itself: its trigger, action, direct reason, material exceptions, and stopping point must be understandable when retrieval returns only that Practice. The link tells a caller when more detail or a reusable artifact is helpful; it should not hide the only safety-critical condition.
+
+## Validate before release
+
+```sh
+lore validate /path/to/pack
+```
+
+Validation reports structural problems in the Pack, including resource-directory safety and a missing or invalid `resource:` target. It does not execute Pack scripts, install dependencies, connect to the network, read credentials, assess a script's business logic, or require every helper file to be linked directly. A script may legitimately use adjacent helper files; an asset directory may contain a set of files that are copied together.
+
+Passing validation establishes format correctness only. Review the guidance, test retrieval with representative queries, and observe downstream Agent behavior separately before making those broader claims.
+
+## How callers consume resources
+
+After `lore get <practice-id>`, each returned source includes `packName`, `sourcePath`, and the current local `packRoot`. Resolve a `resource:` path from the matching source root. A caller that explicitly selected one Pack can obtain the same kind of locator from `lore pack list <pack-name>`. See the [get reference](./get) and [Pack commands](./packs) for locator lifetime and multi-source behavior.
+
+This is a routing convention, not an access-control system. `resource:` recommends the material that fits the Practice; it does not restrict normal browsing of a Pack root that the caller explicitly selected. Do not derive Pack paths from a name or Store internals. If an update makes a previously returned root unavailable, run `lore get` or `lore pack list` again.
+
+Read references only when needed. Copy assets to the target workspace before editing. Run scripts only with the current task's authorization and with explicit inputs and expected output described by the Practice. Lorelum never auto-runs Pack scripts during install, validation, query, listing, get, indexing, or recovery.
+
+## Install and retrieval boundary
+
+Installing or updating a Pack saves the selected Pack artifact, including valid resources. It does not register a Host Skill, grant new permissions, or run a script. Changing only a resource creates a new Pack artifact but does not change the canonical Practice content used for retrieval. Changing a `resource:` link inside a Practice does change that Practice's canonical content and follows the normal retrieval revision lifecycle.
+
+For authoring guidance that goes beyond this format reference, install and query the [`pack-creator`](../create-pack#get-authoring-guidance) Pack.

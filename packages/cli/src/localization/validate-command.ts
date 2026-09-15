@@ -1,8 +1,10 @@
+import { relative, sep } from "node:path";
+
 import { decodePackDirectory, PackValidationError, SnapshotFormatError } from "@lorelum/engine";
 import { analyzeLocalizationState, type ValidationIssue } from "@lorelum/format";
 import type { CommandDefinition, CommandResult } from "../registry.js";
 import type { JsonSchema, JsonValue } from "../output/protocol.js";
-import { frameworkErrorCodes, cliErrorCodes, CliError } from "../runtime/errors.js";
+import { frameworkErrorCodes, cliErrorCodes } from "../runtime/errors.js";
 import { discoverPackFiles } from "./filesystem.js";
 import {
   assertCanonicalLocaleDirectories,
@@ -78,6 +80,12 @@ function flattenValidationReport(report: {
   }));
 }
 
+function diagnosticSnapshotPath(packRoot: string, snapshotPath: string): string {
+  const path = relative(packRoot, snapshotPath);
+  if (path === "" || path.split(sep).includes("..")) return ".";
+  return path.split(sep).join("/");
+}
+
 async function validatePack(packRoot: string): Promise<CommandResult<JsonValue>> {
   let decoded;
   try {
@@ -92,7 +100,23 @@ async function validatePack(packRoot: string): Promise<CommandResult<JsonValue>>
         exitCode: 1,
       };
     if (error instanceof SnapshotFormatError)
-      throw new CliError(cliErrorCodes.packInvalid, "The selected Pack is invalid.");
+      return {
+        data: {
+          pack: {
+            valid: false,
+            diagnostics: [
+              {
+                level: "error",
+                code: "snapshot.invalid",
+                path: diagnosticSnapshotPath(packRoot, error.snapshotPath),
+                message: "Pack directory structure is invalid.",
+              },
+            ],
+          },
+          localization: { locales: [] },
+        },
+        exitCode: 1,
+      };
     throw error;
   }
   const files = await discoverPackFiles(packRoot);

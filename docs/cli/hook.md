@@ -6,7 +6,7 @@
 printf '%s\n' '{"hook_event_name":"SessionStart"}' | lore hook codex
 ```
 
-成功时，stdout 是包含 `hookSpecificOutput.hookEventName` 和受限 `additionalContext` 的对象。Catalog 包含已安装 Pack 的名称、版本、可选 description 和 `appliesTo`；它只是检索路由提示，不是完整 Practice 内容。
+成功时，stdout 是包含 `hookSpecificOutput.hookEventName` 和受限 `additionalContext` 的对象。Catalog 包含已安装 Pack 的名称、版本、可选 description、`appliesTo` 与当前 `packRoot`；它只是 Pack-level 的检索路由提示，不是完整 Practice 内容，也不包含 resource 文件清单或内容。`packRoot` 在后续 mutation 后可能失效；需要刷新时运行 `lore get` 或 `lore pack list`，不要推导 Store 内部路径。
 
 `lore hook codex` 只支持 `SessionStart`。生命周期来源（例如 `compact`）由 Codex Plugin 的 `hooks.json` matcher 决定，CLI 不推断启动、恢复、清理或 compact 时机。它不会主动 query/get Practice、启动 Backend、下载模型、构建 index 或修改 Store。
 

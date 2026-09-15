@@ -31,15 +31,29 @@ const packsResult = {
   generation: 1,
   effectiveRevision: 2,
   packs: [
-    { name: "agentic-coding", version: "0.3.0", practiceCount: 31 },
-    { name: "platform", version: "1.0.0", practiceCount: 0 },
+    {
+      name: "agentic-coding",
+      version: "0.3.0",
+      packRoot: "/store/packs/p-agentic-coding/current",
+      practiceCount: 31,
+    },
+    {
+      name: "platform",
+      version: "1.0.0",
+      packRoot: "/store/packs/p-platform/current",
+      practiceCount: 0,
+    },
   ],
 };
 
 const packResult = {
   generation: 1,
   effectiveRevision: 2,
-  pack: { name: "agentic-coding", version: "0.3.0" },
+  pack: {
+    name: "agentic-coding",
+    version: "0.3.0",
+    packRoot: "/store/packs/p-agentic-coding/current",
+  },
   practices: [
     {
       id: "agentic-coding.testing.classify-failure-before-changing-test",
@@ -56,12 +70,14 @@ const packDetailsResult = {
     {
       name: "agentic-coding",
       version: "0.3.0",
+      packRoot: "/store/packs/p-agentic-coding/current",
       description: "Agentic coding practices.",
       applies_to: ["typescript"],
     },
     {
       name: "platform",
       version: "1.0.0",
+      packRoot: "/store/packs/p-platform/current",
     },
   ],
 };
@@ -142,10 +158,16 @@ test("returns all list modes through their result schema", async () => {
         {
           name: "agentic-coding",
           version: "0.3.0",
+          packRoot: "/store/packs/p-agentic-coding/current",
           description: "Agentic coding practices.",
           appliesTo: ["typescript"],
         },
-        { name: "platform", version: "1.0.0", appliesTo: [] },
+        {
+          name: "platform",
+          version: "1.0.0",
+          packRoot: "/store/packs/p-platform/current",
+          appliesTo: [],
+        },
       ],
     },
   });

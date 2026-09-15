@@ -30,6 +30,66 @@ test("SnapshotCodec injects Markdown body and normalizes source paths", async ()
   });
 });
 
+test("SnapshotCodec retains validated reference, asset, and script bytes", async () => {
+  await withSnapshot(async (path) => {
+    await mkdir(join(path, "references"), { recursive: true });
+    await mkdir(join(path, "assets", "reports"), { recursive: true });
+    await mkdir(join(path, "scripts", "check"), { recursive: true });
+    await writeFile(join(path, "references", "api.md"), "API matrix\n", "utf8");
+    await writeFile(join(path, "assets", "reports", "badge.bin"), Buffer.from([0, 255, 7]));
+    await writeFile(join(path, "scripts", "check", "main.py"), "print('ok')\n", "utf8");
+    await writeFile(join(path, "scripts", "check", "helpers.py"), "VALUE = 1\n", "utf8");
+    await writeFile(
+      join(path, "practices", "api.md"),
+      "---\nid: platform.api\ntitle: API\nstage: api\ntech_stack: [typescript]\napplies_when: always\n---\nRead [the matrix](resource:references/api.md).\nUse [the checker](resource:scripts/check/main.py).\n",
+    );
+
+    const decoded = await decodeSnapshot(path);
+    expect(decoded.candidate.resources.map((resource) => resource.sourcePath)).toEqual([
+      "assets/reports/badge.bin",
+      "references/api.md",
+      "scripts/check/helpers.py",
+      "scripts/check/main.py",
+    ]);
+    expect([
+      ...decoded.candidate.resources.find(
+        (resource) => resource.sourcePath === "assets/reports/badge.bin",
+      )!.bytes,
+    ]).toEqual([0, 255, 7]);
+  });
+});
+
+test("SnapshotCodec rejects resource links whose target is absent", async () => {
+  await withSnapshot(async (path) => {
+    await writeFile(
+      join(path, "practices", "api.md"),
+      "---\nid: platform.api\ntitle: API\nstage: api\ntech_stack: [typescript]\napplies_when: always\n---\nRead [the matrix](resource:references/missing.md).\n",
+    );
+    await expect(decodeSnapshot(path)).rejects.toMatchObject({
+      report: {
+        valid: false,
+        errors: [expect.objectContaining({ code: "resource-target-missing" })],
+      },
+    });
+  });
+});
+
+test("SnapshotCodec rejects symbolic links inside resource directories", async () => {
+  await withSnapshot(async (path) => {
+    await mkdir(join(path, "references"));
+    const outsidePath = join(path, "outside.md");
+    await writeFile(outsidePath, "not part of the Pack\n");
+    try {
+      await symlink(outsidePath, join(path, "references", "outside.md"));
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "EPERM")
+        return;
+      throw error;
+    }
+    await expect(decodeSnapshot(path)).rejects.toThrow("symbolic links are not allowed");
+  });
+});
+
 test("SnapshotCodec rejects a decisions wrapper object", async () => {
   await withSnapshot(async (path) => {
     await writeFile(join(path, "decisions.yaml"), "decisions: []\n");

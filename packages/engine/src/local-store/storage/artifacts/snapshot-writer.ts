@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import type { PackCandidate } from "../../model";
 import { ArtifactIntegrityError } from "../errors";
@@ -82,6 +82,28 @@ export async function writeSnapshotFromCandidate(
           snapshotPath,
           "cannot write " +
             source.sourcePath +
+            ": " +
+            (error instanceof Error ? error.message : String(error)),
+        );
+      }
+    }),
+  );
+
+  // Resources are intentionally materialized verbatim and remain outside the
+  // canonical Practice projection. Their paths were validated when the
+  // candidate was constructed; `writeFile` accepts Uint8Array without text
+  // conversion, preserving binary assets exactly.
+  await Promise.all(
+    candidate.resources.map(async (resource) => {
+      const resourcePath = join(snapshotPath, resource.sourcePath);
+      try {
+        await mkdir(dirname(resourcePath), { recursive: true });
+        await writeFile(resourcePath, resource.bytes);
+      } catch (error) {
+        throw new ArtifactIntegrityError(
+          snapshotPath,
+          "cannot write " +
+            resource.sourcePath +
             ": " +
             (error instanceof Error ? error.message : String(error)),
         );

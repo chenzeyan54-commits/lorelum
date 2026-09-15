@@ -1,6 +1,7 @@
 export interface InstalledPackCatalogEntry {
   readonly name: string;
   readonly version: string;
+  readonly packRoot: string;
   readonly description?: string;
   readonly appliesTo: readonly string[];
 }
@@ -35,18 +36,34 @@ function normalizeText(value: string): string {
     .trim();
 }
 
+/** Preserve a usable local path while preventing it from injecting Catalog lines. */
+function normalizePath(value: string): string {
+  return value
+    .split("")
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      return code >= 0x20 && code !== 0x7f ? character : `\\u${code.toString(16).padStart(4, "0")}`;
+    })
+    .join("");
+}
+
 function comparePacks(left: InstalledPackCatalogEntry, right: InstalledPackCatalogEntry): number {
   if (left.name !== right.name) return left.name < right.name ? -1 : 1;
   return left.version < right.version ? -1 : left.version > right.version ? 1 : 0;
 }
 
-function renderPack(pack: InstalledPackCatalogEntry): string {
-  const lines = [`- ${normalizeText(pack.name)} (${normalizeText(pack.version)})`];
-  const appliesTo = pack.appliesTo.map(normalizeText).filter(Boolean);
-  if (appliesTo.length > 0) lines.push(`  Stack scope: ${appliesTo.join(", ")}`);
-  if (pack.description !== undefined) {
-    const description = normalizeText(pack.description);
-    if (description !== "") lines.push(`  Description: ${description}`);
+function renderPack(pack: InstalledPackCatalogEntry, includeSummary = true): string {
+  const lines = [
+    `- ${normalizeText(pack.name)} (${normalizeText(pack.version)})`,
+    `  Pack root: ${normalizePath(pack.packRoot)}`,
+  ];
+  if (includeSummary) {
+    const appliesTo = pack.appliesTo.map(normalizeText).filter(Boolean);
+    if (appliesTo.length > 0) lines.push(`  Stack scope: ${appliesTo.join(", ")}`);
+    if (pack.description !== undefined) {
+      const description = normalizeText(pack.description);
+      if (description !== "") lines.push(`  Description: ${description}`);
+    }
   }
   return lines.join("\n");
 }
@@ -82,6 +99,7 @@ export function renderPackCatalog(
       uniquePacks.set(name, {
         name,
         version: normalizeText(pack.version),
+        packRoot: normalizePath(pack.packRoot),
         ...(pack.description === undefined ? {} : { description: normalizeText(pack.description) }),
         appliesTo: Object.freeze(pack.appliesTo.map(normalizeText).filter(Boolean)),
       });
@@ -92,7 +110,7 @@ export function renderPackCatalog(
   const body =
     sortedPacks.length === 0
       ? "No installed Knowledge Packs are currently available."
-      : sortedPacks.map(renderPack).join("\n");
+      : sortedPacks.map((pack) => renderPack(pack)).join("\n");
   const complete = renderContext(body);
   if (complete.length <= maxCharacters) return complete;
 
@@ -102,6 +120,23 @@ export function renderPackCatalog(
   }
 
   const bodyBudget = Math.max(0, maxCharacters - preservedContext.length - 2);
-  const shortenedBody = body.slice(0, bodyBudget).trimEnd();
-  return renderContext(shortenedBody, TRUNCATION_NOTE);
+  const compactEntries: string[] = [];
+  for (const pack of sortedPacks) {
+    const separatorLength = compactEntries.length === 0 ? 0 : 1;
+    const full = renderPack(pack);
+    const required = renderPack(pack, false);
+    const available = bodyBudget - compactEntries.join("\n").length - separatorLength;
+    if (full.length <= available) {
+      compactEntries.push(full);
+      continue;
+    }
+    if (required.length <= available) {
+      // Preserve a complete usable locator even when the Pack summary no
+      // longer fits in the bounded SessionStart context.
+      compactEntries.push(required);
+      continue;
+    }
+    break;
+  }
+  return renderContext(compactEntries.join("\n"), TRUNCATION_NOTE);
 }

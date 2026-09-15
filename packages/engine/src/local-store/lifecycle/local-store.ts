@@ -9,6 +9,7 @@ import { installOrUpgrade } from "./install";
 import {
   openLocalStore,
   getEffectivePractice,
+  getEffectivePracticeWithPackRoots,
   readEffectivePracticeChanges,
   readEffectivePracticeSnapshot,
   readEffectivePracticesAtSnapshot,
@@ -17,6 +18,8 @@ import {
   withSnapshotFence,
   type EffectivePracticeChangeSnapshot,
   type EffectivePracticeSnapshot,
+  type EffectivePracticeSourceLocator,
+  type EffectivePracticeWithPackRoots,
   type StoreSnapshotIdentity,
 } from "./open";
 import { reindexStore } from "./reindex";
@@ -44,6 +47,7 @@ export interface OpenResult {
 export interface InstalledPackSummary {
   readonly name: string;
   readonly version: string;
+  readonly packRoot: string;
 }
 
 export interface InstalledPackDetailsResult {
@@ -58,9 +62,14 @@ export interface LocalStore {
     root: StorageRoot,
     practiceId: string,
   ): Promise<EffectivePractice | undefined>;
+  /** Point read with source-scoped locators from verified Pack artifacts. */
+  getEffectivePracticeWithPackRoots(
+    root: StorageRoot,
+    practiceId: string,
+  ): Promise<EffectivePracticeWithPackRoots | undefined>;
   /** Cold open; throws StoreRecoveryRequiredError on any inconsistency. */
   open(root: StorageRoot): Promise<OpenResult>;
-  /** Verified Pack metadata from sealed projections without widening OpenResult.packs. */
+  /** Verified Pack metadata and locators from sealed projections. */
   readInstalledPackDetails(root: StorageRoot): Promise<InstalledPackDetailsResult>;
   install(
     root: StorageRoot,
@@ -118,14 +127,17 @@ export function createLocalStore(
     getEffectivePractice(root, practiceId) {
       return getEffectivePractice(root.rootPath, practiceId);
     },
+    getEffectivePracticeWithPackRoots(root, practiceId) {
+      return getEffectivePracticeWithPackRoots(root.rootPath, practiceId);
+    },
     async open(root: StorageRoot): Promise<OpenResult> {
       const result = await openLocalStore(root.rootPath);
       return {
         generation: result.manifest.generation,
         effectiveRevision: result.manifest.effectiveRevision,
         packs: Object.freeze(
-          result.manifest.packs.map((pack) =>
-            Object.freeze({ name: pack.packName, version: pack.packVersion }),
+          result.packDetails.map(({ pack, packRoot }) =>
+            Object.freeze({ name: pack.name, version: pack.version, packRoot }),
           ),
         ),
         effectivePractices: result.effectivePractices,
@@ -133,7 +145,9 @@ export function createLocalStore(
     },
     async readInstalledPackDetails(root: StorageRoot): Promise<InstalledPackDetailsResult> {
       const result = await openLocalStore(root.rootPath);
-      const packs = result.packDetails.map(toInstalledPackDetails);
+      const packs = result.packDetails.map(({ pack, packRoot }) =>
+        toInstalledPackDetails({ ...pack, packRoot }),
+      );
       return Object.freeze({
         generation: result.manifest.generation,
         effectiveRevision: result.manifest.effectiveRevision,
@@ -193,6 +207,8 @@ export type {
   EffectivePractice,
   EffectivePracticeChangeSnapshot,
   EffectivePracticeSnapshot,
+  EffectivePracticeSourceLocator,
+  EffectivePracticeWithPackRoots,
   PackCandidate,
   RevisionDelta,
   StoreSnapshotIdentity,

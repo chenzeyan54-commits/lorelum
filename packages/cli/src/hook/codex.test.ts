@@ -23,6 +23,7 @@ const details: ListPackDetailsResult = {
     {
       name: "agentic-coding",
       version: "0.1.0",
+      packRoot: "/private/store/packs/p-agentic-coding/current",
       description: "Engineering guidance.",
       applies_to: ["typescript"],
     },
@@ -70,6 +71,7 @@ describe("lore hook codex", () => {
         additionalContext: expect.stringContaining("Engineering guidance."),
       },
     });
+    expect(stdout.value).toContain("Pack root: /private/store/packs/p-agentic-coding/current");
   });
 
   test.each([

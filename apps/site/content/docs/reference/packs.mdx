@@ -25,7 +25,9 @@ lore pack list --details
 lore pack list agentic-coding
 ```
 
-The first command lists installed Packs. `--details` adds metadata for discovery. A Pack name lists that Pack's Practices. Use a returned ID with [get](./get).
+The first command lists installed Packs and returns each Pack's current local `packRoot`; `--details` adds metadata for discovery and also returns the Pack locator. A Pack name lists that Pack's Practices and returns its `packRoot` on the `pack` object. Use a returned ID with [get](./get). Practice summaries deliberately do not repeat per-Practice paths or resource paths.
+
+`packRoot` is useful when the caller explicitly chose a Pack to browse or maintain. It is not injected into query results, but the Codex Pack Catalog includes it for every installed Pack. The Catalog still does not load or enumerate Pack resources automatically. A locator belongs to the artifact current at this command's Store snapshot. After a mutation, rerun `pack list` or `get` rather than deriving a new root from a Pack name or Store layout. See [Pack format](./pack-format).
 
 ## Update and remove
 
@@ -42,7 +44,7 @@ Update one Pack at a time. Both commands return `pack.not-installed` if the Pack
 lore validate /path/to/pack
 ```
 
-Validation checks the Pack and reports localization state. Use it while [creating a Pack](../create-pack). Exit codes are `0`, `1`, or `2`; inspect the result and `lore describe validate` for the distinction between diagnostics and command errors.
+Validation checks the Pack and reports localization state. It also reports invalid resource directories and `resource:` targets, but never executes Pack scripts. Use it while [creating a Pack](../create-pack) and read [Pack format](./pack-format) for the complete resource boundary. Exit codes are `0`, `1`, or `2`; inspect the result and `lore describe validate` for the distinction between diagnostics and command errors.
 
 ## Choose the Store
 

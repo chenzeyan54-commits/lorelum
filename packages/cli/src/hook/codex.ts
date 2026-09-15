@@ -126,6 +126,7 @@ export function buildCodexHookResponse(
         details.packs.map((pack) => ({
           name: pack.name,
           version: pack.version,
+          packRoot: pack.packRoot,
           ...(pack.description === undefined ? {} : { description: pack.description }),
           appliesTo: pack.applies_to ?? [],
         })),

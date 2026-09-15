@@ -22,12 +22,12 @@ data: {
   generation,
   effectiveRevision,
   packs: [
-    { name, version, practiceCount }
+    { name, version, practiceCount, packRoot }
   ]
 }
 ```
 
-Pack entries are sorted by `name`. `version` comes from the selected Store's verified active manifest. `practiceCount` counts effective Practices for which that Pack has a source claim. If multiple Packs provide the same Practice, each Pack counts it; the values therefore are not a global deduplicated Practice total.
+Pack entries are sorted by `name`. `version` comes from the selected Store's verified active manifest. `practiceCount` counts effective Practices for which that Pack has a source claim. If multiple Packs provide the same Practice, each Pack counts it; the values therefore are not a global deduplicated Practice total. `packRoot` is the selected Pack's current local, verified artifact root. It supports an explicit Pack-level browse or authoring task; it does not cause the CLI to load resource files or Practice bodies into the catalog result.
 
 A fresh Store is a successful response with `packs: []`.
 
@@ -44,7 +44,8 @@ data: {
       name,
       version,
       description?,
-      appliesTo
+      appliesTo,
+      packRoot
     }
   ]
 }
@@ -60,14 +61,16 @@ This mode is intended for integrations that build a Pack index. `description` is
 data: {
   generation,
   effectiveRevision,
-  pack: { name, version },
+    pack: { name, version, packRoot },
   practices: [
     { id, title, applies_when }
   ]
 }
 ```
 
-Practice entries are sorted by exact `id`. The returned `id` can be passed directly to `lore get`. Full Practice bodies, anti-patterns, and source details remain part of `get`. An installed Pack with zero Practices is successful and returns an empty `practices` array.
+Practice entries are sorted by exact `id`. The returned `id` can be passed directly to `lore get`. Full Practice bodies, anti-patterns, and source details remain part of `get`; compact summaries do not repeat `practicePath` or individual resource paths. An installed Pack with zero Practices is successful and returns an empty `practices` array.
+
+`packRoot` is an absolute locator for the active artifact at the Store snapshot used by this command. A caller can browse this explicitly selected Pack root, or resolve a Practice resource target such as `resource:references/checklist.md` from it. It must not guess a root from a Pack name or depend on SQLite/projection layout. After install, update, remove, or recovery changes the Pack state, an earlier root can be stale; rerun the relevant `lore pack list` command or `lore get` to obtain a current locator.
 
 ## Errors and boundaries
 

@@ -15,6 +15,10 @@ Use the exact `id` returned by [`query`](./query) or `lore pack list <pack>`; ti
 lore get example.practice-id
 ```
 
-Success data contains `practice` (the full Practice and metadata), `contentDigest`, and `sources` (`packName` and `sourcePath`). Use the `practiceId` returned by query as the exact `practice-id`. An invalid ID returns `usage.invalid`; an ID absent from the selected Store returns `practice.not-found`. Store contention and recovery report `store.busy` or `store.recovery-required`.
+Success data contains `practice` (the full Practice and metadata), `contentDigest`, and `sources` (`packName`, `sourcePath`, and `packRoot`). `sourcePath` is relative to that source's `packRoot`, so a separate `practicePath` is unnecessary. `packRoot` names the current local verified artifact for that source and lets a caller resolve a Practice link such as `resource:references/api-compatibility.md`.
+
+If one Practice has multiple sources, retain each root separately: do not silently choose one source or combine resources from several Packs. A later Pack update can make a locator stale; call `get` again, or explicitly select a Pack with `lore pack list <pack-name>`, instead of deriving a new path from Store internals. See [Pack format](./pack-format) for how to read references, copy assets, and explicitly run scripts.
+
+Use the `practiceId` returned by query as the exact `practice-id`. An invalid ID returns `usage.invalid`; an ID absent from the selected Store returns `practice.not-found`. Store contention and recovery report `store.busy` or `store.recovery-required`.
 
 Exit `0` means success; all declared failures exit `2`. Run `lore describe get` for the exact result schema.

@@ -44,6 +44,7 @@ export function retrievePacks(input: RetrievePacksInput): RetrievePacksResult {
       Object.freeze({
         name: pack.name,
         version: pack.version,
+        packRoot: pack.packRoot,
         practiceCount: counts.get(pack.name) ?? 0,
       }),
     )
@@ -69,7 +70,11 @@ export function retrievePackPractices(
   const pack = input.packs.find((candidate) => candidate.name === input.packName);
   if (pack === undefined) return null;
 
-  const projectedPack = Object.freeze({ name: pack.name, version: pack.version });
+  const projectedPack = Object.freeze({
+    name: pack.name,
+    version: pack.version,
+    packRoot: pack.packRoot,
+  });
   const practices = input.effectivePractices
     .filter((effectivePractice) =>
       effectivePractice.sources.some((source) => source.packName === pack.name),

@@ -65,6 +65,12 @@ Use the exact `practiceId` from the query or Pack listing. Check applicability a
 
 Retrieve again if new facts change the decision. Describe how the relevant guidance affects the work without claiming that unrelated Practices were applied.
 
+### Use linked Pack resources on demand
+
+A Practice can link Pack-native material with a `resource:` target, such as `resource:references/api-compatibility.md`. Resolve it from the matching source's `packRoot` in the `get` result. Read a reference when it provides the extra detail needed for the decision; copy an asset into the task workspace before editing it; and run a script only when the current task authorizes it and the Practice explains its inputs and purpose.
+
+The link is the default task route, not a file-access allowlist. The Codex SessionStart Catalog gives every installed Pack its current `packRoot`, so you may use that root when the Pack context is already clear. For a retrieved Practice, keep multiple sources separate and use the matching `get` source root rather than silently choosing a Catalog entry. Refresh `get` or `pack list` if any earlier locator is stale after an update; never derive roots from Store internals. Never assume a Pack script runs during install, validation, query, listing, get, indexing, or recovery.
+
 ## Handle JSON and process status
 
 stdout contains one JSON response; stderr contains diagnostics and progress. Inspect `ok`, then the command-specific fields in `data`.
@@ -84,6 +90,7 @@ Semantic query is the default. A failed semantic query does not mean that releva
 ```sh
 lore describe query
 lore describe get
+lore describe pack.list
 lore describe index.build
 ```
 

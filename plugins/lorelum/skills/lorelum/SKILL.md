@@ -9,7 +9,7 @@ Lorelum is an optional local retrieval layer for engineering Practices. It store
 
 ## Use the injected Pack Catalog
 
-Codex receives a compact **Installed Pack Catalog** from the SessionStart Hook. Treat it as lightweight routing metadata, not as complete engineering guidance or a hard filter. Use each Pack's description and declared stack scope as relevance hints.
+Codex receives a compact **Installed Pack Catalog** from the SessionStart Hook. Treat it as lightweight routing metadata, not as complete engineering guidance or a hard filter. Each Pack entry includes its current `packRoot`, while resource files and Practice bodies remain absent. Use each Pack's description and declared stack scope as relevance hints.
 
 Reuse that Catalog for the task; do not rerun `lore pack list --details` at the start because the Hook already supplies the same metadata. If the injected catalog is truncated or unavailable, do not assume omitted Packs are absent; run `lore pack list --details` only when refreshing discovery would help the current task or decision.
 
@@ -26,5 +26,21 @@ Then read the complete body of every candidate Practice you will use:
 ```sh
 lore get <practice-id>
 ```
+
+## Use Pack resources when a retrieved Practice points to them
+
+Packs may include optional `references/`, `assets/`, and `scripts/` directories. A Practice can point to one with a normal Markdown link whose target begins with `resource:`, for example:
+
+```markdown
+[API compatibility matrix](resource:references/api-compatibility.md)
+```
+
+The link is the Practice's suggested route for the current task, not an access-control allowlist. When the relevant Pack is already clear, the SessionStart Catalog provides its `packRoot` for Pack-level browsing. Resolve the part after `resource:` from the corresponding `sources[].packRoot` in `lore get` whenever the selected Practice has a source; this preserves source choice when multiple Packs provide the same Practice. When the user explicitly needs to browse or maintain a Pack, `lore pack list <pack-name>` obtains a fresh `packRoot`. Do not construct paths from a Pack name or use the Store's SQLite/projection layout as an interface.
+
+- Read linked `references/` material only when the Practice needs the extra detail.
+- Copy an `assets/` file to the task destination before editing it; the installed Pack is not a writable work directory.
+- Run a `scripts/` file only under the current task's authorization and with the Practice's stated purpose and inputs. Lorelum never runs Pack scripts automatically during install, validation, query, list, get, indexing, or recovery.
+
+If `lore get` returns multiple sources, preserve their separate roots and do not silently combine their resources or choose one source. A returned root names the current local artifact; if it is no longer available after a Pack update, obtain a fresh locator with `lore get` or `lore pack list`.
 
 The default query is semantic. Do not skip a ready semantic query solely because of expected latency. Do not run backend, model, index, or status commands before this query. Only after the query itself returns a preparation state or an error, read [semantic query recovery](references/semantic-query-recovery.md), follow the relevant recovery path, then retry the same query. Do not silently substitute keyword results for a failed or empty semantic query; use `--mode keyword` only for an intentional offline lookup or semantic-runtime diagnosis. Do not query before every edit, command, or ordinary reply.

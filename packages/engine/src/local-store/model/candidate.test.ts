@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { reactPack } from "@lorelum/format";
 
 import { createPackCandidate } from "./candidate";
-import { InvalidSourcePathError, PackValidationError } from "./errors";
+import { InvalidResourcePathError, InvalidSourcePathError, PackValidationError } from "./errors";
 
 function sourcePaths(): Record<string, string> {
   return {
@@ -91,5 +91,30 @@ describe("createPackCandidate", () => {
       "react.api.layered-design": "practices/api/layered-design.md",
     }) as Record<string, string>;
     expect(() => createPackCandidate(reactPack(), inheritedPaths)).toThrow(InvalidSourcePathError);
+  });
+
+  test("validates resource paths and Practice resource links against candidate bytes", () => {
+    const input = reactPack();
+    input.practices[0]!.body = "Read [the matrix](resource:references/api.md).";
+    const resourceBytes = new Uint8Array([0, 255, 7]);
+    const { candidate } = createPackCandidate(input, sourcePaths(), [
+      { sourcePath: "references/api.md", bytes: resourceBytes },
+      { sourcePath: "scripts/check/helpers.py", bytes: new Uint8Array([1]) },
+    ]);
+    resourceBytes[0] = 42;
+
+    expect(candidate.resources.map((resource) => resource.sourcePath)).toEqual([
+      "references/api.md",
+      "scripts/check/helpers.py",
+    ]);
+    expect([...candidate.resources[0]!.bytes]).toEqual([0, 255, 7]);
+    expect(Object.isFrozen(candidate.resources)).toBe(true);
+
+    expect(() =>
+      createPackCandidate(input, sourcePaths(), [
+        { sourcePath: "references/../escape.md", bytes: new Uint8Array() },
+      ]),
+    ).toThrow(InvalidResourcePathError);
+    expect(() => createPackCandidate(input, sourcePaths())).toThrow(PackValidationError);
   });
 });
