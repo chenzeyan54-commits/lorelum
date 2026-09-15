@@ -74,3 +74,27 @@ test("equivalent directories converge on the same immutable keyword artifact", a
     ]);
   }
 });
+
+test("corrupt ProjectContext keyword artifacts are discarded and rebuilt from canonical source", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lorelum-project-keyword-corrupt-"));
+  const cache = await mkdtemp(join(tmpdir(), "lorelum-project-cache-corrupt-"));
+  try {
+    await project(root, "Recoverable keyword artifact");
+    const snapshot = await resolve(root);
+    const paths = projectKeywordIndexPaths(cache, snapshot);
+    await queryProjectContextKeyword(snapshot, cache, { text: "recoverable" });
+    await writeFile(paths.active, "not a sqlite database");
+
+    await expect(
+      queryProjectContextKeyword(snapshot, cache, { text: "recoverable" }),
+    ).resolves.toMatchObject({
+      results: [{ practiceId: "platform.query" }],
+    });
+    await expect(access(paths.active)).resolves.toBeNull();
+  } finally {
+    await Promise.all([
+      rm(root, { recursive: true, force: true }),
+      rm(cache, { recursive: true, force: true }),
+    ]);
+  }
+});

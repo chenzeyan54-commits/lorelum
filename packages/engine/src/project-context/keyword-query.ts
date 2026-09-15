@@ -1,9 +1,10 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rm } from "node:fs/promises";
 
 import { KeywordIndexError } from "../query/errors";
 import { projectKeywordIndexDatabaseDefinition } from "../persistence/definitions";
 import {
   createPersistentKeywordIndexAt,
+  forkPersistentKeywordIndexAt,
   openPersistentKeywordIndexAt,
   withPersistentKeywordIndexWriterAt,
   type PersistentKeywordIndex,
@@ -13,7 +14,7 @@ import { parseQueryRequest } from "../query/request";
 import { assembleQueryHits } from "../query/result";
 import type { QueryRequest, QueryResult } from "../query/types";
 import { withProjectArtifactLease } from "./artifact-lease";
-import { projectKeywordArtifactId, projectKeywordIndexPaths } from "./cache";
+import { projectCachePaths, projectKeywordArtifactId, projectKeywordIndexPaths } from "./cache";
 import { recordProjectCacheArtifact } from "./cache-catalog";
 import type { ProjectContextSnapshot } from "./types";
 
@@ -22,6 +23,72 @@ function currentArtifact(index: PersistentKeywordIndex, snapshot: ProjectContext
     index.checkpoint.rootBinding === snapshot.indexCorpusDigest &&
     index.checkpoint.effectiveRevision === 0
   );
+}
+
+const ARTIFACT_ID = /^[a-f0-9]{64}$/;
+
+interface ReusableKeywordArtifact {
+  readonly paths: ReturnType<typeof projectKeywordIndexPaths>;
+  readonly removedPracticeIds: readonly string[];
+  readonly changedDocuments: ReturnType<typeof projectKeywordPractice>[];
+  readonly unchangedCount: number;
+}
+
+async function reusableArtifact(
+  snapshot: ProjectContextSnapshot,
+  cacheRoot: string,
+): Promise<ReusableKeywordArtifact | undefined> {
+  const target = projectKeywordIndexPaths(cacheRoot, snapshot);
+  const directory = `${projectCachePaths(cacheRoot).artifacts}/keyword`;
+  let entries: readonly string[];
+  try {
+    entries = await readdir(directory);
+  } catch {
+    return undefined;
+  }
+  const documents = snapshot.practices.map(projectKeywordPractice);
+  let best: ReusableKeywordArtifact | undefined;
+  for (const artifactId of entries.filter((entry) => ARTIFACT_ID.test(entry)).sort()) {
+    if (artifactId === projectKeywordArtifactId(snapshot)) continue;
+    const paths = Object.freeze({
+      directory: `${directory}/${artifactId}`,
+      active: `${directory}/${artifactId}/active.sqlite`,
+      writer: `${directory}/${artifactId}/writer`,
+    });
+    try {
+      // eslint-disable-next-line no-await-in-loop -- each immutable artifact is independently validated.
+      const previous = await withProjectArtifactLease(paths.directory, async () => {
+        const candidate = await openPersistentKeywordIndexAt(
+          paths,
+          projectKeywordIndexDatabaseDefinition,
+        );
+        if (candidate === undefined) return undefined;
+        try {
+          return candidate.documentDigests();
+        } finally {
+          candidate.close();
+        }
+      });
+      if (previous === undefined) continue;
+      const previousByPractice = new Map(
+        previous.map((document) => [document.practiceId, document.contentDigest]),
+      );
+      const changedDocuments = documents.filter(
+        (document) => previousByPractice.get(document.practiceId) !== document.contentDigest,
+      );
+      const currentIds = new Set(documents.map((document) => document.practiceId));
+      const removedPracticeIds = [...previousByPractice.keys()].filter((id) => !currentIds.has(id));
+      const unchangedCount = documents.length - changedDocuments.length;
+      const next = Object.freeze({ paths, removedPracticeIds, changedDocuments, unchangedCount });
+      if (unchangedCount > 0 && (best === undefined || next.unchangedCount > best.unchangedCount)) {
+        best = next;
+      }
+    } catch {
+      // A corrupt or concurrently pruned old artifact is merely an unusable
+      // optimization. The current artifact will be built from canonical source.
+    }
+  }
+  return best;
 }
 
 async function openOrBuild(
@@ -40,6 +107,24 @@ async function openOrBuild(
       existing?.close();
       if (!(error instanceof KeywordIndexError)) throw error;
       await rm(paths.active, { force: true }).catch(() => undefined);
+    }
+    const reusable = await reusableArtifact(snapshot, cacheRoot);
+    if (reusable !== undefined) {
+      try {
+        return await withProjectArtifactLease(reusable.paths.directory, () =>
+          forkPersistentKeywordIndexAt(
+            reusable.paths,
+            paths,
+            { rootBinding: snapshot.indexCorpusDigest, effectiveRevision: 0 },
+            reusable.removedPracticeIds,
+            reusable.changedDocuments,
+            projectKeywordIndexDatabaseDefinition,
+          ),
+        );
+      } catch {
+        // Fall through to a complete artifact build. A source artifact is
+        // optional derived state and never makes the current query fail.
+      }
     }
     return createPersistentKeywordIndexAt(
       paths,

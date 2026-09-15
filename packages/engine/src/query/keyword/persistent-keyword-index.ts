@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { access, mkdir, rename, rm } from "node:fs/promises";
+import { access, copyFile, mkdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 
@@ -29,11 +29,17 @@ export interface KeywordIndexCheckpoint {
 
 export interface PersistentKeywordIndex extends KeywordIndex {
   readonly checkpoint: KeywordIndexCheckpoint;
+  documentDigests(): readonly KeywordIndexDocumentDigest[];
   applyChanges(
     nextCheckpoint: KeywordIndexCheckpoint,
     removedPracticeIds: readonly string[],
     documents: readonly KeywordDocument[],
   ): void;
+}
+
+export interface KeywordIndexDocumentDigest {
+  readonly practiceId: string;
+  readonly contentDigest: string;
 }
 
 const INDEX_FILE_NAME = "active.sqlite";
@@ -154,6 +160,36 @@ function uniqueIds(ids: readonly string[]): readonly string[] {
   return [...new Set(ids)];
 }
 
+function documentDigests(
+  connection: KeywordIndexConnection,
+): readonly KeywordIndexDocumentDigest[] {
+  // FTS5 virtual-table reads are SQLite-specific and cannot be represented by
+  // Drizzle's normal table model. These digests are only used to seed a new
+  // immutable artifact; Practice content is still assembled from canonical source.
+  const rows = connection.client
+    .query(
+      "SELECT practice_id AS practiceId, content_digest AS contentDigest FROM keyword_documents",
+    )
+    .all();
+  const values = rows.map((row) => {
+    if (
+      typeof row !== "object" ||
+      row === null ||
+      !("practiceId" in row) ||
+      !("contentDigest" in row) ||
+      typeof row.practiceId !== "string" ||
+      typeof row.contentDigest !== "string" ||
+      !/^[a-f0-9]{64}$/.test(row.contentDigest)
+    ) {
+      throw new KeywordIndexError("Keyword index document metadata is invalid");
+    }
+    return Object.freeze({ practiceId: row.practiceId, contentDigest: row.contentDigest });
+  });
+  return Object.freeze(
+    values.sort((left, right) => left.practiceId.localeCompare(right.practiceId)),
+  );
+}
+
 function wrap(
   connection: KeywordIndexConnection,
   initial: KeywordIndexCheckpoint,
@@ -166,6 +202,9 @@ function wrap(
     },
     search(text, limit) {
       return keywordIndex.search(text, limit);
+    },
+    documentDigests() {
+      return documentDigests(connection);
     },
     applyChanges(nextCheckpoint, removedPracticeIds, documents) {
       if (nextCheckpoint.rootBinding !== checkpoint.rootBinding) {
@@ -278,5 +317,73 @@ export async function createPersistentKeywordIndexAt(
     }
     await rm(temporary, { force: true }).catch(() => undefined);
     throw toKeywordIndexError("Cannot build persistent SQLite keyword index", error);
+  }
+}
+
+/**
+ * Publish a new immutable artifact by copying a verified compatible artifact
+ * and changing only the requested FTS rows. The old artifact remains readable
+ * throughout, so a failed replacement never destroys a prior query result.
+ */
+export async function forkPersistentKeywordIndexAt(
+  source: PersistentKeywordIndexPaths,
+  target: PersistentKeywordIndexPaths,
+  checkpoint: KeywordIndexCheckpoint,
+  removedPracticeIds: readonly string[],
+  documents: readonly KeywordDocument[],
+  definition: KeywordIndexDatabaseDefinition = keywordIndexDatabaseDefinition,
+): Promise<PersistentKeywordIndex> {
+  await mkdir(target.directory, { recursive: true });
+  const temporary = join(target.directory, `build-${randomUUID()}.sqlite`);
+  let connection: KeywordIndexConnection | undefined;
+  try {
+    // A completed artifact may still have committed FTS changes in its WAL.
+    // Take the source writer lock and checkpoint before copying so the staging
+    // file is a complete SQLite snapshot rather than just its main database.
+    await withPersistentKeywordIndexWriterAt(source, async () => {
+      const sourceConnection = openSqliteConnection(source.active, definition.schema);
+      try {
+        sourceConnection.client.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      } finally {
+        sourceConnection.close();
+      }
+    });
+    await copyFile(source.active, temporary);
+    connection = openSqliteConnection(temporary, definition.schema);
+    migrateSqlite(connection, definition);
+    connection.orm.transaction(() => {
+      // FTS5 row mutation is the narrow SQLite-specific exception; the
+      // checkpoint is ordinary Drizzle metadata in the same transaction.
+      deleteKeywordDocuments(
+        connection!.client,
+        uniqueIds([...removedPracticeIds, ...documents.map((document) => document.practiceId)]),
+      );
+      insertKeywordDocuments(connection!.client, documents);
+      writeCheckpoint(connection!, checkpoint);
+    });
+    // The copied artifact retains WAL mode. Checkpoint the staging connection
+    // before rename so its committed delta does not remain under the temporary
+    // file name as an orphaned `build-*.sqlite-wal` sidecar.
+    connection.client.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+    connection.close();
+    connection = undefined;
+    await rename(temporary, target.active);
+    const opened = await openPersistentKeywordIndexAt(target, definition);
+    if (opened === undefined || !checkpointEquals(opened.checkpoint, checkpoint)) {
+      opened?.close();
+      throw new KeywordIndexError("Published keyword index did not retain its checkpoint");
+    }
+    return opened;
+  } catch (error) {
+    try {
+      connection?.close();
+    } catch {
+      // Preserve the useful failure below.
+    }
+    await rm(temporary, { force: true }).catch(() => undefined);
+    throw toKeywordIndexError(
+      "Cannot incrementally publish persistent SQLite keyword index",
+      error,
+    );
   }
 }
