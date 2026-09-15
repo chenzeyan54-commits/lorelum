@@ -164,9 +164,10 @@ See [Agent integration](https://lorelum.com/en/docs/agent-setup) and [Codex setu
 
 | Official Pack | Version | Focus |
 | --- | --- | --- |
-| `agentic-coding` | `0.3.1` | Planning, implementation, verification, recovery, and delivery decisions |
+| `agentic-coding` | `0.4.0` | Planning, implementation, validation boundaries, recovery, verification, and delivery decisions |
 | `pack-creator` | `0.1.0` | Writing, reviewing, and publishing Practices and Packs |
 | `react-web-craft` | `0.1.0` | React web application design and performance: component state, async data flow, loading, rendering, and composition |
+| `issue-pr-etiquette` | `0.1.0` | Evidence-grounded single-problem Issues, single-scope PRs, review communication, and honest AI-assistance disclosure |
 
 Browse what you have installed:
 
