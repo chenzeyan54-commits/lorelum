@@ -38,7 +38,6 @@ async function reusableArtifact(
   snapshot: ProjectContextSnapshot,
   cacheRoot: string,
 ): Promise<ReusableKeywordArtifact | undefined> {
-  const target = projectKeywordIndexPaths(cacheRoot, snapshot);
   const directory = `${projectCachePaths(cacheRoot).artifacts}/keyword`;
   let entries: readonly string[];
   try {

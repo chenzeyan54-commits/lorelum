@@ -37,11 +37,7 @@ import {
   type ProjectContextResolver,
 } from "../project-context/service.js";
 import { queryResultSchema } from "./result-schema.js";
-import type {
-  QueryPreparingResult,
-  SemanticRuntimeClient,
-  SemanticRuntimeResult,
-} from "./runtime-client.js";
+import type { SemanticRuntimeClient, SemanticRuntimeResult } from "./runtime-client.js";
 import { DEFAULT_QUERY_SETTINGS, type QuerySettings } from "./settings.js";
 
 interface QueryIndexingResult {
