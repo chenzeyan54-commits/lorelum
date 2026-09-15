@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -160,6 +160,18 @@ test("keeps valid Pack neighbors and Store fallback when one local Practice is m
     });
   }));
 
+test("ignores an invalid Pack while retaining valid sibling Packs", () =>
+  fixture(async (root) => {
+    await mkdir(join(root, ".lorelum", "packs", "broken"), { recursive: true });
+    await writeFile(join(root, ".lorelum", "packs", "broken", "pack.yaml"), "name: nope\n");
+    await writePack(root, "safe", "safe", { valid: practice("safe.valid", "Safe") });
+
+    const snapshot = await resolveProjectContext(resolverOptions(root));
+    expect(snapshot?.state).toBe("degraded");
+    expect(snapshot?.practices.map((item) => item.practiceId)).toEqual(["safe.valid"]);
+    expect(snapshot?.warnings).toContainEqual({ code: "pack.invalid", layerDepth: 0 });
+  }));
+
 test("uses parent configuration after a child config becomes invalid", () =>
   fixture(async (root) => {
     const child = join(root, "child");
@@ -178,6 +190,25 @@ test("uses parent configuration after a child config becomes invalid", () =>
     expect(snapshot?.practices.map((item) => item.practiceId)).toEqual(["child.local"]);
     expect(snapshot?.warnings).toContainEqual({ code: "config.invalid", layerDepth: 1 });
   }));
+
+test.skipIf(process.platform === "win32")(
+  "ignores an unsafe Pack symlink without hiding safe Pack neighbors",
+  () =>
+    fixture(async (root) => {
+      await mkdir(join(root, ".lorelum"));
+      await writePack(root, "safe", "safe", { valid: practice("safe.valid", "Safe") });
+      const external = await mkdtemp(join(tmpdir(), "lorelum-project-external-pack-"));
+      try {
+        await symlink(external, join(root, ".lorelum", "packs", "escaped"));
+        const snapshot = await resolveProjectContext(resolverOptions(root));
+        expect(snapshot?.state).toBe("degraded");
+        expect(snapshot?.practices.map((item) => item.practiceId)).toEqual(["safe.valid"]);
+        expect(snapshot?.warnings).toContainEqual({ code: "source.unsafe", layerDepth: 0 });
+      } finally {
+        await rm(external, { recursive: true, force: true });
+      }
+    }),
+);
 
 test("rejects an explicit root that does not directly contain .lorelum", () =>
   fixture(async (root) => {

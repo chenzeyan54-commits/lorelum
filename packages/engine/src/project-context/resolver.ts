@@ -135,19 +135,25 @@ async function loadLayers(paths: readonly string[]): Promise<{
   return Object.freeze({ layers: Object.freeze(layers), warnings: Object.freeze(warnings) });
 }
 
-async function listPackDirectories(layer: Layer): Promise<readonly string[]> {
+async function listPackDirectories(layer: Layer): Promise<{
+  readonly directories: readonly string[];
+  readonly unsafeEntryFound: boolean;
+}> {
   const directory = resolveProjectPaths(layer.path).packsDirectory;
   const info = await lstat(directory).catch(() => undefined);
-  if (info === undefined) return Object.freeze([]);
+  if (info === undefined) return Object.freeze({ directories: Object.freeze([]), unsafeEntryFound: false });
   if (info.isSymbolicLink() || !info.isDirectory()) throw new ProjectPackLoadError();
   const entries = await readdir(directory, { withFileTypes: true }).catch(() => undefined);
   if (entries === undefined) throw new ProjectPackLoadError();
-  return Object.freeze(
-    entries
-      .filter((entry) => entry.isDirectory() && !entry.isSymbolicLink())
-      .map((entry) => join(directory, entry.name))
-      .sort(compareCodeUnits),
-  );
+  return Object.freeze({
+    directories: Object.freeze(
+      entries
+        .filter((entry) => entry.isDirectory() && !entry.isSymbolicLink())
+        .map((entry) => join(directory, entry.name))
+        .sort(compareCodeUnits),
+    ),
+    unsafeEntryFound: entries.some((entry) => entry.isSymbolicLink()),
+  });
 }
 
 function candidateOrder(left: Candidate, right: Candidate): number {
@@ -212,7 +218,11 @@ export async function resolveProjectContext(
     let directories: readonly string[];
     try {
       // eslint-disable-next-line no-await-in-loop -- preserve a bounded layer traversal.
-      directories = await listPackDirectories(layer);
+      const discoveredPacks = await listPackDirectories(layer);
+      directories = discoveredPacks.directories;
+      if (discoveredPacks.unsafeEntryFound) {
+        warnings.push({ code: "source.unsafe", layerDepth: layer.depth });
+      }
     } catch {
       warnings.push({ code: "source.unsafe", layerDepth: layer.depth });
       continue;
