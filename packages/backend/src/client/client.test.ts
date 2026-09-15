@@ -179,7 +179,7 @@ describe("createBackendClient", () => {
     ]);
   });
 
-  test("does not send a query to a service with a different build", async () => {
+  test("does not send ordinary requests to a service with a different build", async () => {
     const { url } = runningApp();
     const client = createBackendClient({
       identity,
@@ -191,6 +191,25 @@ describe("createBackendClient", () => {
     await expect(
       client.query({ rootPath: "/tmp/lorelum-client-test" }, { text: "search", mode: "keyword" }),
     ).rejects.toEqual(expect.objectContaining({ code: "backend.incompatible" }));
+    await expect(client.statusModel()).rejects.toEqual(
+      expect.objectContaining({ code: "backend.incompatible" }),
+    );
+  });
+
+  test("stops an authenticated service with a different build", async () => {
+    const { url } = runningApp();
+    const client = createBackendClient({
+      identity,
+      secret,
+      buildIdentity: "different-build",
+      baseUrl: url,
+    });
+
+    await expect(client.stop()).resolves.toMatchObject({
+      state: "stopping",
+      instanceId: identity.instanceId,
+      buildIdentity: identity.buildIdentity,
+    });
   });
 
   test("preserves the established domain error code from a query response", async () => {

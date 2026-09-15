@@ -64,7 +64,7 @@ test("status and stop of absent backend do not create runtime files", async () =
   }));
 
 test(
-  "concurrent starters share one daemon; mismatched builds cannot control it",
+  "concurrent starters share one daemon; a different build can stop it",
   async () =>
     fixture(async (directory, port, command) => {
       const options = {
@@ -87,8 +87,7 @@ test(
       const mismatched = createBackendSupervisor({ ...options, buildIdentity: "different-build" });
       await expect(mismatched.status()).rejects.toMatchObject({ code: "backend.incompatible" });
       await expect(mismatched.start()).rejects.toMatchObject({ code: "backend.incompatible" });
-      await expect(mismatched.stop()).rejects.toMatchObject({ code: "backend.incompatible" });
-      expect(await controllers[0]!.stop()).toEqual({ state: "stopped", model: "unloaded" });
+      expect(await mismatched.stop()).toEqual({ state: "stopped", model: "unloaded" });
       expect(await isSameProcess(record)).toBe(false);
       expect(await readRecord(directory)).toBeUndefined();
       const log = await readFile(join(directory, "backend.log"), "utf8");

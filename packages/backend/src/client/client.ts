@@ -181,7 +181,10 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
     return body;
   };
 
-  const identify = async (requestOptions: BackendRequestOptions = {}): Promise<BackendIdentity> => {
+  const identify = async (
+    requestOptions: BackendRequestOptions = {},
+    allowCurrentBuildMismatch = false,
+  ): Promise<BackendIdentity> => {
     const nonce = randomBytes(32).toString("hex");
     const body = await send(
       `${BACKEND_ROUTES.identity}?nonce=${nonce}`,
@@ -197,7 +200,7 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
     if (
       identity.instanceId !== options.identity.instanceId ||
       identity.buildIdentity !== options.identity.buildIdentity ||
-      identity.buildIdentity !== options.buildIdentity ||
+      (!allowCurrentBuildMismatch && identity.buildIdentity !== options.buildIdentity) ||
       identity.protocolVersion !== PROTOCOL_VERSION
     ) {
       throw new BackendError("backend.incompatible");
@@ -215,16 +218,18 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
       timeout = timeoutMs,
       signal,
       deadline,
+      allowCurrentBuildMismatch = false,
     }: {
       payload?: unknown;
       method?: "GET" | "POST";
       timeout?: number;
       signal?: AbortSignal | undefined;
       deadline?: number | undefined;
+      allowCurrentBuildMismatch?: boolean;
     } = {},
   ): Promise<T> => {
     const budget = { signal, deadline: deadline ?? Date.now() + timeout };
-    await identify(budget);
+    await identify(budget, allowCurrentBuildMismatch);
     const headers: Record<string, string> = { authorization: `Bearer ${options.secret}` };
     const init: RequestInit = { method, headers, signal: signal ?? null };
     if (payload !== undefined) {
@@ -244,9 +249,14 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
     return Math.max(1, Math.ceil(value));
   }
 
-  const control = async (path: string, method: "GET" | "POST" = "GET"): Promise<BackendStatus> => {
+  const control = async (
+    path: string,
+    method: "GET" | "POST" = "GET",
+    allowCurrentBuildMismatch = false,
+  ): Promise<BackendStatus> => {
     const result = await request(path, statusSchema, {
       method,
+      allowCurrentBuildMismatch,
     });
     if (
       result.instanceId !== options.identity.instanceId ||
@@ -278,7 +288,7 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
   return Object.freeze({
     identity: identify,
     status: () => control(BACKEND_ROUTES.status),
-    stop: () => control(BACKEND_ROUTES.stop, "POST"),
+    stop: () => control(BACKEND_ROUTES.stop, "POST", true),
     async loadModel({ onProgress } = {}) {
       let result = await modelRequest(BACKEND_ROUTES.modelLoad, { payload: {} });
       // Explicit load admits retries; automatic admission only joins/starts a nonfailed task.

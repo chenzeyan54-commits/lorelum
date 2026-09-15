@@ -45,7 +45,7 @@ lore backend status
 lore backend stop
 ```
 
-请求经过身份验证的实例停止，取消下载或卸载模型并等待 daemon 退出。只有确认停止后才退出 `0`，data 为 stopped/unloaded。没有服务时可重复调用；不会按端口或名称终止陌生进程。下载片段保留，下次 model load 可恢复。
+请求经过身份验证的实例停止，取消下载或卸载模型并等待 daemon 退出。只有确认停止后才退出 `0`，data 为 stopped/unloaded。升级后，新的 CLI 可以安全停止 protocol-compatible 的旧 build Backend：它仍通过当前用户的私有 runtime record、进程身份和 loopback identity proof 确认目标，不会按端口或名称终止陌生进程。这个例外只适用于 stop；其他 lifecycle/runtime 请求仍要求 build 兼容。下载片段保留，下次 model load 可恢复。
 
 ## 配置与错误
 
@@ -56,7 +56,7 @@ lore backend stop
 | code | 处理 |
 | --- | --- |
 | `backend.port-conflict` | 固定端口属于未验证的服务，检查占用 |
-| `backend.incompatible` | 客户端与后台 build 或协议不匹配，检查是否混用了不同工作目录的程序 |
+| `backend.incompatible` | `start`、`status` 或普通 runtime 请求与后台 build/协议不匹配；`stop` 允许当前 CLI build 不同，但仍要求 protocol 和 runtime record identity 匹配 |
 | `backend.config-invalid` | 修正 YAML、未知字段或越界值 |
 | `backend.state-invalid` | 私有运行记录或权限无法安全使用 |
 | `backend.deadline-exceeded` | 操作未在配置预算内达到目标状态 |
