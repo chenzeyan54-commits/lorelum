@@ -108,6 +108,7 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
     semanticQueryService: semanticQuery,
     indexOperations,
     projectSemanticRuntime,
+    projectSemanticIndexRuntime: projectSemanticRuntime,
   });
   const signalHandler = () => {
     void backend.stop();

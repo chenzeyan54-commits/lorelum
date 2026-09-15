@@ -18,6 +18,7 @@ import {
 
 import { EmbeddingError } from "../embedding/errors";
 import type { ModelPreparation, ModelStatus } from "../embedding/dto";
+import type { IndexOperation, IndexStatus } from "../index/model";
 import { ProjectOperationJournal, type ProjectOperationRecord } from "./project-operation-journal";
 
 export interface ProjectSemanticRequest {
@@ -53,10 +54,19 @@ export interface ProjectSemanticRuntimePort {
   waitForIdle(deadline?: number): Promise<void>;
 }
 
+export interface ProjectSemanticIndexRuntimePort {
+  indexStatus(root: StorageRoot, request: ProjectSemanticRequest): Promise<IndexStatus>;
+  buildIndex(root: StorageRoot, request: ProjectSemanticRequest): Promise<IndexOperation>;
+  rebuildIndex(root: StorageRoot, request: ProjectSemanticRequest): Promise<IndexOperation>;
+  indexOperation(operationId: string): Promise<IndexOperation | undefined>;
+}
+
 interface ProjectOperation {
   readonly operationId: string;
   readonly artifactId: string;
   readonly projectSlotId: string;
+  readonly snapshot: Awaited<ReturnType<ProjectSemanticRuntime["snapshot"]>>;
+  readonly cacheRoot: string;
   readonly task: Promise<void>;
 }
 
@@ -70,7 +80,9 @@ export interface ProjectSemanticModelPreparation {
  * Source locations live only in the closure of an accepted task. Its durable
  * progress file contains target digests and vectors, never a project path.
  */
-export class ProjectSemanticRuntime implements ProjectSemanticRuntimePort {
+export class ProjectSemanticRuntime
+  implements ProjectSemanticRuntimePort, ProjectSemanticIndexRuntimePort
+{
   private readonly operations = new Map<string, ProjectOperation>();
   private readonly desiredArtifactBySlot = new Map<string, string>();
   private queue: Promise<void> = Promise.resolve();
@@ -123,6 +135,42 @@ export class ProjectSemanticRuntime implements ProjectSemanticRuntimePort {
     });
     if (snapshot === undefined) throw new InvalidProjectRootError();
     return snapshot;
+  }
+
+  private async indexStatusForSnapshot(
+    snapshot: Awaited<ReturnType<ProjectSemanticRuntime["snapshot"]>>,
+    cacheRoot: string,
+  ): Promise<IndexStatus> {
+    const progress = new ProjectSemanticProgressService(
+      snapshot,
+      cacheRoot,
+      this.profile,
+      this.documentEmbedding,
+    );
+    const status = await progress.status();
+    if (status.state === "indexing") {
+      const artifactId = projectSemanticArtifactId(snapshot, this.profile.profileId);
+      const operation =
+        this.operations.get(artifactId) ?? (await this.journal?.findByArtifact(artifactId));
+      if (operation !== undefined) {
+        return Object.freeze({
+          state: "indexing",
+          profileId: this.profile.profileId,
+          operationId: operation.operationId,
+          indexedPracticeCount: status.indexedPracticeCount,
+          totalPracticeCount: status.totalPracticeCount,
+        });
+      }
+      // An untracked progress file can only arise from interrupted derived
+      // state. It is not ready, but reporting it as stale keeps index status
+      // truthful without inventing an operation handle that cannot be observed.
+      return Object.freeze({ state: "stale", profileId: this.profile.profileId });
+    }
+    return Object.freeze({
+      state: status.state,
+      profileId: this.profile.profileId,
+      ...(status.state === "ready" ? { vectorCount: status.indexedPracticeCount } : {}),
+    });
   }
 
   private async start(
@@ -195,6 +243,20 @@ export class ProjectSemanticRuntime implements ProjectSemanticRuntimePort {
         if (!(error instanceof EmbeddingError) || error.code !== "embedding.not-loaded")
           throw error;
         const preparation = this.modelPreparation.beginModelPreparation();
+        await this.record({
+          operationId,
+          projectRootId: snapshot.projectRootId,
+          projectSlotId,
+          artifactId,
+          corpusDigest: snapshot.indexCorpusDigest,
+          profileId: this.profile.profileId,
+          state: "preparing",
+          preparationId: preparation.preparationId,
+          indexedPracticeCount: (await progress.status()).indexedPracticeCount,
+          totalPracticeCount: snapshot.practices.length,
+          attempts: attempts + 1,
+          createdAt,
+        });
         await this.modelPreparation.waitModelPreparation(preparation.preparationId);
         const result = await progress.build();
         if (!desired() || result.state !== "ready") return "superseded";
@@ -251,7 +313,14 @@ export class ProjectSemanticRuntime implements ProjectSemanticRuntimePort {
         throw error;
       });
     this.queue = task.catch(() => undefined);
-    const operation = Object.freeze({ operationId, artifactId, projectSlotId, task });
+    const operation = Object.freeze({
+      operationId,
+      artifactId,
+      projectSlotId,
+      snapshot,
+      cacheRoot,
+      task,
+    });
     this.operations.set(artifactId, operation);
     void task.finally(() => {
       // Ready artifacts are discoverable by digest; retaining the operation only while it runs
@@ -333,6 +402,128 @@ export class ProjectSemanticRuntime implements ProjectSemanticRuntimePort {
       operationId: operation.operationId,
       indexedPracticeCount: current.indexedPracticeCount,
       totalPracticeCount: current.totalPracticeCount,
+    });
+  }
+
+  async indexStatus(root: StorageRoot, request: ProjectSemanticRequest): Promise<IndexStatus> {
+    return this.indexStatusForSnapshot(await this.snapshot(root, request), request.cacheRoot);
+  }
+
+  async buildIndex(root: StorageRoot, request: ProjectSemanticRequest): Promise<IndexOperation> {
+    const snapshot = await this.snapshot(root, request);
+    const status = await this.indexStatusForSnapshot(snapshot, request.cacheRoot);
+    if (status.state === "ready") {
+      return Object.freeze({ operationId: randomUUID(), state: "ready", index: status });
+    }
+    const operation = await this.start(snapshot, request.cacheRoot);
+    const current = await this.journal?.findById(operation.operationId);
+    return this.toIndexOperation(
+      current ?? {
+        operationId: operation.operationId,
+        projectRootId: snapshot.projectRootId,
+        projectSlotId: operation.projectSlotId,
+        artifactId: operation.artifactId,
+        corpusDigest: snapshot.indexCorpusDigest,
+        profileId: this.profile.profileId,
+        state: "queued",
+        indexedPracticeCount: 0,
+        totalPracticeCount: snapshot.practices.length,
+        attempts: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    );
+  }
+
+  async rebuildIndex(root: StorageRoot, request: ProjectSemanticRequest): Promise<IndexOperation> {
+    // A ProjectContext artifact is content-addressed. Rebuilding the current
+    // target means revalidating/recovering that exact artifact; it never mutates
+    // a previous corpus or creates a path-bound replacement index.
+    return this.buildIndex(root, request);
+  }
+
+  async indexOperation(operationId: string): Promise<IndexOperation | undefined> {
+    const live = [...this.operations.values()].find(
+      (operation) => operation.operationId === operationId,
+    );
+    if (live !== undefined) {
+      const status = await new ProjectSemanticProgressService(
+        live.snapshot,
+        live.cacheRoot,
+        this.profile,
+        this.documentEmbedding,
+      ).status();
+      const record = await this.journal?.findById(operationId);
+      return this.toIndexOperation(
+        record ?? {
+          operationId,
+          projectRootId: live.snapshot.projectRootId,
+          projectSlotId: live.projectSlotId,
+          artifactId: live.artifactId,
+          corpusDigest: live.snapshot.indexCorpusDigest,
+          profileId: this.profile.profileId,
+          state: "building",
+          indexedPracticeCount: status.indexedPracticeCount,
+          totalPracticeCount: status.totalPracticeCount,
+          attempts: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        status,
+      );
+    }
+    const record = await this.journal?.findById(operationId);
+    if (record === undefined) return undefined;
+    return this.toIndexOperation(record);
+  }
+
+  private toIndexOperation(
+    record: ProjectOperationRecord,
+    observed?: Awaited<ReturnType<ProjectSemanticProgressService["status"]>>,
+  ): IndexOperation {
+    const indexedPracticeCount = observed?.indexedPracticeCount ?? record.indexedPracticeCount;
+    const totalPracticeCount = observed?.totalPracticeCount ?? record.totalPracticeCount;
+    if (record.state === "ready") {
+      const index: IndexStatus = {
+        state: "ready",
+        profileId: record.profileId,
+        vectorCount: indexedPracticeCount,
+      };
+      return Object.freeze({
+        operationId: record.operationId,
+        state: "ready",
+        index,
+      });
+    }
+    if (record.state === "failed") {
+      return Object.freeze({
+        operationId: record.operationId,
+        state: "failed",
+        error: "backend.failed",
+      });
+    }
+    if (record.state === "waiting-for-source" || record.state === "queued") {
+      return Object.freeze({
+        operationId: record.operationId,
+        state: record.state,
+        indexedPracticeCount,
+        totalPracticeCount,
+      });
+    }
+    if (record.state === "preparing" && record.preparationId !== undefined) {
+      return Object.freeze({
+        operationId: record.operationId,
+        state: "preparing",
+        preparationId: record.preparationId,
+        indexedPracticeCount,
+        totalPracticeCount,
+      });
+    }
+    return Object.freeze({
+      operationId: record.operationId,
+      state: "building",
+      indexedPracticeCount,
+      totalPracticeCount,
     });
   }
 

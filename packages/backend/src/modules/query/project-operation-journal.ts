@@ -11,6 +11,7 @@ const MAX_JOURNAL_BYTES = 131_072;
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const operationState = z.enum([
   "queued",
+  "preparing",
   "building",
   "waiting-for-source",
   "superseded",
@@ -26,6 +27,7 @@ export const projectOperationRecordSchema = z.strictObject({
   corpusDigest: digest,
   profileId: digest,
   state: operationState,
+  preparationId: z.string().uuid().optional(),
   indexedPracticeCount: z.int().nonnegative(),
   totalPracticeCount: z.int().nonnegative(),
   attempts: z.int().nonnegative(),
@@ -100,7 +102,9 @@ export class ProjectOperationJournal {
     const current = await this.read();
     const timestamp = new Date().toISOString();
     const recovered = current.map((operation) =>
-      operation.state === "queued" || operation.state === "building"
+      operation.state === "queued" ||
+      operation.state === "preparing" ||
+      operation.state === "building"
         ? { ...operation, state: "waiting-for-source" as const, updatedAt: timestamp }
         : operation,
     );
@@ -110,6 +114,10 @@ export class ProjectOperationJournal {
 
   async findByArtifact(artifactId: string): Promise<ProjectOperationRecord | undefined> {
     return (await this.read()).find((operation) => operation.artifactId === artifactId);
+  }
+
+  async findById(operationId: string): Promise<ProjectOperationRecord | undefined> {
+    return (await this.read()).find((operation) => operation.operationId === operationId);
   }
 
   async latestForSlot(projectSlotId: string): Promise<ProjectOperationRecord | undefined> {

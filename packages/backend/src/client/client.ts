@@ -44,9 +44,11 @@ import {
   indexMutationSchema,
   indexOperationParamsSchema,
   indexOperationSchema,
+  indexStatusQuerySchema,
   indexStatusSchema,
   type IndexOperation,
   type IndexStatus,
+  type ProjectIndexRequest,
 } from "../modules/index/model";
 import { ENCODING_ID } from "../modules/embedding/model";
 import type { EmbeddingResult } from "../modules/embedding/model";
@@ -62,6 +64,10 @@ export type BackendQueryRequest = QueryRequest & {
 export interface BackendRequestOptions {
   readonly signal?: AbortSignal | undefined;
   readonly deadline?: number | undefined;
+}
+
+export interface BackendIndexRequestOptions extends BackendRequestOptions {
+  readonly projectContext?: ProjectIndexRequest;
 }
 
 export interface CreateBackendClientOptions {
@@ -96,9 +102,9 @@ export interface BackendClient {
     request: BackendQueryRequest,
     options?: BackendRequestOptions,
   ): Promise<BackendQueryResult>;
-  indexStatus(root: StorageRoot, options?: BackendRequestOptions): Promise<IndexStatus>;
-  buildIndex(root: StorageRoot, options?: BackendRequestOptions): Promise<IndexOperation>;
-  rebuildIndex(root: StorageRoot, options?: BackendRequestOptions): Promise<IndexOperation>;
+  indexStatus(root: StorageRoot, options?: BackendIndexRequestOptions): Promise<IndexStatus>;
+  buildIndex(root: StorageRoot, options?: BackendIndexRequestOptions): Promise<IndexOperation>;
+  rebuildIndex(root: StorageRoot, options?: BackendIndexRequestOptions): Promise<IndexOperation>;
   indexOperation(operationId: string, options?: BackendRequestOptions): Promise<IndexOperation>;
 }
 
@@ -352,17 +358,35 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
       return request(BACKEND_ROUTES.query, queryResultSchema, { payload, ...requestOptions });
     },
     async indexStatus(root, requestOptions) {
-      const payload = { storageRoot: root.rootPath };
-      if (!indexMutationSchema.safeParse(payload).success)
+      const payload = {
+        storageRoot: root.rootPath,
+        ...(requestOptions?.projectContext === undefined
+          ? {}
+          : {
+              projectRoot: requestOptions.projectContext.projectRoot,
+              cacheRoot: requestOptions.projectContext.cacheRoot,
+            }),
+      };
+      if (!indexStatusQuerySchema.safeParse(payload).success)
         throw new BackendError("backend.invalid-request");
+      const search = new URLSearchParams({ storageRoot: root.rootPath });
+      if (requestOptions?.projectContext !== undefined) {
+        search.set("projectRoot", requestOptions.projectContext.projectRoot);
+        search.set("cacheRoot", requestOptions.projectContext.cacheRoot);
+      }
       return request(
-        `${BACKEND_ROUTES.indexStatus}?storageRoot=${encodeURIComponent(root.rootPath)}`,
+        `${BACKEND_ROUTES.indexStatus}?${search.toString()}`,
         indexStatusSchema,
         requestOptions,
       );
     },
     async buildIndex(root, requestOptions) {
-      const payload = { storageRoot: root.rootPath };
+      const payload = {
+        storageRoot: root.rootPath,
+        ...(requestOptions?.projectContext === undefined
+          ? {}
+          : { projectContext: requestOptions.projectContext }),
+      };
       if (!indexMutationSchema.safeParse(payload).success)
         throw new BackendError("backend.invalid-request");
       return request(BACKEND_ROUTES.indexBuild, indexOperationSchema, {
@@ -371,7 +395,12 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
       });
     },
     async rebuildIndex(root, requestOptions) {
-      const payload = { storageRoot: root.rootPath };
+      const payload = {
+        storageRoot: root.rootPath,
+        ...(requestOptions?.projectContext === undefined
+          ? {}
+          : { projectContext: requestOptions.projectContext }),
+      };
       if (!indexMutationSchema.safeParse(payload).success)
         throw new BackendError("backend.invalid-request");
       return request(BACKEND_ROUTES.indexRebuild, indexOperationSchema, {

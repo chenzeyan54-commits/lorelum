@@ -12,9 +12,14 @@ import {
   indexStatusSchema,
 } from "./model";
 import type { IndexOperationService } from "./operation-service";
+import type { ProjectSemanticIndexRuntimePort } from "../query/project-semantic-runtime";
 
 /** HTTP/authentication adapter for a Backend-hosted Engine semantic index service. */
-export function indexController(service: IndexOperationService, available: () => boolean) {
+export function indexController(
+  service: IndexOperationService,
+  available: () => boolean,
+  projectRuntime?: ProjectSemanticIndexRuntimePort,
+) {
   return new Elysia({ normalize: false })
     .onBeforeHandle(({ request }) => {
       if (!available()) return reject(503, "backend.busy");
@@ -24,6 +29,13 @@ export function indexController(service: IndexOperationService, available: () =>
       BACKEND_ROUTES.indexStatus,
       async ({ query }) => {
         try {
+          if (query.projectRoot !== undefined && query.cacheRoot !== undefined) {
+            if (projectRuntime === undefined) return indexFailure(new BackendError("backend.failed"));
+            return await projectRuntime.indexStatus(
+              { rootPath: query.storageRoot },
+              { projectRoot: query.projectRoot, cacheRoot: query.cacheRoot },
+            );
+          }
           return await service.status({ rootPath: query.storageRoot });
         } catch (error) {
           return indexFailure(error);
@@ -36,8 +48,15 @@ export function indexController(service: IndexOperationService, available: () =>
     )
     .post(
       BACKEND_ROUTES.indexBuild,
-      ({ body }) => {
+      async ({ body }) => {
         try {
+          if (body.projectContext !== undefined) {
+            if (projectRuntime === undefined) return indexFailure(new BackendError("backend.failed"));
+            return status(
+              202,
+              await projectRuntime.buildIndex({ rootPath: body.storageRoot }, body.projectContext),
+            );
+          }
           return status(202, service.build({ rootPath: body.storageRoot }));
         } catch (error) {
           return indexFailure(error);
@@ -50,8 +69,15 @@ export function indexController(service: IndexOperationService, available: () =>
     )
     .post(
       BACKEND_ROUTES.indexRebuild,
-      ({ body }) => {
+      async ({ body }) => {
         try {
+          if (body.projectContext !== undefined) {
+            if (projectRuntime === undefined) return indexFailure(new BackendError("backend.failed"));
+            return status(
+              202,
+              await projectRuntime.rebuildIndex({ rootPath: body.storageRoot }, body.projectContext),
+            );
+          }
           return status(202, service.rebuild({ rootPath: body.storageRoot }));
         } catch (error) {
           return indexFailure(error);
@@ -64,11 +90,10 @@ export function indexController(service: IndexOperationService, available: () =>
     )
     .get(
       BACKEND_ROUTES.indexOperation,
-      ({ params }) => {
-        const operation = service.operation(params.operationId);
-        return operation === undefined
-          ? status(410, backendErrorBody("backend.operation-expired"))
-          : operation;
+      async ({ params }) => {
+        const operation =
+          service.operation(params.operationId) ?? (await projectRuntime?.indexOperation(params.operationId));
+        return operation === undefined ? status(410, backendErrorBody("backend.operation-expired")) : operation;
       },
       {
         params: indexOperationParamsSchema,

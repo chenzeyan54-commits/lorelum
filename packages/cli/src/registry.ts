@@ -344,6 +344,7 @@ export const commandRegistry = snapshotCommandDefinitions([
     createClient: createProcessBackendClient,
     createRuntimeClient: createProcessIndexRuntimeClient,
     storageRoot: sharedStorageRoot,
+    resolveProjectContext: sharedProjectContextResolver,
   }),
   ...createLocalizationCommands(),
 ]);
