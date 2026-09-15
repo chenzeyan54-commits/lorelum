@@ -36,10 +36,15 @@ export function resolveProjectInvocationOptions(
     options.projectRoot === undefined
       ? undefined
       : optionalPath(options.projectRoot, "", workingDirectory);
-  if (options.noProject !== undefined && options.noProject !== true) throw invalidInvocationError();
+  // Commander exposes --no-project as the negated `project: false` option.
+  // Keep noProject as the product-facing name while accepting its parser form.
+  const noProject = options.noProject === true || options.project === false;
+  if (options.noProject !== undefined && options.noProject !== true) {
+    throw invalidInvocationError();
+  }
   return Object.freeze({
     ...(projectRoot === undefined ? {} : { projectRoot }),
-    noProject: options.noProject === true,
+    noProject,
     cacheRoot: optionalPath(options.cacheRoot, defaultProjectCacheRoot(), workingDirectory),
   });
 }

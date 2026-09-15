@@ -18,6 +18,7 @@ import {
   type QueryResult,
   type QueryService,
   type SemanticQueryResult,
+  type ProjectContextSnapshot,
   type StorageRoot,
   queryProjectContextKeyword,
 } from "@lorelum/engine";
@@ -97,12 +98,15 @@ function parseIntegerOption(value: unknown, min: number, max: number): number | 
 
 function toQueryResult(
   result: QueryResult | SemanticQueryResult | QueryPreparingResult | QueryIndexingResult,
+  project?: ProjectContextSnapshot,
 ): JsonValue {
+  const context = project === undefined ? {} : { context: projectContextData(project) };
   if ("state" in result && result.state === "preparing") {
     return {
       state: result.state,
       preparationId: result.preparationId,
       message: result.message,
+      ...context,
     };
   }
   if ("state" in result && result.state === "indexing") {
@@ -112,6 +116,7 @@ function toQueryResult(
       indexedPracticeCount: result.indexedPracticeCount,
       totalPracticeCount: result.totalPracticeCount,
       message: "The semantic index is building in the background. Retry this query shortly.",
+      ...context,
     };
   }
   const queryResult = result as QueryResult | AnnotatedSemanticQueryResult;
@@ -142,6 +147,19 @@ function toQueryResult(
       appliesWhen: hit.appliesWhen,
       severity: hit.severity,
       contentDigest: hit.contentDigest,
+    })),
+    ...context,
+  };
+}
+
+function projectContextData(project: ProjectContextSnapshot): JsonValue {
+  return {
+    state: project.state,
+    warnings: project.warnings.map((warning) => ({
+      code: warning.code,
+      layerDepth: warning.layerDepth,
+      ...(warning.packName === undefined ? {} : { packName: warning.packName }),
+      ...(warning.practiceId === undefined ? {} : { practiceId: warning.practiceId }),
     })),
   };
 }
@@ -293,7 +311,7 @@ export function createQueryCommand(services: QueryCommandServices): CommandDefin
                       },
                     }),
               });
-        const data = toQueryResult(result);
+        const data = toQueryResult(result, project);
         return { data, ...(dataIsPending(data) ? { exitCode: 1 as const } : {}) };
       } catch (error) {
         throwVisibleQueryError(error);

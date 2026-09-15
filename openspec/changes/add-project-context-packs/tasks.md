@@ -4,7 +4,7 @@
 - [x] 1.2 在 Engine 实现 nearest-leaf/ancestor ProjectContext discovery、parent-to-child config fold、directory depth precedence、单条 Practice 级 decode 与 Store base snapshot；以 colocated tests 覆盖非 Git 目录、嵌套 layer、同名 Pack 增量覆盖、同 ID winner、Pack 失效、单条 Practice 失效、`base:none` 和 source 路径逃逸。
 - [x] 1.3 实现一致的 `ProjectContextSnapshot`、degraded warning、effective config/layer/provenance result assembly；验证 child config 无效时继承 parent/default、单条 Practice 无效仅跳过该条、lower-priority fallback 生效且 `lore validate` 保持严格诊断。
 - [x] 1.4 在用户级 config 增加整数 `query.maxWaitMs`（默认 3000）和 `query.minCoveragePercent`（默认 0），扩展 CLI global option/describe schema 和 command routing，增加 `--project-root`、`--no-project`、`--cache-root`、`--max-wait-ms`、`--min-coverage-percent`、`--require-complete`、`lore init`、`lore context status`；以 command tests 验证显式 project root、毫秒/百分比校验、override、无 marker Store-only 和 status 不泄漏绝对路径。
-- [ ] 1.5 将 keyword query 与 get 接到 ProjectContext，增加 JSON envelope/provenance/warning mapping；以 source-entrypoint 的隔离 Store/cache integration tests 验证 parent/child winner、`--no-project` escape hatch、坏 Practice 邻居仍可查询和无模型 keyword 离线行为。
+- [x] 1.5 将 keyword query 与 get 接到 ProjectContext，增加 JSON envelope/provenance/warning mapping；以 source-entrypoint 的隔离 Store/cache integration tests 验证 parent/child winner、`--no-project` escape hatch、坏 Practice 邻居仍可查询和无模型 keyword 离线行为。
 
 ## 2. Content-addressed derived caches and keyword artifacts
 

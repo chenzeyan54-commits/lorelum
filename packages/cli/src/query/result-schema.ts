@@ -30,6 +30,28 @@ const queryHitSchema: JsonSchema = {
 
 const resultsSchema: JsonSchema = { type: "array", items: queryHitSchema };
 
+const contextWarningSchema: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["code", "layerDepth"],
+  properties: {
+    code: { enum: ["config.invalid", "pack.invalid", "practice.invalid", "source.unsafe"] },
+    layerDepth: { type: "integer" },
+    packName: stringSchema,
+    practiceId: stringSchema,
+  },
+};
+
+const contextSchema: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["state", "warnings"],
+  properties: {
+    state: { enum: ["ready", "degraded"] },
+    warnings: { type: "array", items: contextWarningSchema },
+  },
+};
+
 export const queryResultSchema: JsonSchema = {
   oneOf: [
     {
@@ -40,6 +62,7 @@ export const queryResultSchema: JsonSchema = {
         state: { const: "preparing" },
         preparationId: stringSchema,
         message: stringSchema,
+        context: contextSchema,
       },
     },
     {
@@ -52,6 +75,7 @@ export const queryResultSchema: JsonSchema = {
         indexedPracticeCount: { type: "integer" },
         totalPracticeCount: { type: "integer" },
         message: stringSchema,
+        context: contextSchema,
       },
     },
     {
@@ -61,6 +85,7 @@ export const queryResultSchema: JsonSchema = {
       properties: {
         mode: { const: "keyword" },
         results: resultsSchema,
+        context: contextSchema,
       },
     },
     {
@@ -75,6 +100,7 @@ export const queryResultSchema: JsonSchema = {
         totalPracticeCount: { type: "integer" },
         operationId: stringSchema,
         results: resultsSchema,
+        context: contextSchema,
       },
     },
   ],
