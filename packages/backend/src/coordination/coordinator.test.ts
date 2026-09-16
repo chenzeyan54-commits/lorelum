@@ -76,6 +76,10 @@ test("caller cancellation stops startup wait without stopping shared startup", a
 
 test("caller deadline stops startup wait without stopping shared startup", async () => {
   let release!: () => void;
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
   const starting = new Promise<void>((resolve) => {
     release = resolve;
   });
@@ -83,9 +87,14 @@ test("caller deadline stops startup wait without stopping shared startup", async
     connect: async () => {
       throw new BackendError("backend.unavailable");
     },
-    start: () => starting,
+    start: () => {
+      entered();
+      return starting;
+    },
   });
-  await expect(coordinator.connect({ deadline: Date.now() + 1 })).rejects.toMatchObject({
+  const work = coordinator.connect({ deadline: Date.now() + 100 });
+  await started;
+  await expect(work).rejects.toMatchObject({
     code: "backend.deadline-exceeded",
   });
   release();
@@ -95,6 +104,10 @@ test("caller deadline stops startup wait without stopping shared startup", async
 test("caller deadline also covers the post-start connection handshake", async () => {
   let connectAttempts = 0;
   let release!: () => void;
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
   const connecting = new Promise<BackendClient>((resolve) => {
     release = () => resolve(client());
   });
@@ -104,9 +117,13 @@ test("caller deadline also covers the post-start connection handshake", async ()
       if (connectAttempts === 1) throw new BackendError("backend.unavailable");
       return connecting;
     },
-    start: async () => undefined,
+    start: async () => {
+      entered();
+    },
   });
-  await expect(coordinator.connect({ deadline: Date.now() + 1 })).rejects.toMatchObject({
+  const work = coordinator.connect({ deadline: Date.now() + 100 });
+  await started;
+  await expect(work).rejects.toMatchObject({
     code: "backend.deadline-exceeded",
   });
   release();
