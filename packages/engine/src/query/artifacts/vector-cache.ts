@@ -1,14 +1,14 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { access, mkdir, rm } from "node:fs/promises";
 
-import { acquireMutationLock } from "../local-store/storage/mutation-lock";
-import { openSqliteConnection } from "../persistence/database/connection";
-import { migrateSqlite } from "../persistence/database/migrator";
-import { semanticVectorCacheDatabaseDefinition } from "../persistence/definitions";
-import { embeddingVectors } from "../persistence/schemas/semantic-vector-cache";
-import type { EmbeddingProfile } from "../query/semantic/profile";
-import type { SemanticDocument } from "../query/semantic/projection";
-import { semanticVectorCachePaths } from "./cache";
+import { acquireMutationLock } from "../../local-store/storage/mutation-lock";
+import { openSqliteConnection } from "../../persistence/database/connection";
+import { migrateSqlite } from "../../persistence/database/migrator";
+import { semanticVectorCacheDatabaseDefinition } from "../../persistence/definitions";
+import { embeddingVectors } from "../../persistence/schemas/semantic-vector-cache";
+import type { EmbeddingProfile } from "../semantic/profile";
+import type { SemanticDocument } from "../semantic/projection";
+import { contentArtifactVectorCachePaths } from "./cache";
 
 const DIGEST = /^[a-f0-9]{64}$/;
 
@@ -47,7 +47,7 @@ async function databaseExists(path: string): Promise<boolean> {
 }
 
 async function withWriter<T>(cacheRoot: string, work: () => Promise<T>): Promise<T> {
-  const paths = semanticVectorCachePaths(cacheRoot);
+  const paths = contentArtifactVectorCachePaths(cacheRoot);
   await mkdir(paths.writer, { recursive: true });
   const lock = await acquireMutationLock(paths.writer);
   try {
@@ -66,7 +66,7 @@ export async function readSharedEmbeddingVectors(
   profile: EmbeddingProfile,
   documents: readonly SemanticDocument[],
 ): Promise<ReadonlyMap<string, Float32Array>> {
-  const paths = semanticVectorCachePaths(cacheRoot);
+  const paths = contentArtifactVectorCachePaths(cacheRoot);
   if (!(await databaseExists(paths.database)) || documents.length === 0) return new Map();
   const digests = [
     ...new Set(documents.filter(validDocument).map((item) => item.projectionDigest)),
@@ -142,7 +142,7 @@ export async function writeSharedEmbeddingVectors(
   vectors: readonly Float32Array[],
 ): Promise<void> {
   if (documents.length !== vectors.length || documents.length === 0) return;
-  const paths = semanticVectorCachePaths(cacheRoot);
+  const paths = contentArtifactVectorCachePaths(cacheRoot);
   try {
     await withWriter(cacheRoot, async () => {
       await mkdir(paths.directory, { recursive: true });
@@ -199,7 +199,7 @@ export interface SharedVectorCacheStatus {
 }
 
 export async function sharedVectorCacheStatus(cacheRoot: string): Promise<SharedVectorCacheStatus> {
-  const paths = semanticVectorCachePaths(cacheRoot);
+  const paths = contentArtifactVectorCachePaths(cacheRoot);
   if (!(await databaseExists(paths.database))) return { vectorCount: 0, byteSize: 0 };
   try {
     const connection = openSqliteConnection(
@@ -223,7 +223,7 @@ export async function sharedVectorCacheStatus(cacheRoot: string): Promise<Shared
 
 /** An explicit prune may discard every reusable vector; all entries are derived state. */
 export async function pruneSharedVectorCache(cacheRoot: string): Promise<number> {
-  const paths = semanticVectorCachePaths(cacheRoot);
+  const paths = contentArtifactVectorCachePaths(cacheRoot);
   if (!(await databaseExists(paths.database))) return 0;
   return withWriter(cacheRoot, async () => {
     const info = await Bun.file(paths.database)

@@ -3,9 +3,9 @@ import { access, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { projectKeywordArtifactId, projectKeywordIndexPaths } from "./cache";
-import { queryProjectContextKeyword } from "./keyword-query";
-import { resolveProjectContext } from "./resolver";
+import { contentKeywordArtifactId, contentKeywordIndexPaths } from "../artifacts/cache";
+import { queryContentAddressedKeyword } from "./content-addressed-query";
+import { resolveProjectContext } from "../../project-context/resolver";
 
 async function project(root: string, title: string): Promise<void> {
   const pack = join(root, ".lorelum", "packs", "platform");
@@ -37,11 +37,11 @@ test("queries a content-addressed keyword artifact outside the project source tr
   try {
     await project(root, "Content addressed query cache");
     const snapshot = await resolve(root);
-    const result = await queryProjectContextKeyword(snapshot, cache, {
+    const result = await queryContentAddressedKeyword(snapshot, cache, {
       text: "content addressed cache",
     });
     expect(result.results.map((hit) => hit.practiceId)).toEqual(["platform.query"]);
-    const paths = projectKeywordIndexPaths(cache, snapshot);
+    const paths = contentKeywordIndexPaths(cache, snapshot);
     await expect(access(paths.active)).resolves.toBeNull();
     await expect(access(join(root, ".lorelum", "cache"))).rejects.toThrow();
   } finally {
@@ -60,11 +60,11 @@ test("equivalent directories converge on the same immutable keyword artifact", a
       project(second, "Content addressed query cache"),
     ]);
     const [left, right] = await Promise.all([resolve(first), resolve(second)]);
-    expect(projectKeywordArtifactId(left)).toBe(projectKeywordArtifactId(right));
-    await queryProjectContextKeyword(left, cache, { text: "cache" });
-    const paths = projectKeywordIndexPaths(cache, right);
+    expect(contentKeywordArtifactId(left)).toBe(contentKeywordArtifactId(right));
+    await queryContentAddressedKeyword(left, cache, { text: "cache" });
+    const paths = contentKeywordIndexPaths(cache, right);
     await expect(access(paths.active)).resolves.toBeNull();
-    const result = await queryProjectContextKeyword(right, cache, { text: "cache" });
+    const result = await queryContentAddressedKeyword(right, cache, { text: "cache" });
     expect(result.results).toHaveLength(1);
   } finally {
     await Promise.all([
@@ -81,12 +81,12 @@ test("corrupt ProjectContext keyword artifacts are discarded and rebuilt from ca
   try {
     await project(root, "Recoverable keyword artifact");
     const snapshot = await resolve(root);
-    const paths = projectKeywordIndexPaths(cache, snapshot);
-    await queryProjectContextKeyword(snapshot, cache, { text: "recoverable" });
+    const paths = contentKeywordIndexPaths(cache, snapshot);
+    await queryContentAddressedKeyword(snapshot, cache, { text: "recoverable" });
     await writeFile(paths.active, "not a sqlite database");
 
     await expect(
-      queryProjectContextKeyword(snapshot, cache, { text: "recoverable" }),
+      queryContentAddressedKeyword(snapshot, cache, { text: "recoverable" }),
     ).resolves.toMatchObject({
       results: [{ practiceId: "platform.query" }],
     });

@@ -3,10 +3,10 @@ import { access, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createEmbeddingProfile } from "../query/semantic";
-import { projectSemanticArtifactId, projectSemanticIndexPaths } from "./cache";
-import { resolveProjectContext } from "./resolver";
-import { createProjectSemanticServices } from "./semantic";
+import { createEmbeddingProfile } from "../semantic";
+import { contentSemanticArtifactId, contentSemanticIndexPaths } from "./cache";
+import { resolveProjectContext } from "../../project-context/resolver";
+import { createContentAddressedSemanticServices } from "./semantic";
 
 const encodingId = "a".repeat(64);
 
@@ -55,7 +55,7 @@ test("builds and queries one immutable ProjectContext semantic artifact", () =>
     const current = await snapshot(root);
     const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
     const calls: string[][] = [];
-    const services = createProjectSemanticServices(current, cache, profile, {
+    const services = createContentAddressedSemanticServices(current, cache, profile, {
       maxBatchSize: 8,
       async embed(inputs) {
         calls.push([...inputs]);
@@ -74,7 +74,7 @@ test("builds and queries one immutable ProjectContext semantic artifact", () =>
     });
     expect(calls).toHaveLength(2);
     await expect(
-      access(projectSemanticIndexPaths(cache, current, profile.profileId).active),
+      access(contentSemanticIndexPaths(cache, current, profile.profileId).active),
     ).resolves.toBeNull();
     await expect(access(join(root, ".lorelum", "cache"))).rejects.toThrow();
   }));
@@ -89,8 +89,8 @@ test("uses one semantic artifact identity for equivalent directory snapshots", a
     await Promise.all([writeProject(first), writeProject(second)]);
     const [left, right] = await Promise.all([snapshot(first), snapshot(second)]);
     const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
-    expect(projectSemanticArtifactId(left, profile.profileId)).toBe(
-      projectSemanticArtifactId(right, profile.profileId),
+    expect(contentSemanticArtifactId(left, profile.profileId)).toBe(
+      contentSemanticArtifactId(right, profile.profileId),
     );
   } finally {
     await Promise.all([

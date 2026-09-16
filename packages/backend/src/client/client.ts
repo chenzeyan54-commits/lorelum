@@ -22,7 +22,7 @@ import {
   queryRequestSchema,
   queryResultSchema,
   type BackendQueryResult,
-  type ProjectSemanticRequest,
+  type ProjectContextTargetRequest,
   type QueryMode,
 } from "../modules/query/model";
 import {
@@ -57,7 +57,7 @@ import type { QueryRequest, StorageRoot } from "@lorelum/engine";
 
 export type BackendQueryRequest = QueryRequest & {
   readonly mode?: QueryMode;
-  readonly projectContext?: ProjectSemanticRequest;
+  readonly projectContext?: ProjectContextTargetRequest;
   readonly cacheRoot?: string;
   readonly maxWaitMs?: number;
   readonly minCoveragePercent?: number;
@@ -364,7 +364,12 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
         storageRoot: root.rootPath,
         ...(requestOptions?.projectContext !== undefined
           ? {
-              projectRoot: requestOptions.projectContext.projectRoot,
+              ...(requestOptions.projectContext.projectRoot === undefined
+                ? {}
+                : { projectRoot: requestOptions.projectContext.projectRoot }),
+              ...(requestOptions.projectContext.startDirectory === undefined
+                ? {}
+                : { projectStartDirectory: requestOptions.projectContext.startDirectory }),
               cacheRoot: requestOptions.projectContext.cacheRoot,
             }
           : requestOptions?.cacheRoot === undefined
@@ -375,7 +380,12 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
         throw new BackendError("backend.invalid-request");
       const search = new URLSearchParams({ storageRoot: root.rootPath });
       if (requestOptions?.projectContext !== undefined) {
-        search.set("projectRoot", requestOptions.projectContext.projectRoot);
+        if (requestOptions.projectContext.projectRoot !== undefined) {
+          search.set("projectRoot", requestOptions.projectContext.projectRoot);
+        }
+        if (requestOptions.projectContext.startDirectory !== undefined) {
+          search.set("projectStartDirectory", requestOptions.projectContext.startDirectory);
+        }
         search.set("cacheRoot", requestOptions.projectContext.cacheRoot);
       } else if (requestOptions?.cacheRoot !== undefined) {
         search.set("cacheRoot", requestOptions.cacheRoot);

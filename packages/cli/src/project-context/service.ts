@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 
 import {
-  defaultProjectCacheRoot,
+  defaultQueryArtifactCacheRoot,
   resolveProjectContext,
   type LocalStore,
   type ProjectContextSnapshot,
@@ -14,6 +14,15 @@ export interface ProjectInvocationOptions {
   readonly projectRoot?: string;
   readonly noProject: boolean;
   readonly cacheRoot: string;
+}
+
+export interface BackendProjectTargetOptions {
+  readonly cacheRoot?: string;
+  readonly projectContext?: {
+    readonly cacheRoot: string;
+    readonly startDirectory: string;
+    readonly projectRoot?: string;
+  };
 }
 
 export type ProjectContextResolver = (
@@ -45,7 +54,7 @@ export function resolveProjectInvocationOptions(
   return Object.freeze({
     ...(projectRoot === undefined ? {} : { projectRoot }),
     noProject,
-    cacheRoot: optionalPath(options.cacheRoot, defaultProjectCacheRoot(), workingDirectory),
+    cacheRoot: optionalPath(options.cacheRoot, defaultQueryArtifactCacheRoot(), workingDirectory),
   });
 }
 
@@ -59,4 +68,24 @@ export function createProjectContextResolver(
       ...(options.projectRoot === undefined ? {} : { projectRoot: options.projectRoot }),
       noProject: options.noProject,
     });
+}
+
+/**
+ * Preserve one CLI decision for all Backend-hosted semantic operations. The
+ * daemon resolves the full corpus so its response metadata and queried rows
+ * come from the same final snapshot; CLI-only keyword/get paths still use the
+ * local resolver directly.
+ */
+export function backendProjectTargetOptions(
+  options: ProjectInvocationOptions,
+  workingDirectory = process.cwd(),
+): BackendProjectTargetOptions {
+  if (options.noProject) return Object.freeze({ cacheRoot: options.cacheRoot });
+  return Object.freeze({
+    projectContext: Object.freeze({
+      cacheRoot: options.cacheRoot,
+      startDirectory: resolve(workingDirectory),
+      ...(options.projectRoot === undefined ? {} : { projectRoot: options.projectRoot }),
+    }),
+  });
 }

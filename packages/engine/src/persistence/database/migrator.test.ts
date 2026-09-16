@@ -121,16 +121,17 @@ test("Drizzle project cache init is versioned and idempotent", () => {
     expect(
       connection.client
         .query(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('project_context_artifacts', 'project_context_artifact_indexes') ORDER BY name",
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('content_artifact_sources', 'project_context_artifacts', 'project_context_artifact_indexes') ORDER BY name",
         )
         .all(),
     ).toEqual([
+      { name: "content_artifact_sources" },
       { name: "project_context_artifact_indexes" },
       { name: "project_context_artifacts" },
     ]);
     expect(
       connection.client.query("SELECT COUNT(*) AS count FROM __drizzle_migrations").get(),
-    ).toEqual({ count: 1 });
+    ).toEqual({ count: 2 });
   } finally {
     connection.close();
   }

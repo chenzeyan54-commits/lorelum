@@ -1,4 +1,5 @@
 import type { EffectivePractice, PracticeSource, StorageRoot } from "../local-store";
+import type { ContentAddressedCorpus } from "../query/artifacts/cache";
 
 export type ProjectContextState = "ready" | "degraded";
 
@@ -29,7 +30,7 @@ export interface ContextSourceStatus {
 }
 
 /** The in-memory result of resolving project layers against an optional Store base. */
-export interface ProjectContextSnapshot {
+export interface ProjectContextSnapshot extends ContentAddressedCorpus {
   readonly kind: "project";
   readonly projectRootId: string;
   /** Retained only in memory for source reattachment; never cache or protocol output. */

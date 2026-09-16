@@ -76,7 +76,7 @@ async function activeLeaseCount(artifactDirectory: string): Promise<number> {
  * or waits for pruning to finish; it cannot race an unlink after observing a
  * ready index file.
  */
-export async function withProjectArtifactLease<T>(
+export async function withContentArtifactLease<T>(
   artifactDirectory: string,
   work: () => Promise<T>,
 ): Promise<T> {
@@ -85,7 +85,8 @@ export async function withProjectArtifactLease<T>(
   const deadline = Date.now() + LEASE_WAIT_MS;
   while (true) {
     if (await exists(pruning)) {
-      if (Date.now() >= deadline) throw new Error("Project cache artifact is being pruned");
+      if (Date.now() >= deadline)
+        throw new Error("Content-addressed cache artifact is being pruned");
       // eslint-disable-next-line no-await-in-loop -- bounded coordination retry.
       await Bun.sleep(25);
       continue;
@@ -112,12 +113,12 @@ export async function withProjectArtifactLease<T>(
       }
     }
     await rm(lease, { recursive: true, force: true }).catch(() => undefined);
-    if (Date.now() >= deadline) throw new Error("Project cache artifact is being pruned");
+    if (Date.now() >= deadline) throw new Error("Content-addressed cache artifact is being pruned");
   }
 }
 
 /** Run a destructive cache action only when no build or partial query holds the artifact. */
-export async function withProjectArtifactPruneGuard<T>(
+export async function withContentArtifactPruneGuard<T>(
   artifactDirectory: string,
   work: () => Promise<T>,
 ): Promise<{ readonly pruned: true; readonly value: T } | { readonly pruned: false }> {

@@ -20,7 +20,7 @@ import {
   type SemanticQueryResult,
   type ProjectContextSnapshot,
   type StorageRoot,
-  queryProjectContextKeyword,
+  queryContentAddressedKeyword,
 } from "@lorelum/engine";
 
 import type { JsonValue } from "../output/protocol.js";
@@ -33,6 +33,7 @@ import {
 } from "../runtime/errors.js";
 import { resolveInvocationStorageRoot } from "../store/storage-root.js";
 import {
+  backendProjectTargetOptions,
   resolveProjectInvocationOptions,
   type ProjectContextResolver,
 } from "../project-context/service.js";
@@ -45,12 +46,24 @@ interface QueryIndexingResult {
   readonly operationId: string;
   readonly indexedPracticeCount: number;
   readonly totalPracticeCount: number;
+  readonly context?: QueryContextData;
+}
+
+interface QueryContextData {
+  readonly state: "ready" | "degraded";
+  readonly warnings: readonly {
+    readonly code: "config.invalid" | "pack.invalid" | "practice.invalid" | "source.unsafe";
+    readonly layerDepth: number;
+    readonly packName?: string;
+    readonly practiceId?: string;
+  }[];
 }
 
 interface AnnotatedSemanticQueryResult extends SemanticQueryResult {
   readonly indexedPracticeCount?: number;
   readonly totalPracticeCount?: number;
   readonly operationId?: string;
+  readonly context?: QueryContextData;
 }
 
 export interface QueryCommandServices {
@@ -100,7 +113,12 @@ function toQueryResult(
   result: QueryResult | SemanticQueryResult | SemanticRuntimeResult | QueryIndexingResult,
   project?: ProjectContextSnapshot,
 ): JsonValue {
-  const context = project === undefined ? {} : { context: projectContextData(project) };
+  const context =
+    project !== undefined
+      ? { context: projectContextData(project) }
+      : "context" in result && result.context !== undefined
+        ? { context: result.context }
+        : {};
   if ("state" in result && result.state === "preparing") {
     return {
       state: result.state,
@@ -291,7 +309,7 @@ export function createQueryCommand(services: QueryCommandServices): CommandDefin
             : (minCoverageOverride ?? settings.minCoveragePercent);
         const request = limit === undefined ? { text } : { text, limit };
         const project =
-          services.resolveProjectContext === undefined
+          mode !== "keyword" || services.resolveProjectContext === undefined
             ? undefined
             : await services.resolveProjectContext(root, projectOptions);
         const result =
@@ -304,14 +322,7 @@ export function createQueryCommand(services: QueryCommandServices): CommandDefin
                 mode,
                 maxWaitMs,
                 minCoveragePercent,
-                ...(project === undefined
-                  ? { cacheRoot: projectOptions.cacheRoot }
-                  : {
-                      projectContext: {
-                        projectRoot: project.projectRootPath,
-                        cacheRoot: projectOptions.cacheRoot,
-                      },
-                    }),
+                ...backendProjectTargetOptions(projectOptions),
               });
         const data = toQueryResult(result, project);
         return { data, ...(dataIsPending(data) ? { exitCode: 1 as const } : {}) };
@@ -332,7 +343,9 @@ async function queryKeyword(
   request: { readonly text: string; readonly limit?: number },
 ): Promise<QueryResult> {
   if (project === undefined) return services.queryService.query(root, request);
-  return queryProjectContextKeyword(project, cacheRoot, request);
+  return queryContentAddressedKeyword(project, cacheRoot, request, {
+    sourceSlotId: project.projectRootId,
+  });
 }
 
 function dataIsPending(data: JsonValue): boolean {

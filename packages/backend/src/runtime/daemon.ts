@@ -2,13 +2,7 @@ import { prepareModel } from "../models/prepare";
 import { createEmbeddingService } from "../modules/embedding/service";
 import { createEmbeddingProcess } from "./embedding-process";
 import { consumeDaemonLaunch, resolveBackendSettings, resolveEmbeddingConfig } from "../config";
-import {
-  createEmbeddingProfile,
-  createLocalStore,
-  createQueryService,
-  createSemanticQueryService,
-  createSemanticIndexService,
-} from "@lorelum/engine";
+import { createEmbeddingProfile, createLocalStore, createQueryService } from "@lorelum/engine";
 import { BACKEND_HOST, MAX_BODY_BYTES } from "../protocol/constants";
 import { BackendError } from "../protocol/errors";
 import { createBackendApp } from "../app";
@@ -17,8 +11,7 @@ import {
   createEmbeddingAdapter,
   createQueryEmbeddingAdapter,
 } from "../modules/index/embedding-adapter";
-import { createIndexOperationService } from "../modules/index/operation-service";
-import { ProjectSemanticRuntime } from "../modules/query/project-semantic-runtime";
+import { ContentAddressedSemanticRuntime } from "../modules/query/content-addressed-semantic-runtime";
 import { SemanticOperationJournal } from "../modules/query/project-operation-journal";
 import { isSameProcess } from "./process-identity";
 import { readRecord, removeRecord, writeRecord } from "./runtime-state";
@@ -81,18 +74,7 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
     encodingId: model.encodingId,
     dimensions: model.dimensions,
   });
-  const semanticIndex = createSemanticIndexService({
-    store,
-    profile,
-    embedding: createEmbeddingAdapter(embedding),
-  });
-  const semanticQuery = createSemanticQueryService({
-    store,
-    profile,
-    embedding: createQueryEmbeddingAdapter(embedding),
-  });
-  const indexOperations = createIndexOperationService(semanticIndex, embedding);
-  const projectSemanticRuntime = new ProjectSemanticRuntime(
+  const semanticRuntime = new ContentAddressedSemanticRuntime(
     store,
     profile,
     createEmbeddingAdapter(embedding),
@@ -105,12 +87,7 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
     embedding,
     port,
     keywordQueryService: createQueryService({ store }),
-    semanticQueryService: semanticQuery,
-    indexOperations,
-    projectSemanticRuntime,
-    storeSemanticRuntime: projectSemanticRuntime,
-    projectSemanticIndexRuntime: projectSemanticRuntime,
-    storeSemanticIndexRuntime: projectSemanticRuntime,
+    semanticRuntime,
   });
   const signalHandler = () => {
     void backend.stop();
@@ -122,12 +99,11 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
     }, settings.shutdownTimeoutMs);
     try {
       try {
-        await indexOperations.waitForIdle(deadline);
-        await projectSemanticRuntime.waitForIdle(deadline);
+        await semanticRuntime.waitForIdle(deadline);
       } catch (error) {
         // Stop the native runtime, then wait for Engine to clean staging and release its writer lock.
         await embedding.unload(Date.now() + settings.shutdownTimeoutMs).catch(() => {});
-        await indexOperations.waitForIdle();
+        await semanticRuntime.waitForIdle();
         throw error;
       }
       await embedding.unload(deadline);

@@ -3,7 +3,11 @@ import { BackendError, backendErrorBody, errorSchema } from "../../protocol/erro
 import { Elysia, status } from "elysia";
 import { requireJson, reject } from "../../plugins/local-auth";
 import { EmbeddingError } from "../embedding/errors";
-import { StoreBusyError, StoreRecoveryRequiredError } from "@lorelum/engine";
+import {
+  StoreBusyError,
+  StoreRecoveryRequiredError,
+  defaultQueryArtifactCacheRoot,
+} from "@lorelum/engine";
 import {
   indexMutationSchema,
   indexOperationParamsSchema,
@@ -11,18 +15,15 @@ import {
   indexStatusQuerySchema,
   indexStatusSchema,
 } from "./model";
-import type { IndexOperationService } from "./operation-service";
 import type {
-  ProjectSemanticIndexRuntimePort,
-  StoreSemanticIndexRuntimePort,
-} from "../query/project-semantic-runtime";
+  ContentAddressedSemanticRuntimePort,
+  ContentAddressedTargetRequest,
+} from "../query/content-addressed-semantic-runtime";
 
 /** HTTP/authentication adapter for a Backend-hosted Engine semantic index service. */
 export function indexController(
-  service: IndexOperationService,
+  runtime: ContentAddressedSemanticRuntimePort,
   available: () => boolean,
-  projectRuntime?: ProjectSemanticIndexRuntimePort,
-  storeRuntime?: StoreSemanticIndexRuntimePort,
 ) {
   return new Elysia({ normalize: false })
     .onBeforeHandle(({ request }) => {
@@ -33,22 +34,7 @@ export function indexController(
       BACKEND_ROUTES.indexStatus,
       async ({ query }) => {
         try {
-          if (query.projectRoot !== undefined && query.cacheRoot !== undefined) {
-            if (projectRuntime === undefined)
-              return indexFailure(new BackendError("backend.failed"));
-            return await projectRuntime.indexStatus(
-              { rootPath: query.storageRoot },
-              { projectRoot: query.projectRoot, cacheRoot: query.cacheRoot },
-            );
-          }
-          if (query.cacheRoot !== undefined) {
-            if (storeRuntime === undefined) return indexFailure(new BackendError("backend.failed"));
-            return await storeRuntime.indexStatusStore(
-              { rootPath: query.storageRoot },
-              { cacheRoot: query.cacheRoot },
-            );
-          }
-          return await service.status({ rootPath: query.storageRoot });
+          return await runtime.indexStatus({ rootPath: query.storageRoot }, targetForStatus(query));
         } catch (error) {
           return indexFailure(error);
         }
@@ -62,25 +48,10 @@ export function indexController(
       BACKEND_ROUTES.indexBuild,
       async ({ body }) => {
         try {
-          if (body.projectContext !== undefined) {
-            if (projectRuntime === undefined)
-              return indexFailure(new BackendError("backend.failed"));
-            return status(
-              202,
-              await projectRuntime.buildIndex({ rootPath: body.storageRoot }, body.projectContext),
-            );
-          }
-          if (body.cacheRoot !== undefined) {
-            if (storeRuntime === undefined) return indexFailure(new BackendError("backend.failed"));
-            return status(
-              202,
-              await storeRuntime.buildStoreIndex(
-                { rootPath: body.storageRoot },
-                { cacheRoot: body.cacheRoot },
-              ),
-            );
-          }
-          return status(202, service.build({ rootPath: body.storageRoot }));
+          return status(
+            202,
+            await runtime.build({ rootPath: body.storageRoot }, targetForMutation(body)),
+          );
         } catch (error) {
           return indexFailure(error);
         }
@@ -94,28 +65,10 @@ export function indexController(
       BACKEND_ROUTES.indexRebuild,
       async ({ body }) => {
         try {
-          if (body.projectContext !== undefined) {
-            if (projectRuntime === undefined)
-              return indexFailure(new BackendError("backend.failed"));
-            return status(
-              202,
-              await projectRuntime.rebuildIndex(
-                { rootPath: body.storageRoot },
-                body.projectContext,
-              ),
-            );
-          }
-          if (body.cacheRoot !== undefined) {
-            if (storeRuntime === undefined) return indexFailure(new BackendError("backend.failed"));
-            return status(
-              202,
-              await storeRuntime.rebuildStoreIndex(
-                { rootPath: body.storageRoot },
-                { cacheRoot: body.cacheRoot },
-              ),
-            );
-          }
-          return status(202, service.rebuild({ rootPath: body.storageRoot }));
+          return status(
+            202,
+            await runtime.rebuild({ rootPath: body.storageRoot }, targetForMutation(body)),
+          );
         } catch (error) {
           return indexFailure(error);
         }
@@ -128,9 +81,7 @@ export function indexController(
     .get(
       BACKEND_ROUTES.indexOperation,
       async ({ params }) => {
-        const operation =
-          service.operation(params.operationId) ??
-          (await projectRuntime?.indexOperation(params.operationId));
+        const operation = await runtime.indexOperation(params.operationId);
         return operation === undefined
           ? status(410, backendErrorBody("backend.operation-expired"))
           : operation;
@@ -140,6 +91,53 @@ export function indexController(
         response: { 200: indexOperationSchema, 400: errorSchema, 410: errorSchema },
       },
     );
+}
+
+function targetForStatus(input: {
+  readonly cacheRoot?: string | undefined;
+  readonly projectRoot?: string | undefined;
+  readonly projectStartDirectory?: string | undefined;
+}): ContentAddressedTargetRequest {
+  const cacheRoot = input.cacheRoot ?? defaultQueryArtifactCacheRoot();
+  if (input.projectRoot !== undefined || input.projectStartDirectory !== undefined) {
+    return Object.freeze({
+      kind: "project",
+      cacheRoot,
+      ...(input.projectRoot === undefined ? {} : { projectRoot: input.projectRoot }),
+      ...(input.projectStartDirectory === undefined
+        ? {}
+        : { startDirectory: input.projectStartDirectory }),
+    });
+  }
+  return Object.freeze({ kind: "store", cacheRoot });
+}
+
+function targetForMutation(input: {
+  readonly projectContext?:
+    | {
+        readonly cacheRoot: string;
+        readonly projectRoot?: string | undefined;
+        readonly startDirectory?: string | undefined;
+      }
+    | undefined;
+  readonly cacheRoot?: string | undefined;
+}): ContentAddressedTargetRequest {
+  if (input.projectContext !== undefined) {
+    return Object.freeze({
+      kind: "project",
+      cacheRoot: input.projectContext.cacheRoot,
+      ...(input.projectContext.projectRoot === undefined
+        ? {}
+        : { projectRoot: input.projectContext.projectRoot }),
+      ...(input.projectContext.startDirectory === undefined
+        ? {}
+        : { startDirectory: input.projectContext.startDirectory }),
+    });
+  }
+  return Object.freeze({
+    kind: "store",
+    cacheRoot: input.cacheRoot ?? defaultQueryArtifactCacheRoot(),
+  });
 }
 
 function indexFailure(error: unknown) {

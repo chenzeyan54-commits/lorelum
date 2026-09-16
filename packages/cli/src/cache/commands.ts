@@ -1,4 +1,4 @@
-import { projectCacheStatus, pruneProjectCache } from "@lorelum/engine";
+import { contentArtifactCacheStatus, pruneContentArtifactCache } from "@lorelum/engine";
 
 import type { JsonSchema, JsonValue } from "../output/protocol";
 import type { CommandDefinition } from "../registry";
@@ -47,7 +47,7 @@ const cachePruneSchema: JsonSchema = {
   },
 };
 
-function statusData(value: Awaited<ReturnType<typeof projectCacheStatus>>): JsonValue {
+function statusData(value: Awaited<ReturnType<typeof contentArtifactCacheStatus>>): JsonValue {
   return {
     artifactCount: value.artifactCount,
     keywordArtifactCount: value.keywordArtifactCount,
@@ -60,7 +60,7 @@ function statusData(value: Awaited<ReturnType<typeof projectCacheStatus>>): Json
   };
 }
 
-function pruneData(value: Awaited<ReturnType<typeof pruneProjectCache>>): JsonValue {
+function pruneData(value: Awaited<ReturnType<typeof pruneContentArtifactCache>>): JsonValue {
   return {
     removedArtifactCount: value.removedArtifactCount,
     skippedArtifactCount: value.skippedArtifactCount,
@@ -82,7 +82,7 @@ export function createCacheCommands(): readonly CommandDefinition[] {
       exitCodes: [0, 2],
       async handler(invocation) {
         const options = resolveProjectInvocationOptions(invocation.options);
-        return { data: statusData(await projectCacheStatus(options.cacheRoot)) };
+        return { data: statusData(await contentArtifactCacheStatus(options.cacheRoot)) };
       },
     },
     {
@@ -96,7 +96,7 @@ export function createCacheCommands(): readonly CommandDefinition[] {
       exitCodes: [0, 2],
       async handler(invocation) {
         const options = resolveProjectInvocationOptions(invocation.options);
-        return { data: pruneData(await pruneProjectCache(options.cacheRoot)) };
+        return { data: pruneData(await pruneContentArtifactCache(options.cacheRoot)) };
       },
     },
   ]);

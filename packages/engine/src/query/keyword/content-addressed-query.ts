@@ -1,62 +1,65 @@
-import { mkdir, readdir, rm } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 
-import { KeywordIndexError } from "../query/errors";
-import { projectKeywordIndexDatabaseDefinition } from "../persistence/definitions";
+import { KeywordIndexError } from "../errors";
+import { projectKeywordIndexDatabaseDefinition } from "../../persistence/definitions";
 import {
   createPersistentKeywordIndexAt,
   forkPersistentKeywordIndexAt,
   openPersistentKeywordIndexAt,
   withPersistentKeywordIndexWriterAt,
   type PersistentKeywordIndex,
-} from "../query/keyword/persistent-keyword-index";
-import { projectKeywordPractice } from "../query/keyword/projection";
-import { parseQueryRequest } from "../query/request";
-import { assembleQueryHits } from "../query/result";
-import type { QueryRequest, QueryResult } from "../query/types";
-import { withProjectArtifactLease } from "./artifact-lease";
-import { projectCachePaths, projectKeywordArtifactId, projectKeywordIndexPaths } from "./cache";
-import { recordProjectCacheArtifact } from "./cache-catalog";
-import type { ProjectContextSnapshot } from "./types";
+} from "./persistent-keyword-index";
+import { projectKeywordPractice } from "./projection";
+import { parseQueryRequest } from "../request";
+import { assembleQueryHits } from "../result";
+import type { QueryRequest, QueryResult } from "../types";
+import { withContentArtifactLease } from "../artifacts/artifact-lease";
+import {
+  contentKeywordArtifactId,
+  contentKeywordIndexPaths,
+  contentKeywordIndexPathsForArtifactId,
+  type ContentAddressedCorpus,
+} from "../artifacts/cache";
+import {
+  recentContentArtifactIds,
+  recordContentArtifactCacheArtifact,
+} from "../artifacts/cache-catalog";
 
-function currentArtifact(index: PersistentKeywordIndex, snapshot: ProjectContextSnapshot): boolean {
+function currentArtifact(index: PersistentKeywordIndex, corpus: ContentAddressedCorpus): boolean {
   return (
-    index.checkpoint.rootBinding === snapshot.indexCorpusDigest &&
+    index.checkpoint.rootBinding === corpus.indexCorpusDigest &&
     index.checkpoint.effectiveRevision === 0
   );
 }
 
-const ARTIFACT_ID = /^[a-f0-9]{64}$/;
+const MAX_REUSABLE_PREDECESSORS = 2;
 
 interface ReusableKeywordArtifact {
-  readonly paths: ReturnType<typeof projectKeywordIndexPaths>;
+  readonly paths: ReturnType<typeof contentKeywordIndexPaths>;
   readonly removedPracticeIds: readonly string[];
   readonly changedDocuments: ReturnType<typeof projectKeywordPractice>[];
   readonly unchangedCount: number;
 }
 
 async function reusableArtifact(
-  snapshot: ProjectContextSnapshot,
+  corpus: ContentAddressedCorpus,
   cacheRoot: string,
+  sourceSlotId: string | undefined,
 ): Promise<ReusableKeywordArtifact | undefined> {
-  const directory = `${projectCachePaths(cacheRoot).artifacts}/keyword`;
-  let entries: readonly string[];
-  try {
-    entries = await readdir(directory);
-  } catch {
-    return undefined;
-  }
-  const documents = snapshot.practices.map(projectKeywordPractice);
+  if (sourceSlotId === undefined) return undefined;
+  const artifactIds = await recentContentArtifactIds(cacheRoot, {
+    kind: "keyword",
+    sourceSlotId,
+    limit: MAX_REUSABLE_PREDECESSORS,
+  });
+  const documents = corpus.practices.map(projectKeywordPractice);
   let best: ReusableKeywordArtifact | undefined;
-  for (const artifactId of entries.filter((entry) => ARTIFACT_ID.test(entry)).sort()) {
-    if (artifactId === projectKeywordArtifactId(snapshot)) continue;
-    const paths = Object.freeze({
-      directory: `${directory}/${artifactId}`,
-      active: `${directory}/${artifactId}/active.sqlite`,
-      writer: `${directory}/${artifactId}/writer`,
-    });
+  for (const artifactId of artifactIds) {
+    if (artifactId === contentKeywordArtifactId(corpus)) continue;
+    const paths = contentKeywordIndexPathsForArtifactId(cacheRoot, artifactId);
     try {
       // eslint-disable-next-line no-await-in-loop -- each immutable artifact is independently validated.
-      const previous = await withProjectArtifactLease(paths.directory, async () => {
+      const previous = await withContentArtifactLease(paths.directory, async () => {
         const candidate = await openPersistentKeywordIndexAt(
           paths,
           projectKeywordIndexDatabaseDefinition,
@@ -91,15 +94,16 @@ async function reusableArtifact(
 }
 
 async function openOrBuild(
-  snapshot: ProjectContextSnapshot,
+  corpus: ContentAddressedCorpus,
   cacheRoot: string,
+  sourceSlotId: string | undefined,
 ): Promise<PersistentKeywordIndex> {
-  const paths = projectKeywordIndexPaths(cacheRoot, snapshot);
+  const paths = contentKeywordIndexPaths(cacheRoot, corpus);
   return withPersistentKeywordIndexWriterAt(paths, async () => {
     let existing: PersistentKeywordIndex | undefined;
     try {
       existing = await openPersistentKeywordIndexAt(paths, projectKeywordIndexDatabaseDefinition);
-      if (existing !== undefined && currentArtifact(existing, snapshot)) return existing;
+      if (existing !== undefined && currentArtifact(existing, corpus)) return existing;
       existing?.close();
       existing = undefined;
     } catch (error) {
@@ -107,14 +111,14 @@ async function openOrBuild(
       if (!(error instanceof KeywordIndexError)) throw error;
       await rm(paths.active, { force: true }).catch(() => undefined);
     }
-    const reusable = await reusableArtifact(snapshot, cacheRoot);
+    const reusable = await reusableArtifact(corpus, cacheRoot, sourceSlotId);
     if (reusable !== undefined) {
       try {
-        return await withProjectArtifactLease(reusable.paths.directory, () =>
+        return await withContentArtifactLease(reusable.paths.directory, () =>
           forkPersistentKeywordIndexAt(
             reusable.paths,
             paths,
-            { rootBinding: snapshot.indexCorpusDigest, effectiveRevision: 0 },
+            { rootBinding: corpus.indexCorpusDigest, effectiveRevision: 0 },
             reusable.removedPracticeIds,
             reusable.changedDocuments,
             projectKeywordIndexDatabaseDefinition,
@@ -127,30 +131,32 @@ async function openOrBuild(
     }
     return createPersistentKeywordIndexAt(
       paths,
-      { rootBinding: snapshot.indexCorpusDigest, effectiveRevision: 0 },
-      snapshot.practices.map(projectKeywordPractice),
+      { rootBinding: corpus.indexCorpusDigest, effectiveRevision: 0 },
+      corpus.practices.map(projectKeywordPractice),
       projectKeywordIndexDatabaseDefinition,
     );
   });
 }
 
-/** Query a complete, content-addressed ProjectContext artifact and read summaries from the snapshot. */
-export async function queryProjectContextKeyword(
-  snapshot: ProjectContextSnapshot,
+/** Query a complete content-addressed artifact and read summaries from the current corpus. */
+export async function queryContentAddressedKeyword(
+  corpus: ContentAddressedCorpus,
   cacheRoot: string,
   request: QueryRequest,
+  options: { readonly sourceSlotId?: string } = {},
 ): Promise<QueryResult> {
   const input = parseQueryRequest(request);
-  const paths = projectKeywordIndexPaths(cacheRoot, snapshot);
+  const paths = contentKeywordIndexPaths(cacheRoot, corpus);
   await mkdir(paths.directory, { recursive: true });
-  return withProjectArtifactLease(paths.directory, async () => {
-    const index = await openOrBuild(snapshot, cacheRoot);
+  return withContentArtifactLease(paths.directory, async () => {
+    const index = await openOrBuild(corpus, cacheRoot, options.sourceSlotId);
     try {
-      await recordProjectCacheArtifact(cacheRoot, {
-        artifactId: projectKeywordArtifactId(snapshot),
+      await recordContentArtifactCacheArtifact(cacheRoot, {
+        artifactId: contentKeywordArtifactId(corpus),
         kind: "keyword",
-        corpusDigest: snapshot.indexCorpusDigest,
-        documentCount: snapshot.practices.length,
+        corpusDigest: corpus.indexCorpusDigest,
+        ...(options.sourceSlotId === undefined ? {} : { sourceSlotId: options.sourceSlotId }),
+        documentCount: corpus.practices.length,
         state: "ready",
         filePath: paths.active,
         verified: true,
@@ -159,7 +165,7 @@ export async function queryProjectContextKeyword(
       return Object.freeze({
         mode: "keyword",
         results: assembleQueryHits(
-          snapshot.practices,
+          corpus.practices,
           candidates,
           (message) => new KeywordIndexError(message),
         ),

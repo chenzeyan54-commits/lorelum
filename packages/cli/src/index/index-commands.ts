@@ -11,15 +11,14 @@ import {
   type IndexStatus,
 } from "@lorelum/backend/protocol";
 import type { StorageRoot } from "@lorelum/engine";
-import { InvalidProjectRootError } from "@lorelum/engine";
 
 import type { JsonSchema, JsonValue } from "../output/protocol";
 import type { CommandDefinition } from "../registry";
 import { CliError, frameworkErrorCodes } from "../runtime/errors";
 import { resolveInvocationStorageRoot } from "../store/storage-root";
 import {
+  backendProjectTargetOptions,
   resolveProjectInvocationOptions,
-  type ProjectContextResolver,
 } from "../project-context/service";
 
 export interface IndexCommandServices {
@@ -28,7 +27,6 @@ export interface IndexCommandServices {
   /** Build/rebuild observe Backend-owned execution without waiting for model downloads. */
   readonly createRuntimeClient: () => Promise<IndexRuntimeClient>;
   readonly storageRoot: StorageRoot;
-  readonly resolveProjectContext?: ProjectContextResolver;
 }
 
 const indexStatusResultSchema: JsonSchema = {
@@ -166,19 +164,7 @@ function command(
           services.storageRoot,
         );
         const projectOptions = resolveProjectInvocationOptions(invocation.options);
-        const project =
-          isOperation || services.resolveProjectContext === undefined
-            ? undefined
-            : await services.resolveProjectContext(root, projectOptions);
-        const indexOptions =
-          project === undefined
-            ? { cacheRoot: projectOptions.cacheRoot }
-            : {
-                projectContext: {
-                  projectRoot: project.projectRootPath,
-                  cacheRoot: projectOptions.cacheRoot,
-                },
-              };
+        const indexOptions = isOperation ? undefined : backendProjectTargetOptions(projectOptions);
         if (isStatus || isOperation) {
           const client = await services.createClient();
           if (isStatus)
@@ -208,8 +194,6 @@ function command(
         ) {
           throw storeCliError(error.code as (typeof indexOperationStoreErrorCodes)[number]);
         }
-        if (error instanceof InvalidProjectRootError)
-          throw new CliError("usage.invalid", error.message);
         throw error;
       }
     },

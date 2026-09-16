@@ -31,7 +31,7 @@ query:
 ```text
 ~/.lorelum/
 ├── config.yaml         # 共享用户配置，首次 start 创建
-├── cache/               # 可删除、可重建的 ProjectContext query artifact 与共享向量
+├── cache/               # 可删除、可重建的 query artifact 与共享向量
 ├── run/backend/        # 私有运行记录，由服务生命周期创建和清理
 └── models/<sha256>/    # 模型缓存，首次使用时创建；停止服务后保留
 ```
@@ -45,8 +45,8 @@ query:
 ```text
 ~/.lorelum/cache/
 ├── semantic/v1/vector-cache.sqlite
-└── project-context/v1/
-    ├── project-cache.sqlite
+└── query-artifacts/v1/
+    ├── artifact-cache.sqlite
     └── artifacts/
         ├── keyword/<artifact-id>/active.sqlite
         └── semantic/<artifact-id>/{progress.sqlite,active.sqlite}

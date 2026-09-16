@@ -5,13 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 
-import {
-  createEmbeddingProfile,
-  createLocalStore,
-  createQueryService,
-  createSemanticIndexService,
-  createSemanticQueryService,
-} from "@lorelum/engine";
+import { createEmbeddingProfile, createLocalStore, createQueryService } from "@lorelum/engine";
 import { createBackendClient } from "@lorelum/backend/client";
 import { resolveEmbeddingConfig, DEFAULT_BACKEND_SETTINGS } from "@lorelum/backend/config";
 import {
@@ -29,8 +23,7 @@ import {
   createEmbeddingAdapter,
   createQueryEmbeddingAdapter,
 } from "../../backend/src/modules/index/embedding-adapter.js";
-import { createIndexOperationService } from "../../backend/src/modules/index/operation-service.js";
-import { ProjectSemanticRuntime } from "../../backend/src/modules/query/project-semantic-runtime.js";
+import { ContentAddressedSemanticRuntime } from "../../backend/src/modules/query/content-addressed-semantic-runtime.js";
 import { SemanticOperationJournal } from "../../backend/src/modules/query/project-operation-journal.js";
 import { createEmbeddingProcess } from "../../backend/src/runtime/embedding-process.js";
 import { createCacheCommands } from "../src/cache/commands.js";
@@ -149,18 +142,7 @@ try {
         return result;
       },
     };
-    const semanticIndex = createSemanticIndexService({
-      store,
-      profile,
-      embedding: documentEmbedding,
-    });
-    const semanticQuery = createSemanticQueryService({
-      store,
-      profile,
-      embedding: createQueryEmbeddingAdapter(embedding),
-    });
-    const indexOperations = createIndexOperationService(semanticIndex, embedding);
-    const projectRuntime = new ProjectSemanticRuntime(
+    const semanticRuntime = new ContentAddressedSemanticRuntime(
       store,
       profile,
       documentEmbedding,
@@ -179,12 +161,7 @@ try {
       embedding,
       port: 0,
       keywordQueryService: createQueryService({ store }),
-      semanticQueryService: semanticQuery,
-      indexOperations,
-      projectSemanticRuntime: projectRuntime,
-      storeSemanticRuntime: projectRuntime,
-      projectSemanticIndexRuntime: projectRuntime,
-      storeSemanticIndexRuntime: projectRuntime,
+      semanticRuntime,
     });
     app.listen({ hostname: "127.0.0.1", port: 0 });
     assert(app.server, "Native smoke Backend must listen on an ephemeral loopback port");
@@ -319,7 +296,7 @@ try {
     assert.equal(strictQuery.exitCode, 1);
     assert.equal(strictQuery.response.data?.state, "indexing");
     releaseSecondBatch?.();
-    await projectRuntime.waitForIdle(Date.now() + 180_000);
+    await semanticRuntime.waitForIdle(Date.now() + 180_000);
     const initialDocumentEmbedding = {
       documentCount: encodedDocumentCount,
       elapsedMs: documentEncodingMs,
@@ -381,7 +358,7 @@ try {
     };
     const incrementalBuild = await invoke([...parentArgs, "index", "build"]);
     expectOk("incremental index build", incrementalBuild);
-    await projectRuntime.waitForIdle(Date.now() + 180_000);
+    await semanticRuntime.waitForIdle(Date.now() + 180_000);
     assert.equal(
       documentCalls - beforeIncrementalDocuments,
       1,
@@ -402,7 +379,7 @@ try {
     expectOk("incremental semantic query", changedQuery);
     const rebuild = await invoke([...parentArgs, "index", "rebuild"]);
     expectOk("index rebuild", rebuild);
-    await projectRuntime.waitForIdle(Date.now() + 180_000);
+    await semanticRuntime.waitForIdle(Date.now() + 180_000);
 
     const cacheBeforePrune = await invoke(["--cache-root", cacheRoot, "cache", "status"]);
     expectOk("cache status", cacheBeforePrune);

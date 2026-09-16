@@ -20,7 +20,7 @@
 }
 ```
 
-`storageRoot` must be an absolute path. `text` must not be blank and is limited to 4,096 Unicode code points; `limit` defaults to 5 and ranges from 1 through 50. `mode` is `semantic` or `keyword`; it is optional and defaults to `semantic`. `maxWaitMs` is an integer 0–120000 and `minCoveragePercent` is an integer 0–100. `projectContext` is `{ projectRoot, cacheRoot }` with absolute paths; it and direct `cacheRoot` are mutually exclusive. The request body is a strict JSON object and rejects extra fields.
+`storageRoot` must be an absolute path. `text` must not be blank and is limited to 4,096 Unicode code points; `limit` defaults to 5 and ranges from 1 through 50. `mode` is `semantic` or `keyword`; it is optional and defaults to `semantic`. `maxWaitMs` is an integer 0–120000 and `minCoveragePercent` is an integer 0–100. `projectContext` is `{ cacheRoot, startDirectory?, projectRoot? }` with absolute paths and must include at least one of `startDirectory` or `projectRoot`; it and direct `cacheRoot` are mutually exclusive. The request body is a strict JSON object and rejects extra fields.
 
 成功 `200`：
 

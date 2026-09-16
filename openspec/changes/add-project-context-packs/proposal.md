@@ -11,7 +11,7 @@
 - 新增 directory-based `ProjectContext`：从执行目录或显式 `--project-root` 发现 `.lorelum/` context stack；Git 不是前提，也不参与发现、身份或 artifact 复用。
 - 父子 `.lorelum` 默认继承。config 从父到子逐字段合并；子层 Pack source 和同 ID Practice 以增量覆盖方式参与同一 precedence resolver，而不是整包遮蔽父层。`inherit: false` 提供显式隔离。
 - Pack metadata/root 无效时忽略该 Pack；单条 Practice 无效时仅忽略该条，其他有效 Practice 与更低优先级 fallback 继续参与 query/get/index，并以 `degraded` 与 provenance 可见。
-- 新增用户级、内容寻址的 project artifact/vector cache；任意目录的相同最终语料复用 keyword/semantic artifact 与 embedding vector，cache 不写入项目目录、`.lorelum/` 或 LocalStore。
+- 新增用户级、内容寻址的 query artifact/vector cache；Store-only 与任意目录的相同最终语料复用 keyword/semantic artifact 与 embedding vector，cache 不写入项目目录、`.lorelum/` 或 LocalStore。
 - 所有 semantic query（Store-only 与 ProjectContext）都会先安全地接入本地 Backend 并自动提交或加入 index target；Backend 接受请求后，用户级 `query.maxWaitMs` 限制模型准备与 index progress 的前台观察。完整 index 未完成时，只查询已验证、仍属于 current snapshot 的 progress rows，并返回 partial coverage、indexed/total counts 与 operation。
 - **BREAKING:** `lore query`、`lore get`、`lore index` 在可发现 `.lorelum/` layer 时使用合并的 ProjectContext；调用方可用 `--no-project` 保持纯 Store 行为。semantic query 的缺失/过期 index 不再默认要求调用方先执行 index 命令，而会自动开始/加入构建，并可能成功返回 partial result。
 
@@ -32,5 +32,5 @@
 - Engine：新增 ProjectContext layer discovery、config fold、Practice-granular precedence、context snapshot、内容寻址 cache identity 与 candidate validation。
 - Config/CLI：新增项目层 config schema、`lore init`、`--project-root`、`--no-project`、`--cache-root`、query wait/coverage options、context/cache commands、describe/JSON envelope/error mapping 与用户文档。
 - Backend：对 Store 或已解析 ProjectContext target 维护持久 operation/progress；重启后保留进度但不持久化 project absolute path，待同源 command reattach 后继续。
-- Persistence/release：新增 project artifact、shared vector、semantic progress 的 Drizzle schema/migration/release asset；FTS5、`MATCH`/`bm25`、PRAGMA/integrity 继续是受限原生 SQL 例外。
+- Persistence/release：新增 source-neutral query artifact、shared vector、semantic progress 的 Drizzle schema/migration/release asset；FTS5、`MATCH`/`bm25`、PRAGMA/integrity 继续是受限原生 SQL 例外。
 - 不修改 Registry Pack install/update、Pack format、模型/provider 配置、网络边界、Codex Hook 或本地 MCP。

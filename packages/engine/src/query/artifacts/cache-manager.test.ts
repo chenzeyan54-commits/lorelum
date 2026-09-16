@@ -3,19 +3,19 @@ import { access, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createEmbeddingProfile } from "../query/semantic";
-import { withProjectArtifactLease } from "./artifact-lease";
+import { createEmbeddingProfile } from "../semantic";
+import { withContentArtifactLease } from "./artifact-lease";
 import {
-  projectCachePaths,
-  projectKeywordIndexPaths,
-  projectSemanticIndexPaths,
-  semanticVectorCachePaths,
+  contentArtifactCachePaths,
+  contentKeywordIndexPaths,
+  contentSemanticIndexPaths,
+  contentArtifactVectorCachePaths,
 } from "./cache";
-import { projectCacheStatus, pruneProjectCache } from "./cache-manager";
-import { queryProjectContextKeyword } from "./keyword-query";
-import { resolveProjectContext } from "./resolver";
-import { ProjectSemanticProgressService } from "./semantic-progress";
-import { projectSemanticPractice } from "../query/semantic/projection";
+import { contentArtifactCacheStatus, pruneContentArtifactCache } from "./cache-manager";
+import { queryContentAddressedKeyword } from "../keyword/content-addressed-query";
+import { resolveProjectContext } from "../../project-context/resolver";
+import { ContentAddressedSemanticProgressService } from "./semantic-progress";
+import { projectSemanticPractice } from "../semantic/projection";
 import { writeSharedEmbeddingVectors } from "./vector-cache";
 
 const encodingId = "c".repeat(64);
@@ -53,30 +53,30 @@ Keep source data outside the cache.
     if (snapshot === undefined) throw new Error("Expected ProjectContext");
     const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
 
-    await queryProjectContextKeyword(snapshot, cache, { text: "derived cache" });
-    await new ProjectSemanticProgressService(snapshot, cache, profile, {
+    await queryContentAddressedKeyword(snapshot, cache, { text: "derived cache" });
+    await new ContentAddressedSemanticProgressService(snapshot, cache, profile, {
       maxBatchSize: 8,
       async embed(inputs) {
         return { encodingId, vectors: inputs.map(() => [1, 0]) };
       },
     }).build();
 
-    await expect(projectCacheStatus(cache)).resolves.toMatchObject({
+    await expect(contentArtifactCacheStatus(cache)).resolves.toMatchObject({
       artifactCount: 2,
       keywordArtifactCount: 1,
       semanticArtifactCount: 1,
       vectorCount: 1,
     });
-    await expect(pruneProjectCache(cache)).resolves.toMatchObject({
+    await expect(pruneContentArtifactCache(cache)).resolves.toMatchObject({
       removedArtifactCount: 2,
       skippedArtifactCount: 0,
     });
-    await expect(access(projectKeywordIndexPaths(cache, snapshot).active)).rejects.toThrow();
+    await expect(access(contentKeywordIndexPaths(cache, snapshot).active)).rejects.toThrow();
     await expect(
-      access(projectSemanticIndexPaths(cache, snapshot, profile.profileId).active),
+      access(contentSemanticIndexPaths(cache, snapshot, profile.profileId).active),
     ).rejects.toThrow();
     expect(await Bun.file(practicePath).text()).toBe(source);
-    await expect(projectCacheStatus(cache)).resolves.toMatchObject({
+    await expect(contentArtifactCacheStatus(cache)).resolves.toMatchObject({
       artifactCount: 0,
       vectorCount: 0,
     });
@@ -120,8 +120,8 @@ Keep derived vectors while a reader holds a lease.
     });
     if (snapshot === undefined) throw new Error("Expected ProjectContext");
     const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
-    await queryProjectContextKeyword(snapshot, cache, { text: "leased cache" });
-    await new ProjectSemanticProgressService(snapshot, cache, profile, {
+    await queryContentAddressedKeyword(snapshot, cache, { text: "leased cache" });
+    await new ContentAddressedSemanticProgressService(snapshot, cache, profile, {
       maxBatchSize: 8,
       async embed(inputs) {
         return { encodingId, vectors: inputs.map(() => [1, 0]) };
@@ -133,8 +133,8 @@ Keep derived vectors while a reader holds a lease.
     const leaseHeld = new Promise<void>((resolve) => {
       markLeaseHeld = resolve;
     });
-    const lease = withProjectArtifactLease(
-      projectKeywordIndexPaths(cache, snapshot).directory,
+    const lease = withContentArtifactLease(
+      contentKeywordIndexPaths(cache, snapshot).directory,
       async () => {
         markLeaseHeld();
         await new Promise<void>((resolve) => {
@@ -144,15 +144,15 @@ Keep derived vectors while a reader holds a lease.
     );
     await leaseHeld;
 
-    await expect(pruneProjectCache(cache)).resolves.toMatchObject({
+    await expect(pruneContentArtifactCache(cache)).resolves.toMatchObject({
       removedArtifactCount: 1,
       skippedArtifactCount: 1,
       removedVectorByteSize: 0,
     });
-    await expect(access(projectKeywordIndexPaths(cache, snapshot).active)).resolves.toBeNull();
+    await expect(access(contentKeywordIndexPaths(cache, snapshot).active)).resolves.toBeNull();
     release();
     await lease;
-    await expect(pruneProjectCache(cache)).resolves.toMatchObject({
+    await expect(pruneContentArtifactCache(cache)).resolves.toMatchObject({
       removedArtifactCount: 1,
       skippedArtifactCount: 0,
     });
@@ -199,8 +199,8 @@ test("catalog, vectors, and semantic artifacts retain no ProjectContext source p
     });
     if (snapshot === undefined) throw new Error("Expected ProjectContext");
     const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
-    await queryProjectContextKeyword(snapshot, cache, { text: "private cache" });
-    await new ProjectSemanticProgressService(snapshot, cache, profile, {
+    await queryContentAddressedKeyword(snapshot, cache, { text: "private cache" });
+    await new ContentAddressedSemanticProgressService(snapshot, cache, profile, {
       maxBatchSize: 8,
       async embed(inputs) {
         return { encodingId, vectors: inputs.map(() => [1, 0]) };
@@ -216,9 +216,9 @@ test("catalog, vectors, and semantic artifacts retain no ProjectContext source p
     );
 
     const protectedFiles = [
-      projectCachePaths(cache).catalog,
-      semanticVectorCachePaths(cache).database,
-      projectSemanticIndexPaths(cache, snapshot, profile.profileId).active,
+      contentArtifactCachePaths(cache).catalog,
+      contentArtifactVectorCachePaths(cache).database,
+      contentSemanticIndexPaths(cache, snapshot, profile.profileId).active,
     ];
     for (const path of protectedFiles) {
       // eslint-disable-next-line no-await-in-loop -- each physical SQLite file has an independent privacy assertion.

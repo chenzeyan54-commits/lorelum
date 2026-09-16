@@ -10,10 +10,24 @@ const storageRootSchema = z
   .min(1)
   .refine(isAbsolute, "storageRoot must be an absolute path");
 const profileIdSchema = z.string().regex(/^[a-f0-9]{64}$/);
-const projectContextSchema = z.strictObject({
-  projectRoot: z.string().min(1).refine(isAbsolute, "projectRoot must be an absolute path"),
-  cacheRoot: z.string().min(1).refine(isAbsolute, "cacheRoot must be an absolute path"),
-});
+const projectContextSchema = z
+  .strictObject({
+    projectRoot: z
+      .string()
+      .min(1)
+      .refine(isAbsolute, "projectRoot must be an absolute path")
+      .optional(),
+    startDirectory: z
+      .string()
+      .min(1)
+      .refine(isAbsolute, "startDirectory must be an absolute path")
+      .optional(),
+    cacheRoot: z.string().min(1).refine(isAbsolute, "cacheRoot must be an absolute path"),
+  })
+  .refine(
+    (value) => value.projectRoot !== undefined || value.startDirectory !== undefined,
+    "projectContext requires projectRoot or startDirectory",
+  );
 export type ProjectIndexRequest = z.infer<typeof projectContextSchema>;
 
 export const indexStateSchema = z.enum(["missing", "indexing", "ready", "stale", "incompatible"]);
@@ -45,11 +59,14 @@ export const indexStatusQuerySchema = z
   .strictObject({
     storageRoot: storageRootSchema,
     projectRoot: projectContextSchema.shape.projectRoot.optional(),
+    projectStartDirectory: projectContextSchema.shape.startDirectory.optional(),
     cacheRoot: projectContextSchema.shape.cacheRoot.optional(),
   })
   .refine(
-    (value) => value.projectRoot === undefined || value.cacheRoot !== undefined,
-    "projectRoot requires cacheRoot",
+    (value) =>
+      (value.projectRoot === undefined && value.projectStartDirectory === undefined) ||
+      value.cacheRoot !== undefined,
+    "project source requires cacheRoot",
   );
 export const indexMutationSchema = z
   .strictObject({

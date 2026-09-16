@@ -4,11 +4,8 @@ import { InvalidQueryRequestError, SemanticIndexNotReadyError } from "@lorelum/e
 import { createBackendApp } from "../../app";
 import { createBackendService } from "../backend/service";
 import type { QueryService } from "@lorelum/engine";
-import type { SemanticQueryService } from "@lorelum/engine";
-import type {
-  ProjectSemanticRuntimePort,
-  StoreSemanticRuntimePort,
-} from "./project-semantic-runtime";
+import type { ContentAddressedSemanticRuntimePort } from "./content-addressed-semantic-runtime";
+import { createContentAddressedSemanticRuntimeStub } from "./content-addressed-semantic-runtime.test-helper";
 import { PROTOCOL_VERSION } from "../../protocol/constants";
 
 const secret = "query-controller-test-secret";
@@ -32,16 +29,12 @@ function request(body: unknown): Request {
 
 function app(
   keywordQueryService: QueryService,
-  semanticQueryService: SemanticQueryService,
-  projectSemanticRuntime?: ProjectSemanticRuntimePort,
-  storeSemanticRuntime?: StoreSemanticRuntimePort,
+  semanticRuntime: ContentAddressedSemanticRuntimePort,
 ) {
   return createBackendApp({
     backend: createBackendService({ identity, secret, onStop: () => undefined }),
     keywordQueryService,
-    semanticQueryService,
-    ...(projectSemanticRuntime === undefined ? {} : { projectSemanticRuntime }),
-    ...(storeSemanticRuntime === undefined ? {} : { storeSemanticRuntime }),
+    semanticRuntime,
   });
 }
 
@@ -53,8 +46,8 @@ test("defaults query mode to semantic and preserves semantic result metadata", a
         throw new Error("keyword facade must not be selected");
       },
     },
-    {
-      async query(root, query) {
+    createContentAddressedSemanticRuntimeStub({
+      async query(root, _target, query) {
         calls.push(`${root.rootPath}:${query.text}`);
         return {
           mode: "semantic",
@@ -63,7 +56,7 @@ test("defaults query mode to semantic and preserves semantic result metadata", a
           results: [],
         };
       },
-    },
+    }),
   );
 
   const response = await instance.handle(
@@ -88,11 +81,11 @@ test("explicit keyword mode selects only the keyword facade", async () => {
         return { mode: "keyword", results: [] };
       },
     },
-    {
+    createContentAddressedSemanticRuntimeStub({
       async query() {
         throw new Error("semantic facade must not be selected");
       },
-    },
+    }),
   );
 
   const response = await instance.handle(
@@ -113,11 +106,11 @@ test("maps semantic index readiness failures to a typed remote error", async () 
         return { mode: "keyword", results: [] };
       },
     },
-    {
+    createContentAddressedSemanticRuntimeStub({
       async query() {
         throw new SemanticIndexNotReadyError();
       },
-    },
+    }),
   );
   const response = await instance.handle(
     request({ storageRoot: "/tmp/query-controller", query: { text: "deployment" } }),
@@ -133,11 +126,11 @@ test("maps invalid Engine input before exposing an implementation failure", asyn
         throw new InvalidQueryRequestError();
       },
     },
-    {
+    createContentAddressedSemanticRuntimeStub({
       async query() {
         return { mode: "semantic", profileId: "a".repeat(64), coverage: "complete", results: [] };
       },
-    },
+    }),
   );
   const response = await instance.handle(
     request({
@@ -151,7 +144,7 @@ test("maps invalid Engine input before exposing an implementation failure", asyn
 
 test("uses the project runtime for partial and indexing query results", async () => {
   const calls: unknown[] = [];
-  const runtime: ProjectSemanticRuntimePort = {
+  const runtime: ContentAddressedSemanticRuntimePort = {
     async query(root, context, query) {
       calls.push({ root, context, query });
       return {
@@ -164,17 +157,24 @@ test("uses the project runtime for partial and indexing query results", async ()
         results: [],
       };
     },
+    async indexStatus() {
+      return { state: "missing", profileId: "a".repeat(64) };
+    },
+    async build() {
+      return { operationId: crypto.randomUUID(), state: "building" };
+    },
+    async rebuild() {
+      return { operationId: crypto.randomUUID(), state: "building" };
+    },
+    async indexOperation() {
+      return undefined;
+    },
     async waitForIdle() {},
   };
   const instance = app(
     {
       async query() {
         return { mode: "keyword", results: [] };
-      },
-    },
-    {
-      async query() {
-        throw new Error("Store semantic path must not run");
       },
     },
     runtime,
@@ -198,7 +198,7 @@ test("uses the project runtime for partial and indexing query results", async ()
   expect(calls).toEqual([
     {
       root: { rootPath: "/tmp/query-controller" },
-      context: { projectRoot: "/tmp/project", cacheRoot: "/tmp/cache" },
+      context: { kind: "project", projectRoot: "/tmp/project", cacheRoot: "/tmp/cache" },
       query: { text: "deployment" },
     },
   ]);
@@ -206,9 +206,9 @@ test("uses the project runtime for partial and indexing query results", async ()
 
 test("uses the Store target runtime whenever semantic query supplies a cache root", async () => {
   const calls: unknown[] = [];
-  const runtime: StoreSemanticRuntimePort = {
-    async queryStore(root, request, query, policy) {
-      calls.push({ root, request, query, policy });
+  const runtime: ContentAddressedSemanticRuntimePort = {
+    async query(root, target, query, policy) {
+      calls.push({ root, target, query, policy });
       return {
         state: "indexing",
         operationId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
@@ -216,6 +216,19 @@ test("uses the Store target runtime whenever semantic query supplies a cache roo
         totalPracticeCount: 100,
       };
     },
+    async indexStatus() {
+      return { state: "missing", profileId: "a".repeat(64) };
+    },
+    async build() {
+      return { operationId: crypto.randomUUID(), state: "building" };
+    },
+    async rebuild() {
+      return { operationId: crypto.randomUUID(), state: "building" };
+    },
+    async indexOperation() {
+      return undefined;
+    },
+    async waitForIdle() {},
   };
   const instance = app(
     {
@@ -223,12 +236,6 @@ test("uses the Store target runtime whenever semantic query supplies a cache roo
         return { mode: "keyword", results: [] };
       },
     },
-    {
-      async query() {
-        throw new Error("legacy Store semantic path must not run");
-      },
-    },
-    undefined,
     runtime,
   );
   const response = await instance.handle(
@@ -251,7 +258,7 @@ test("uses the Store target runtime whenever semantic query supplies a cache roo
   expect(calls).toEqual([
     {
       root: { rootPath: "/tmp/query-controller" },
-      request: { cacheRoot: "/tmp/query-cache" },
+      target: { kind: "store", cacheRoot: "/tmp/query-cache" },
       query: { text: "deployment" },
       policy: { maxWaitMs: 5000, minCoveragePercent: 80 },
     },

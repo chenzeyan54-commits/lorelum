@@ -1,9 +1,12 @@
 import { access, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-import { withProjectArtifactPruneGuard } from "./artifact-lease";
-import { projectCachePaths } from "./cache";
-import { projectCacheCatalogStatus, removeProjectCacheArtifactRecords } from "./cache-catalog";
+import { withContentArtifactPruneGuard } from "./artifact-lease";
+import { contentArtifactCachePaths } from "./cache";
+import {
+  contentArtifactCacheCatalogStatus,
+  removeContentArtifactCacheArtifactRecords,
+} from "./cache-catalog";
 import { pruneSharedVectorCache, sharedVectorCacheStatus } from "./vector-cache";
 
 const ARTIFACT_ID = /^[a-f0-9]{64}$/;
@@ -19,7 +22,7 @@ interface ArtifactDirectory {
   readonly hasProgress: boolean;
 }
 
-export interface ProjectCacheStatus {
+export interface ContentArtifactCacheStatus {
   readonly artifactCount: number;
   readonly keywordArtifactCount: number;
   readonly semanticArtifactCount: number;
@@ -30,7 +33,7 @@ export interface ProjectCacheStatus {
   readonly catalogArtifactCount: number;
 }
 
-export interface ProjectCachePruneResult {
+export interface ContentArtifactCachePruneResult {
   readonly removedArtifactCount: number;
   readonly skippedArtifactCount: number;
   readonly removedArtifactByteSize: number;
@@ -55,7 +58,7 @@ async function fileSize(path: string): Promise<number> {
 }
 
 async function artifactDirectories(cacheRoot: string): Promise<readonly ArtifactDirectory[]> {
-  const artifacts = projectCachePaths(cacheRoot).artifacts;
+  const artifacts = contentArtifactCachePaths(cacheRoot).artifacts;
   const values: ArtifactDirectory[] = [];
   for (const kind of ["keyword", "semantic"] as const) {
     const directory = join(artifacts, kind);
@@ -91,11 +94,13 @@ async function artifactDirectories(cacheRoot: string): Promise<readonly Artifact
 }
 
 /** Read cache state without creating a cache database or contacting a Backend. */
-export async function projectCacheStatus(cacheRoot: string): Promise<ProjectCacheStatus> {
+export async function contentArtifactCacheStatus(
+  cacheRoot: string,
+): Promise<ContentArtifactCacheStatus> {
   const [artifacts, vectors, catalog] = await Promise.all([
     artifactDirectories(cacheRoot),
     sharedVectorCacheStatus(cacheRoot),
-    projectCacheCatalogStatus(cacheRoot),
+    contentArtifactCacheCatalogStatus(cacheRoot),
   ]);
   return Object.freeze({
     artifactCount: artifacts.length,
@@ -113,14 +118,16 @@ export async function projectCacheStatus(cacheRoot: string): Promise<ProjectCach
  * Explicitly discard only unused derived state. Prune never reaches a project
  * source directory or LocalStore and skips an artifact held by a build/query.
  */
-export async function pruneProjectCache(cacheRoot: string): Promise<ProjectCachePruneResult> {
+export async function pruneContentArtifactCache(
+  cacheRoot: string,
+): Promise<ContentArtifactCachePruneResult> {
   const artifacts = await artifactDirectories(cacheRoot);
   const removed: string[] = [];
   let removedArtifactByteSize = 0;
   let skippedArtifactCount = 0;
   for (const artifact of artifacts) {
     // eslint-disable-next-line no-await-in-loop -- each guard protects one independently removable directory.
-    const outcome = await withProjectArtifactPruneGuard(artifact.directory, async () => {
+    const outcome = await withContentArtifactPruneGuard(artifact.directory, async () => {
       await rm(artifact.directory, { recursive: true, force: true });
     });
     if (outcome.pruned) {
@@ -130,7 +137,7 @@ export async function pruneProjectCache(cacheRoot: string): Promise<ProjectCache
       skippedArtifactCount += 1;
     }
   }
-  await removeProjectCacheArtifactRecords(cacheRoot, removed);
+  await removeContentArtifactCacheArtifactRecords(cacheRoot, removed);
   // A shared vector can serve any artifact. If even one artifact has an active
   // build or partial reader, retain the vector database rather than guessing
   // whether that operation will need a compatible row in its next batch.

@@ -3,7 +3,7 @@ import {
   type EffectivePractice,
   type StorageRoot,
   type StoreSnapshotIdentity,
-} from "../local-store";
+} from "../../local-store";
 import {
   createSemanticIndexService,
   createSemanticQueryService,
@@ -11,9 +11,9 @@ import {
   type EmbeddingProfile,
   type SemanticIndexService,
   type SemanticQueryService,
-} from "../query/semantic";
-import { projectSemanticIndexDatabaseDefinition } from "../persistence/definitions";
-import { projectSemanticIndexPaths } from "./cache";
+} from "../semantic";
+import { projectSemanticIndexDatabaseDefinition } from "../../persistence/definitions";
+import { contentSemanticIndexPaths } from "./cache";
 import type { ContentAddressedCorpus } from "./cache";
 
 function identityFor(snapshot: ContentAddressedCorpus): StoreSnapshotIdentity {
@@ -53,7 +53,7 @@ export interface ContentAddressedSemanticServices {
 
 /**
  * Bind the shared semantic SQLite implementation to one immutable, content-addressed
- * ProjectContext snapshot. The target has no mutable Store revision: a source edit
+ * source snapshot. The target has no mutable Store revision: a source edit
  * produces a different artifact identity, while the old artifact remains reusable.
  */
 export function createContentAddressedSemanticServices(
@@ -65,7 +65,7 @@ export function createContentAddressedSemanticServices(
   const identity = identityFor(snapshot);
   const root = Object.freeze({ rootPath: "content-addressed-artifact" });
   const paths = (_root: StorageRoot, profileId: string) =>
-    projectSemanticIndexPaths(cacheRoot, snapshot, profileId);
+    contentSemanticIndexPaths(cacheRoot, snapshot, profileId);
   const index = createSemanticIndexService({
     profile,
     embedding,
@@ -106,8 +106,3 @@ export function createContentAddressedSemanticServices(
   });
   return Object.freeze({ root, index, query });
 }
-
-/** @deprecated Use createContentAddressedSemanticServices for non-project corpora too. */
-export const createProjectSemanticServices = createContentAddressedSemanticServices;
-/** @deprecated Use ContentAddressedSemanticServices for non-project corpora too. */
-export type ProjectSemanticServices = ContentAddressedSemanticServices;

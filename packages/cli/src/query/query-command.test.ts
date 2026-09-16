@@ -148,7 +148,10 @@ test("uses semantic Backend query by default and preserves semantic metadata", a
       mode: "semantic",
       maxWaitMs: 3_000,
       minCoveragePercent: 0,
-      cacheRoot: expect.any(String),
+      projectContext: {
+        cacheRoot: expect.any(String),
+        startDirectory: process.cwd(),
+      },
     },
   });
   expect(result.response.data).toEqual(semantic);
@@ -197,7 +200,10 @@ test("requires complete coverage without cancelling the accepted semantic operat
         },
       }) as Pick<BackendClient, "query">,
   );
-  expect(received).toMatchObject({ minCoveragePercent: 100, cacheRoot: expect.any(String) });
+  expect(received).toMatchObject({
+    minCoveragePercent: 100,
+    projectContext: { cacheRoot: expect.any(String), startDirectory: process.cwd() },
+  });
   expect(result.exitCode).toBe(1);
   expect(result.response.data).toMatchObject({
     state: "indexing",

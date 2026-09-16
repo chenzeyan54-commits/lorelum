@@ -78,14 +78,14 @@ projectSlotId       = SHA-256(projectRootId + profileId)
 
 若 canonical 内容变化而 semantic projection 不变，例如未进入 projection 的 metadata 改动，新的 artifact 仍需发布以绑定 current canonical snapshot，但 vector 可以复用。不同 Practice ID 即使正文相同仍保留为两个可返回结果；artifact 行主键保持 Practice ID。
 
-### 3. 用户级 cache 分离 shared vector、project artifact 与 progress
+### 3. 用户级 cache 分离 shared vector、query artifact 与 progress
 
 ```text
 <user cache root>/
   semantic/v1/
     vector-cache.sqlite
-  project-context/v1/
-    project-cache.sqlite
+  query-artifacts/v1/
+    artifact-cache.sqlite
     artifacts/
       keyword/<keywordArtifactId>/active.sqlite
       semantic/<semanticArtifactId>/
@@ -98,12 +98,12 @@ projectSlotId       = SHA-256(projectRootId + profileId)
 | Database kind | Drizzle tables | 专属 SQLite 内容 |
 | --- | --- | --- |
 | `semantic-vector-cache` | `embedding_vectors` | 已校验 Float32 BLOB。 |
-| `project-cache` | `project_context_artifacts`、`project_context_artifact_indexes` | artifact catalog，绝不存 source path 或正文。 |
+| `artifact-cache` | `project_context_artifacts`、`project_context_artifact_indexes`、`content_artifact_sources` | source-neutral artifact catalog，绝不存 source path 或正文。 |
 | `project-keyword-index` | `project_keyword_index_metadata` | `keyword_documents` FTS5、`MATCH`、`bm25`。 |
 | `project-semantic-index` | `project_semantic_index_metadata`、`semantic_vectors` | complete artifact 的 vector codec、integrity。 |
 | `semantic-progress-index` | `semantic_progress_metadata`、`semantic_vectors` | 一个 target 的 manifest、expected/ready counts 与批次事务。 |
 
-`embedding_vectors` 的 key 是 `(profileId, projectionDigest)`，包含 encoding/dimensions/normalization/vector/timestamps。`project_context_artifacts` 以 `artifactId` 为 key，记录 index kind、Profile（semantic）、corpus digest、document count、created/last-accessed；`project_context_artifact_indexes` 记录相对 artifact path、byte size、published/verified time。catalog、vector cache 与 progress 均不保存 canonical Practice body、absolute directory path 或 full provenance。
+`embedding_vectors` 的 key 是 `(profileId, projectionDigest)`，包含 encoding/dimensions/normalization/vector/timestamps。`project_context_artifacts` 是迁移中的历史物理表名，但在代码中是 source-neutral artifact catalog：以 `artifactId` 为 key，记录 index kind、Profile（semantic）、corpus digest、document count、created/last-accessed；`content_artifact_sources` 用 `(artifactId, opaque sourceSlotId)` 关联可选 source revision checkpoint，因此同一个共享 artifact 不会覆盖另一个 Store 或目录的 predecessor history；`project_context_artifact_indexes` 记录相对 artifact path、byte size、published/verified time。catalog、vector cache 与 progress 均不保存 canonical Practice body、absolute directory path 或 full provenance。
 
 普通 metadata/CRUD/vector row 使用 Drizzle transaction；仅 FTS5 DDL/search、`MATCH`/`bm25` 与 PRAGMA/integrity 使用参数化 native SQL。
 
@@ -111,7 +111,9 @@ projectSlotId       = SHA-256(projectRootId + profileId)
 
 keyword index 继续对完整 current ProjectContext snapshot 同步建立/查询。semantic target 缺少 exact complete artifact 时创建或恢复 `progress.sqlite`，其 metadata 包含 exact target digest、Profile、expected count、ready count 与状态。
 
-先从 compatible complete artifact 与 shared vector cache 种入 `(profileId, projectionDigest)` 匹配的 rows；只为 miss 请求 embedding。每批返回后，先写入 shared vector cache，再在同一 progress SQLite transaction 中写 target vector rows 和 ready count。这样崩溃最多遗留可复用 vector，绝不出现 metadata 声称 ready 而 query 读不到 row 的状态。
+共同 progress builder 接受 source-neutral `ContentAddressedCorpus` 与可选 predecessor seed。普通目录/ProjectContext 只在同一 opaque slot 的有界 predecessor 集中验证一个 compatible complete artifact，并按当前 Practice ID/projection 种入可复用行。Store-only 先从同一 slot 的 catalog predecessor 读取可选 Store revision checkpoint，再调用 `readEffectivePracticeChanges(afterRevision)` 验证 retained history、当前 revision 与受影响 Practice 的 canonical digest；验证通过后复制 immutable predecessor artifact，只删除 delta 触及的 rows，由正常 batch publisher 仅补回 current touched rows。未保留连续 history、catalog/artifact 损坏、row count 或当前 digest 不一致时 MUST 放弃该优化，回退到完整 current corpus 的安全构建。两条 source 都共用 shared vector cache，因此只为新的 projection 请求 embedding。
+
+每批返回后，先写入 shared vector cache，再在同一 progress SQLite transaction 中写 target vector rows 和 ready count。这样崩溃最多遗留可复用 vector，绝不出现 metadata 声称 ready 而 query 读不到 row 的状态。
 
 semantic query 只读取与 current `semanticArtifactId` 完全匹配的 progress SQLite，并在一个 read transaction 中扫描当前验证通过的 rows。若 layer/source 在结果组装前改变，重新解析 current ProjectContext；不匹配的 progress row 立即排除。全部完成后再校验 manifest、row count、vector contract 和 integrity，原子提升为 `active.sqlite`；未完成 progress 永不标记 ready。
 
@@ -119,7 +121,7 @@ semantic query 只读取与 current `semanticArtifactId` 完全匹配的 progres
 
 Backend 的持久 queue 记录 opaque target/artifact/slot identity、Profile、expected/ready counts、state、attempt/retry 与安全错误码。相同 `semanticArtifactId` 加入同一 operation；不同 artifact 排队；相同 `projectSlotId` 的新 target 覆盖旧 desired corpus。CLI 中断不取消已接受 operation。
 
-queue 不持久化 project absolute path 或 Practice body，因此 daemon 重启后无法也不得扫描任意目录来恢复 ProjectContext source。它保留 progress/vector/operation，将未完成 project target 标记为 `waiting-for-source`；下次从同一 `projectRootId` 执行 query/build/rebuild 时，由当前解析出的 source reattach 并继续。这保留已经完成的批次，同时不留下目录 locator。
+queue 不持久化 project absolute path 或 Practice body，因此 daemon 重启后无法也不得扫描任意目录来恢复 ProjectContext source。它保留 progress/vector/operation，将未完成 project target 标记为 `waiting-for-source`；下次从同一 `projectRootId` 执行 query/build/rebuild 时，由当前解析出的 source reattach 并继续。Store revision checkpoint 只属于 artifact catalog 的可删可重建 derived metadata，不进入 queue、artifact ID 或 canonical source。这保留已经完成的批次，同时不留下目录 locator。
 
 `query.maxWaitMs` 和 `query.minCoveragePercent` 属于用户级 config。CLI 必须先安全完成本地 Backend 的连接、身份校验和一次 query 提交；`maxWaitMs` 从 Backend 接受该请求后开始，只限制共享模型准备与 target progress 的前台观察。这样 `0` 是“不要额外等待 progress”，而不是无法完成一次本地 RPC 的即时 deadline。查询在该总毫秒预算内观察模型与 progress：complete 则返回 complete；达到 coverage policy 则返回带 indexed/total/operation 的 exit-0 partial；没有可接受 rows 时返回 exit-1 `indexing`；模型未就绪时返回 exit-1 `preparing`。超时不取消 queue。
 
@@ -135,8 +137,8 @@ queue 不持久化 project absolute path 或 Practice body，因此 daemon 重�
 ## Migration Plan
 
 1. 实现 ProjectContext directory discovery、parent-to-child config fold、Practice-granular precedence、`lore init`/`context status` 与 `--no-project`；普通无 Git 目录和无 marker 的 Store-only 行为都加入测试。
-2. 新增 shared vector/project artifact/progress persistence、migration/config/generator/release asset；实现内容寻址、keyword artifact 与 prune/recovery。
-3. 将 Backend operation 改为 Store/ProjectContext 共用 persistent target queue，接入 progress batch publication、partial query、project slot coalescing 与 `waiting-for-source` reattach。
+2. 新增 shared vector/query artifact/progress persistence、migration/config/generator/release asset；实现内容寻址、keyword artifact 与 prune/recovery。
+3. 将 Backend operation 改为 Store/ProjectContext 共用 persistent target queue 和 progress builder；Store retained revision delta 只作为同一 builder 的可验证 seed，接入 progress batch publication、partial query、project slot coalescing 与 `waiting-for-source` reattach。
 4. 同步 CLI/configuration/API/site/development docs、`lore describe` 与 JSON schemas；运行 directory hierarchy、普通目录、相同语料复用、partial coverage、restart reattach 和 prune 的端到端验证。review 后才同步 delta/归档。
 
 ## Open Questions

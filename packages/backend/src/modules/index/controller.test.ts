@@ -1,16 +1,14 @@
 import { expect, test } from "bun:test";
 
-import type { QueryService, SemanticQueryService } from "@lorelum/engine";
+import type { QueryService, StorageRoot } from "@lorelum/engine";
 
 import { createBackendApp } from "../../app";
 import { createBackendService } from "../backend/service";
 import { EmbeddingError } from "../embedding/errors";
 import { StoreBusyError } from "@lorelum/engine";
-import type { IndexOperationService } from "./operation-service";
-import type {
-  ProjectSemanticIndexRuntimePort,
-  StoreSemanticIndexRuntimePort,
-} from "../query/project-semantic-runtime";
+import type { ContentAddressedSemanticRuntimePort } from "../query/content-addressed-semantic-runtime";
+import { createContentAddressedSemanticRuntimeStub } from "../query/content-addressed-semantic-runtime.test-helper";
+import type { IndexOperation, IndexStatus } from "./model";
 
 const identity = Object.freeze({
   instanceId: "test-instance",
@@ -21,6 +19,14 @@ const secret = "index-controller-test-secret";
 const operationId = "0f8fad5b-d9cb-469f-a165-70867728950e";
 const profileId = "a".repeat(64);
 
+interface IndexOperationStub {
+  status(root: StorageRoot): Promise<IndexStatus>;
+  build(root: StorageRoot): IndexOperation;
+  rebuild(root: StorageRoot): IndexOperation;
+  operation(operationId: string): IndexOperation | undefined;
+  waitForIdle(deadline?: number): Promise<void>;
+}
+
 function request(path: string, init: RequestInit = {}): Request {
   return new Request(`http://127.0.0.1${path}`, {
     ...init,
@@ -29,27 +35,37 @@ function request(path: string, init: RequestInit = {}): Request {
 }
 
 function app(
-  indexOperations: IndexOperationService,
-  projectRuntime?: ProjectSemanticIndexRuntimePort,
-  storeRuntime?: StoreSemanticIndexRuntimePort,
+  indexOperations: IndexOperationStub,
+  semanticRuntime?: ContentAddressedSemanticRuntimePort,
 ) {
   const keywordQueryService: QueryService = {
     async query() {
       return { mode: "keyword", results: [] };
     },
   };
-  const semanticQueryService: SemanticQueryService = {
-    async query() {
-      return { mode: "semantic", profileId, coverage: "complete", results: [] };
-    },
-  };
+  const runtime =
+    semanticRuntime ??
+    createContentAddressedSemanticRuntimeStub({
+      async indexStatus(root) {
+        return indexOperations.status(root);
+      },
+      async build(root) {
+        return indexOperations.build(root);
+      },
+      async rebuild(root) {
+        return indexOperations.rebuild(root);
+      },
+      async indexOperation(operationId) {
+        return indexOperations.operation(operationId);
+      },
+      async waitForIdle(deadline) {
+        await indexOperations.waitForIdle(deadline);
+      },
+    });
   return createBackendApp({
     backend: createBackendService({ identity, secret, onStop: () => undefined }),
     keywordQueryService,
-    semanticQueryService,
-    indexOperations,
-    ...(projectRuntime === undefined ? {} : { projectSemanticIndexRuntime: projectRuntime }),
-    ...(storeRuntime === undefined ? {} : { storeSemanticIndexRuntime: storeRuntime }),
+    semanticRuntime: runtime,
   });
 }
 
@@ -212,8 +228,8 @@ test("project index routes use the supplied context without changing the Store s
       waitForIdle: async () => undefined,
     },
     {
-      async indexStatus(root, request) {
-        calls.push(["status", root, request]);
+      async indexStatus(root, target) {
+        calls.push(["status", root, target]);
         return {
           state: "indexing",
           profileId,
@@ -222,8 +238,8 @@ test("project index routes use the supplied context without changing the Store s
           totalPracticeCount: 100,
         };
       },
-      async buildIndex(root, request) {
-        calls.push(["build", root, request]);
+      async build(root, target) {
+        calls.push(["build", root, target]);
         return {
           operationId,
           state: "queued",
@@ -231,8 +247,8 @@ test("project index routes use the supplied context without changing the Store s
           totalPracticeCount: 100,
         };
       },
-      async rebuildIndex(root, request) {
-        calls.push(["rebuild", root, request]);
+      async rebuild(root, target) {
+        calls.push(["rebuild", root, target]);
         return {
           operationId,
           state: "queued",
@@ -243,6 +259,10 @@ test("project index routes use the supplied context without changing the Store s
       async indexOperation() {
         return undefined;
       },
+      async query() {
+        throw new Error("query is outside this index-controller test");
+      },
+      async waitForIdle() {},
     },
   );
 
@@ -278,8 +298,8 @@ test("project index routes use the supplied context without changing the Store s
     totalPracticeCount: 100,
   });
   expect(calls).toEqual([
-    ["status", { rootPath: "/tmp/index-controller" }, { projectRoot, cacheRoot }],
-    ["build", { rootPath: "/tmp/index-controller" }, { projectRoot, cacheRoot }],
+    ["status", { rootPath: "/tmp/index-controller" }, { kind: "project", projectRoot, cacheRoot }],
+    ["build", { rootPath: "/tmp/index-controller" }, { kind: "project", projectRoot, cacheRoot }],
   ]);
 });
 
@@ -301,10 +321,9 @@ test("Store cache routes use the common target runtime", async () => {
       },
       waitForIdle: async () => undefined,
     },
-    undefined,
     {
-      async indexStatusStore(root, request) {
-        calls.push(["status", root, request]);
+      async indexStatus(root, target) {
+        calls.push(["status", root, target]);
         return {
           state: "indexing",
           profileId,
@@ -313,13 +332,20 @@ test("Store cache routes use the common target runtime", async () => {
           totalPracticeCount: 100,
         };
       },
-      async buildStoreIndex(root, request) {
-        calls.push(["build", root, request]);
+      async build(root, target) {
+        calls.push(["build", root, target]);
         return { operationId, state: "queued", indexedPracticeCount: 0, totalPracticeCount: 100 };
       },
-      async rebuildStoreIndex() {
+      async rebuild() {
         throw new Error("unexpected rebuild");
       },
+      async indexOperation() {
+        return undefined;
+      },
+      async query() {
+        throw new Error("query is outside this index-controller test");
+      },
+      async waitForIdle() {},
     },
   );
   const statusResponse = await instance.handle(
@@ -337,7 +363,15 @@ test("Store cache routes use the common target runtime", async () => {
   );
   expect(buildResponse.status).toBe(202);
   expect(calls).toEqual([
-    ["status", { rootPath: "/tmp/index-controller" }, { cacheRoot: "/tmp/index-cache" }],
-    ["build", { rootPath: "/tmp/index-controller" }, { cacheRoot: "/tmp/index-cache" }],
+    [
+      "status",
+      { rootPath: "/tmp/index-controller" },
+      { kind: "store", cacheRoot: "/tmp/index-cache" },
+    ],
+    [
+      "build",
+      { rootPath: "/tmp/index-controller" },
+      { kind: "store", cacheRoot: "/tmp/index-cache" },
+    ],
   ]);
 });

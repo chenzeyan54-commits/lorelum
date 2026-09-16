@@ -6,15 +6,9 @@ import {
   type StoreSnapshotIdentity,
 } from "../../local-store";
 import { revisionDeltaPracticeIds, type RevisionDelta } from "../../local-store/model";
-import { parseQueryRequest } from "../request";
-import { assembleQueryHits } from "../result";
 import type { QueryHit, QueryRequest } from "../types";
-import { validateEmbeddingBatch, type EmbeddingPort } from "./encoding";
-import {
-  SemanticIndexIncompatibleError,
-  SemanticIndexNotReadyError,
-  SemanticIndexQueryError,
-} from "./errors";
+import type { EmbeddingPort } from "./encoding";
+import { SemanticIndexIncompatibleError, SemanticIndexNotReadyError } from "./errors";
 import {
   openSemanticIndexReader,
   openSemanticIndexReaderAt,
@@ -23,6 +17,7 @@ import {
 import type { SemanticIndexPaths } from "./index/paths";
 import type { SemanticIndexDatabaseDefinition } from "./index/database";
 import type { EmbeddingProfile } from "./profile";
+import { assembleSemanticArtifactResult, searchSemanticArtifact } from "./read";
 
 const MAX_QUERY_RETRIES = 3;
 
@@ -161,7 +156,6 @@ export function createSemanticQueryService(
 
   return Object.freeze({
     async query(root: StorageRoot, request: QueryRequest): Promise<SemanticQueryResult> {
-      const input = parseQueryRequest(request);
       for (let attempt = 0; attempt < MAX_QUERY_RETRIES; attempt += 1) {
         let reader: Awaited<ReturnType<typeof openSemanticIndexReader>> | undefined;
         try {
@@ -179,16 +173,14 @@ export function createSemanticQueryService(
           // eslint-disable-next-line no-await-in-loop -- delta history is part of the same retry.
           const coverage = await prepareCoverage(store, root, reader.metadata, current);
 
-          let candidates: readonly SemanticCandidate[] = Object.freeze([]);
-          if (reader.hasEligibleVectors(coverage.excludedPracticeIds)) {
-            // eslint-disable-next-line no-await-in-loop -- the model admits one request at a time.
-            const batch = await embedding.embed([input.text]);
-            const [queryVector] = validateEmbeddingBatch(profile, [input.text], batch);
-            if (queryVector === undefined) {
-              throw new SemanticIndexQueryError("Embedding result did not contain a query vector");
-            }
-            candidates = reader.search(queryVector, coverage.excludedPracticeIds, input.limit);
-          }
+          // eslint-disable-next-line no-await-in-loop -- the model admits one request at a time.
+          const candidates = await searchSemanticArtifact({
+            reader,
+            profile,
+            embedding,
+            request,
+            excludedPracticeIds: coverage.excludedPracticeIds,
+          });
 
           const ids = semanticCandidateIds(candidates);
           // eslint-disable-next-line no-await-in-loop -- final read validates this retry's snapshot.
@@ -197,16 +189,11 @@ export function createSemanticQueryService(
             coverage.identity,
             ids,
           );
-          const results = assembleQueryHits(
+          return assembleSemanticArtifactResult({
+            profile,
+            coverage: coverage.coverage,
             practices,
             candidates,
-            (message) => new SemanticIndexQueryError(message),
-          );
-          return Object.freeze({
-            mode: "semantic",
-            profileId: profile.profileId,
-            coverage: coverage.coverage,
-            results,
           });
         } catch (error) {
           if (error instanceof StoreSnapshotChangedError) {

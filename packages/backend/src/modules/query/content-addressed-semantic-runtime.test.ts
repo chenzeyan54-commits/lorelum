@@ -7,7 +7,7 @@ import { createEmbeddingProfile, type EffectivePractice } from "@lorelum/engine"
 
 import { canonicalizePractice } from "../../../../engine/src/local-store/model/canonical-practice";
 
-import { ProjectSemanticRuntime } from "./project-semantic-runtime";
+import { ContentAddressedSemanticRuntime } from "./content-addressed-semantic-runtime";
 import { SemanticOperationJournal } from "./project-operation-journal";
 
 const encodingId = "c".repeat(64);
@@ -39,7 +39,7 @@ test("builds a project semantic artifact during the query wait budget", async ()
       "---\nid: platform.query\ntitle: Project query\nstage: implementation\ntech_stack:\n  - typescript\napplies_when: When querying a project-local Pack.\n---\nUse an incrementally published semantic cache.\n",
     );
     const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
-    const runtime = new ProjectSemanticRuntime(
+    const runtime = new ContentAddressedSemanticRuntime(
       {
         async readEffectivePracticeSnapshot() {
           return {
@@ -79,7 +79,7 @@ test("builds a project semantic artifact during the query wait budget", async ()
     await expect(
       runtime.query(
         { rootPath: join(root, "store") },
-        { projectRoot: root, cacheRoot: cache },
+        { kind: "project", projectRoot: root, cacheRoot: cache },
         { text: "incrementally published cache" },
         { maxWaitMs: 1_000, minCoveragePercent: 0 },
       ),
@@ -122,7 +122,7 @@ test("coalesces rapid edits for one directory to the latest semantic target", as
     const firstBatch = new Promise<void>((resolve) => {
       releaseFirst = resolve;
     });
-    const runtime = new ProjectSemanticRuntime(
+    const runtime = new ContentAddressedSemanticRuntime(
       {
         async readEffectivePracticeSnapshot() {
           return {
@@ -162,7 +162,7 @@ test("coalesces rapid edits for one directory to the latest semantic target", as
         },
       },
     );
-    const request = { projectRoot: root, cacheRoot: cache };
+    const request = { kind: "project" as const, projectRoot: root, cacheRoot: cache };
     await expect(
       runtime.query(
         { rootPath: join(root, "store") },
@@ -237,7 +237,7 @@ ${id}
     });
     let documentCalls = 0;
     const journal = new SemanticOperationJournal(runtime);
-    const service = new ProjectSemanticRuntime(
+    const service = new ContentAddressedSemanticRuntime(
       {
         async readEffectivePracticeSnapshot() {
           return {
@@ -278,7 +278,7 @@ ${id}
     );
     const result = await service.query(
       { rootPath: join(root, "store") },
-      { projectRoot: root, cacheRoot: cache },
+      { kind: "project", projectRoot: root, cacheRoot: cache },
       { text: "persisted progress" },
       { maxWaitMs: 0, minCoveragePercent: 100 },
     );
@@ -317,7 +317,8 @@ test("queries only the 50 current Store Practices published by incremental progr
       releaseSecond = resolve;
     });
     let documentBatches = 0;
-    const runtime = new ProjectSemanticRuntime(
+    let queryEmbeddings = 0;
+    const runtime = new ContentAddressedSemanticRuntime(
       {
         async readEffectivePracticeSnapshot() {
           return {
@@ -343,6 +344,7 @@ test("queries only the 50 current Store Practices published by incremental progr
       {
         maxBatchSize: 1,
         async embed(inputs) {
+          queryEmbeddings += 1;
           return { encodingId, vectors: inputs.map(() => [1, 0]) };
         },
       },
@@ -355,9 +357,9 @@ test("queries only the 50 current Store Practices published by incremental progr
         },
       },
     );
-    const result = await runtime.queryStore(
+    const result = await runtime.query(
       { rootPath: "/isolated/store-progress" },
-      { cacheRoot: cache },
+      { kind: "store", cacheRoot: cache },
       { text: "Store Practice", limit: 50 },
       { maxWaitMs: 1_000, minCoveragePercent: 0 },
     );
@@ -370,8 +372,136 @@ test("queries only the 50 current Store Practices published by incremental progr
     if (!("results" in result)) throw new Error("Expected semantic results");
     expect(result.results).toHaveLength(50);
     expect(result.results.every((item) => Number(item.practiceId.slice(-3)) < 50)).toBe(true);
+    expect(queryEmbeddings).toBe(1);
+    await expect(
+      runtime.query(
+        { rootPath: "/isolated/store-progress" },
+        { kind: "store", cacheRoot: cache },
+        { text: "Store Practice", limit: 50 },
+        { maxWaitMs: 0, minCoveragePercent: 100 },
+      ),
+    ).resolves.toMatchObject({ state: "indexing", indexedPracticeCount: 50 });
+    expect(queryEmbeddings).toBe(1);
     releaseSecond();
     await runtime.waitForIdle();
+  } finally {
+    await rm(cache, { recursive: true, force: true });
+  }
+});
+
+test("uses retained Store revision deltas and safely falls back when later history is unavailable", async () => {
+  const cache = await mkdtemp(join(tmpdir(), "lorelum-backend-store-delta-cache-"));
+  try {
+    const first = Object.freeze([
+      storePractice("platform.unchanged", "Keep this projection"),
+      storePractice("platform.changed", "Original projection"),
+    ]);
+    const second = Object.freeze([
+      first[0]!,
+      storePractice("platform.changed", "Changed projection"),
+    ]);
+    const third = Object.freeze([first[0]!, storePractice("platform.changed", "Third projection")]);
+    let revision = 1;
+    let practices: readonly EffectivePractice[] = first;
+    const deltaReads: number[] = [];
+    let documentEmbeddings = 0;
+    const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
+    const runtime = new ContentAddressedSemanticRuntime(
+      {
+        async readEffectivePracticeSnapshot() {
+          return {
+            identity: {
+              rootBinding: "store-delta",
+              generation: revision,
+              effectiveRevision: revision,
+              manifestDigest: "0".repeat(64),
+            },
+            practices,
+          };
+        },
+        async readEffectivePracticeChanges(_root, afterEffectiveRevision) {
+          deltaReads.push(afterEffectiveRevision);
+          if (afterEffectiveRevision !== 1 || revision !== 2) return undefined;
+          return {
+            identity: {
+              rootBinding: "store-delta",
+              generation: 2,
+              effectiveRevision: 2,
+              manifestDigest: "0".repeat(64),
+            },
+            deltas: [
+              {
+                revision: 2,
+                delta: { added: [], changed: ["platform.changed"], invalidated: [] },
+              },
+            ],
+            // LocalStore deliberately materializes only revision-touched rows.
+            currentPractices: [second[1]!],
+          };
+        },
+      },
+      profile,
+      {
+        maxBatchSize: 8,
+        async embed(inputs) {
+          documentEmbeddings += inputs.filter((input) => input.startsWith("Practice:")).length;
+          return { encodingId, vectors: inputs.map(() => [1, 0]) };
+        },
+      },
+      {
+        maxBatchSize: 1,
+        async embed(inputs) {
+          return { encodingId, vectors: inputs.map(() => [1, 0]) };
+        },
+      },
+      {
+        beginModelPreparation() {
+          throw new Error("model preparation should not be needed");
+        },
+        async waitModelPreparation() {
+          throw new Error("model preparation should not be needed");
+        },
+      },
+    );
+    const root = { rootPath: "/isolated/store-delta" };
+    const target = { kind: "store" as const, cacheRoot: cache };
+    const policy = { maxWaitMs: 1_000, minCoveragePercent: 100 };
+
+    await expect(
+      runtime.query(root, target, { text: "projection" }, policy),
+    ).resolves.toMatchObject({
+      mode: "semantic",
+      coverage: "complete",
+    });
+    expect(documentEmbeddings).toBe(2);
+
+    revision = 2;
+    practices = second;
+    const updated = await runtime.query(root, target, { text: "changed" }, policy);
+    expect(updated).toMatchObject({ mode: "semantic", coverage: "complete" });
+    if (!("results" in updated)) throw new Error("Expected a semantic query result");
+    expect(updated.results.map((result) => result.practiceId)).toContain("platform.changed");
+    expect(deltaReads).toEqual([1]);
+    expect(documentEmbeddings).toBe(3);
+
+    // Revision 3 intentionally has no retained history. The runtime must not
+    // return the copied revision-2 row as the current winner; it falls back to
+    // the generic current-corpus seed and embeds the new projection once.
+    revision = 3;
+    practices = third;
+    const recovered = await runtime.query(root, target, { text: "third" }, policy);
+    expect(recovered).toMatchObject({ mode: "semantic", coverage: "complete" });
+    if (!("results" in recovered)) throw new Error("Expected a semantic query result");
+    expect(recovered.results).toContainEqual(
+      expect.objectContaining({
+        practiceId: "platform.changed",
+        contentDigest: third[1]!.contentDigest,
+      }),
+    );
+    // A bounded predecessor lookup may try the immediately preceding revision
+    // and one older catalog entry before it gives up on unavailable history.
+    expect(deltaReads).toEqual([1, 2, 1]);
+    expect(documentEmbeddings).toBe(4);
   } finally {
     await rm(cache, { recursive: true, force: true });
   }
@@ -400,7 +530,7 @@ test("joins one content-addressed operation for equivalent ordinary directories"
       release = resolve;
     });
     let documentCalls = 0;
-    const runtime = new ProjectSemanticRuntime(
+    const runtime = new ContentAddressedSemanticRuntime(
       {
         async readEffectivePracticeSnapshot() {
           return {
@@ -441,7 +571,7 @@ test("joins one content-addressed operation for equivalent ordinary directories"
     const policy = { maxWaitMs: 0, minCoveragePercent: 100 };
     const firstResult = await runtime.query(
       { rootPath: join(first, "store") },
-      { projectRoot: first, cacheRoot: cache },
+      { kind: "project", projectRoot: first, cacheRoot: cache },
       { text: "shared" },
       policy,
     );
@@ -450,7 +580,7 @@ test("joins one content-addressed operation for equivalent ordinary directories"
     }
     const secondResult = await runtime.query(
       { rootPath: join(second, "store") },
-      { projectRoot: second, cacheRoot: cache },
+      { kind: "project", projectRoot: second, cacheRoot: cache },
       { text: "shared" },
       policy,
     );

@@ -19,6 +19,7 @@
 - [x] 3.2 实现 Store 与 ProjectContext 共用的 semantic progress builder：复用 compatible artifact/vector cache、只为新的 projection embedding，并在每个 batch 用事务发布可查询 progress rows/count；以 Engine/Backend tests 验证 100 条 target 完成 50 条时只查询 50 条、shadowed/ignored source 不编码、layer source 改变排除旧 row、失败保留旧 ready artifact。
 - [x] 3.3 实现同一 project directory 最新 target 合并、相同 content-addressed artifact operation joining 与不同 target 排队，替换 `backend.busy` 正常路径；以并发 integration tests 验证普通目录、多个 Git worktree 和相同语料无关目录都遵循同一规则。
 - [x] 3.4 将 Store-only 与 ProjectContext semantic query/index command 接入 common target progress，安全接入并提交 Backend request 后按 `maxWaitMs` 观察并区分 `waiting-for-source`、`preparing(preparationId)`、无可接受 coverage 的 `indexing(operationId)` 与成功 partial result；`0` 毫秒只表示不额外等待 progress，不得成为 transport deadline。以 protocol tests 验证 indexed/total counts、`--require-complete`、query timeout 不取消 operation、child winner 变更不返回旧 Practice 且不使用 keyword substitute。
+- [x] 3.5 完成 source-neutral runtime review：删除未接入 daemon 的旧 Store operation facade；让 catalog predecessor 只做有界查找；让 Store retained revision delta 在同一 progress builder 中复制并只替换受影响 rows；验证旧 artifact/history 不可信时回退、普通目录和 Store 都走同一 Backend port。
 
 ## 4. Contract synchronization and end-to-end verification
 

@@ -9,7 +9,7 @@ import {
   type ProjectPackConfig,
 } from "@lorelum/config";
 
-import { indexCorpusDigest } from "./cache";
+import { indexCorpusDigest } from "../query/artifacts/cache";
 import type { EffectivePractice } from "../local-store";
 import { loadProjectPack, ProjectPackLoadError } from "./load-pack";
 import {

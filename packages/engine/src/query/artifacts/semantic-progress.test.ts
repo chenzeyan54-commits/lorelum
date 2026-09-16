@@ -3,10 +3,10 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createEmbeddingProfile } from "../query/semantic";
-import { resolveProjectContext } from "./resolver";
-import { ProjectSemanticProgressService } from "./semantic-progress";
-import { semanticVectorCachePaths } from "./cache";
+import { createEmbeddingProfile } from "../semantic";
+import { resolveProjectContext } from "../../project-context/resolver";
+import { ContentAddressedSemanticProgressService } from "./semantic-progress";
+import { contentArtifactVectorCachePaths } from "./cache";
 
 const encodingId = "b".repeat(64);
 
@@ -72,7 +72,7 @@ test("publishes each completed ProjectContext vector batch for partial query bef
         return { encodingId, vectors: inputs.map(() => [1, 0]) };
       },
     };
-    const service = new ProjectSemanticProgressService(
+    const service = new ContentAddressedSemanticProgressService(
       snapshot,
       cache,
       profile,
@@ -121,7 +121,7 @@ test("reuses shared vectors when a new ProjectContext artifact keeps the same pr
     if (first === undefined) throw new Error("Expected ProjectContext");
     const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
     let initialDocumentCalls = 0;
-    await new ProjectSemanticProgressService(first, cache, profile, {
+    await new ContentAddressedSemanticProgressService(first, cache, profile, {
       maxBatchSize: 4,
       async embed(inputs) {
         initialDocumentCalls += inputs.filter((input) => input.startsWith("Practice:")).length;
@@ -151,7 +151,7 @@ test("reuses shared vectors when a new ProjectContext artifact keeps the same pr
     expect(second.indexCorpusDigest).not.toBe(first.indexCorpusDigest);
 
     let secondDocumentCalls = 0;
-    await new ProjectSemanticProgressService(second, cache, profile, {
+    await new ContentAddressedSemanticProgressService(second, cache, profile, {
       maxBatchSize: 4,
       async embed(inputs) {
         secondDocumentCalls += inputs.filter((input) => input.startsWith("Practice:")).length;
@@ -183,7 +183,7 @@ test("shared vectors never cross an embedding Profile or changed semantic projec
     const first = await resolve();
     if (first === undefined) throw new Error("Expected ProjectContext");
     const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
-    await new ProjectSemanticProgressService(first, cache, profile, {
+    await new ContentAddressedSemanticProgressService(first, cache, profile, {
       maxBatchSize: 4,
       async embed(inputs) {
         return { encodingId, vectors: inputs.map(() => [1, 0]) };
@@ -193,7 +193,7 @@ test("shared vectors never cross an embedding Profile or changed semantic projec
     const otherEncodingId = "c".repeat(64);
     const otherProfile = createEmbeddingProfile({ encodingId: otherEncodingId, dimensions: 2 });
     let incompatibleProfileEmbeds = 0;
-    await new ProjectSemanticProgressService(first, cache, otherProfile, {
+    await new ContentAddressedSemanticProgressService(first, cache, otherProfile, {
       maxBatchSize: 4,
       async embed(inputs) {
         incompatibleProfileEmbeds += inputs.filter((input) => input.startsWith("Practice:")).length;
@@ -217,7 +217,7 @@ test("shared vectors never cross an embedding Profile or changed semantic projec
     const changed = await resolve();
     if (changed === undefined) throw new Error("Expected changed ProjectContext");
     let changedProjectionEmbeds = 0;
-    await new ProjectSemanticProgressService(changed, cache, profile, {
+    await new ContentAddressedSemanticProgressService(changed, cache, profile, {
       maxBatchSize: 4,
       async embed(inputs) {
         changedProjectionEmbeds += inputs.filter((input) => input.startsWith("Practice:")).length;
@@ -247,19 +247,19 @@ test("a forced rebuild failure keeps the prior ready artifact queryable", async 
     });
     if (snapshot === undefined) throw new Error("Expected ProjectContext");
     const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
-    await new ProjectSemanticProgressService(snapshot, cache, profile, {
+    await new ContentAddressedSemanticProgressService(snapshot, cache, profile, {
       maxBatchSize: 4,
       async embed(inputs) {
         return { encodingId, vectors: inputs.map(() => [1, 0]) };
       },
     }).build();
-    const vectors = semanticVectorCachePaths(cache);
+    const vectors = contentArtifactVectorCachePaths(cache);
     await Promise.all([
       rm(vectors.database, { force: true }),
       rm(`${vectors.database}-wal`, { force: true }),
       rm(`${vectors.database}-shm`, { force: true }),
     ]);
-    const replacement = new ProjectSemanticProgressService(snapshot, cache, profile, {
+    const replacement = new ContentAddressedSemanticProgressService(snapshot, cache, profile, {
       maxBatchSize: 1,
       async embed() {
         throw new Error("replacement embedding failed");

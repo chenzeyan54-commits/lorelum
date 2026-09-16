@@ -66,8 +66,8 @@ semantic artifact、progress 和 shared vector 都是可删除重建的用户级
 ```text
 ~/.lorelum/cache/
 ├── semantic/v1/vector-cache.sqlite
-└── project-context/v1/
-    ├── project-cache.sqlite
+└── query-artifacts/v1/
+    ├── artifact-cache.sqlite
     └── artifacts/semantic/<artifact-id>/{progress.sqlite,active.sqlite}
 ```
 
