@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
 
 import { chinesePracticeId, type InstalledPacksFixture } from "../fixtures/installed-packs.js";
@@ -41,13 +41,20 @@ export async function verifyGetAndQueryScenario(
     ],
   });
   assert.match(String(firstData.contentDigest), /^[0-9a-f]{64}$/);
-  assert.deepEqual(firstData.sources, [
-    {
-      packName: "integration-pack",
-      sourcePath: "practices/retrieval-demo.md",
-      packRoot: "selected-store",
-    },
-  ]);
+  assert.equal(Array.isArray(firstData.sources), true);
+  const sources = firstData.sources as unknown[];
+  assert.equal(sources.length, 1);
+  const source = sources[0];
+  assert(isRecord(source));
+  assert.equal(source.packName, "integration-pack");
+  assert.equal(source.sourcePath, "practices/retrieval-demo.md");
+  // A Store source exposes the public current view. Resolve both sides so a
+  // symlinked temporary directory (macOS /var -> /private/var) cannot perturb
+  // the comparison; a non-locator value fails realpath outright.
+  assert.equal(
+    await realpath(String(source.packRoot)),
+    await realpath(join(fixture.storageRoot, "packs", "p-integration-pack", "current")),
+  );
 
   const keyword = await runQuery(compiledBinary, "retrieval OR", fixture.storageRoot, 3);
   assert.equal(keyword.exitCode, 0);

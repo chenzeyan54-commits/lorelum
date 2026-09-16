@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -203,6 +203,25 @@ test("query and get use project winners, retain valid neighbors, and keep --no-p
         sources: [{ packRoot: "project-layer-1", sourcePath: "practices/shared.md" }],
       },
     });
+
+    const storeGetFromProject = await invoke([...readGlobals, "get", "store.only"]);
+    expect(storeGetFromProject.exitCode).toBe(0);
+    const storeGetData = storeGetFromProject.response.data as {
+      readonly sources: readonly {
+        readonly packName: string;
+        readonly sourcePath: string;
+        readonly packRoot: string;
+      }[];
+    };
+    expect(storeGetData.sources).toHaveLength(1);
+    const storeSource = storeGetData.sources[0];
+    expect(storeSource).toMatchObject({
+      packName: "stored",
+      sourcePath: "practices/only.md",
+    });
+    expect(await realpath(storeSource!.packRoot)).toBe(
+      await realpath(join(storeRoot, "packs", "p-stored", "current")),
+    );
 
     const storeOnlyQuery = await invoke([
       "--store-root",

@@ -28,6 +28,24 @@ export interface GetCommandServices {
   readonly resolveProjectContext?: ProjectContextResolver;
 }
 
+function sourceKey(packName: string, sourcePath: string): string {
+  return packName + "\0" + sourcePath;
+}
+
+function requiredStorePackRoot(
+  roots: ReadonlyMap<string, string>,
+  packName: string,
+  sourcePath: string,
+): string {
+  const packRoot = roots.get(sourceKey(packName, sourcePath));
+  if (packRoot === undefined) {
+    throw new StoreRecoveryRequiredError(
+      "A Store source has no verified Pack locator in the current Store.",
+    );
+  }
+  return packRoot;
+}
+
 export function createGetCommand(services: GetCommandServices): CommandDefinition {
   return {
     name: "get",
@@ -62,22 +80,36 @@ export function createGetCommand(services: GetCommandServices): CommandDefinitio
               "The requested Practice was not found in the selected query context.",
             );
           }
+          const activeSources = project.sources.filter(
+            (source) => source.status === "active" && source.practiceId === id,
+          );
+          const storeSources = activeSources.filter((source) => source.scope === "store");
+          const storeRoots = new Map<string, string>();
+          if (storeSources.length > 0) {
+            const located = await services.store.getEffectivePracticeWithPackRoots(root, id);
+            if (located === undefined) {
+              throw new StoreRecoveryRequiredError(
+                "A Store source changed before its Pack locator could be read.",
+              );
+            }
+            for (const source of located.sources) {
+              storeRoots.set(sourceKey(source.packName, source.sourcePath), source.packRoot);
+            }
+          }
           return {
             data: {
               practice: practice.practice,
               contentDigest: practice.contentDigest,
-              sources: project.sources
-                .filter((source) => source.status === "active" && source.practiceId === id)
-                .map((source) => ({
-                  packName: source.packName,
-                  sourcePath: source.sourcePath ?? "",
-                  // Project paths remain in the resolver process only. This is
-                  // stable, useful provenance without exposing an absolute directory.
-                  packRoot:
-                    source.scope === "project"
-                      ? `project-layer-${source.layerDepth ?? 0}`
-                      : "selected-store",
-                })),
+              sources: activeSources.map((source) => ({
+                packName: source.packName,
+                sourcePath: source.sourcePath ?? "",
+                // Project paths remain in the resolver process only. This is
+                // stable, useful provenance without exposing an absolute directory.
+                packRoot:
+                  source.scope === "project"
+                    ? `project-layer-${source.layerDepth ?? 0}`
+                    : requiredStorePackRoot(storeRoots, source.packName, source.sourcePath ?? ""),
+              })),
             },
           };
         }
