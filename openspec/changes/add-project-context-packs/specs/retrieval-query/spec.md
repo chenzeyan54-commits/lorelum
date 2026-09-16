@@ -35,7 +35,7 @@
 
 ### Requirement: Semantic retrieval uses a safe Store-scoped index
 
-semantic retrieval SHALL 以 selected query context 和固定 embedding Profile 为边界：未发现或禁用 ProjectContext 时，该 context 是 selected LocalStore；有效项目 context 存在时，它包含所有继承 layer resolver 选择的 current winners。查询 MUST 优先使用与 current snapshot 完全匹配的 complete semantic index。完整 index 缺失、落后、损坏或不兼容时，系统 MUST 提交或加入该 context target 的持久 index operation，而不是返回要求用户预先执行 index 的 `semantic.index-not-ready`。在 `maxWaitMs` 总预算内，系统 MUST 观察该 operation 的模型准备和增量进度。
+semantic retrieval SHALL 以 selected query context 和固定 embedding Profile 为边界：未发现或禁用 ProjectContext 时，该 context 是 selected LocalStore；有效项目 context 存在时，它包含所有继承 layer resolver 选择的 current winners。查询 MUST 优先使用与 current snapshot 完全匹配的 complete semantic index。完整 index 缺失、落后、损坏或不兼容时，系统 MUST 提交或加入该 context target 的持久 index operation，而不是返回要求用户预先执行 index 的 `semantic.index-not-ready`。CLI MUST 先安全完成本地 Backend 接入和 query 提交；Backend 接受请求后，系统 MUST 在 `maxWaitMs` 总预算内观察该 operation 的模型准备和增量进度。
 
 预算结束时，系统 MAY 只从 current target 的已验证 vector rows 查询；每个 row MUST 同时匹配 current Practice ID、content digest、semantic projection digest、Profile 与编码约束。被删除、改变、被其他 winner 替换或不再属于 current snapshot 的 Practice MUST 不参与结果。它 MUST 不以 Store-only、旧 ProjectContext、keyword retrieval 或无法证明兼容的 vector 代替 current target。
 
@@ -63,7 +63,12 @@ semantic retrieval SHALL 以 selected query context 和固定 embedding Profile 
 
 成功的 semantic 或 keyword query SHALL 在 stdout 输出 JSON protocol envelope，其中 results 只包含 Practice summary，不包含完整正文或内部 score；调用方 MUST 使用 `lore get <practice-id>` 读取 current context 的 canonical Practice。complete result 与满足 caller coverage policy 的 partial result MUST 以 exit code 0 结束。semantic partial result MUST 包含 `coverage: "partial"`、`indexedPracticeCount`、`totalPracticeCount` 和 non-terminal operation detail；complete semantic result MUST 包含 `coverage: "complete"` 且 indexed/total counts 相等。
 
-`maxWaitMs` 从 semantic query 完成输入校验后开始，并包含 Backend 启动、共享模型准备、operation joining 与 progress 观察；预算耗尽 MUST 不取消 daemon operation。若 fixed model 的准备仍未完成，命令 MUST 输出 `data.state: "preparing"`、preparationId 和恢复提示，并以 exit code 1 结束。若没有满足 coverage policy 的 queryable progress，命令 MUST 输出 `data.state: "indexing"`、operationId、当前 indexed/total counts 和恢复提示，并以 exit code 1 结束。两种 pending 状态都 MUST 不伪造检索结果。失败 MUST 使用 `ok: false` 的 error envelope 并以 exit code 2 结束。
+`maxWaitMs` 是 Backend 接受 semantic query 后，观察共享模型准备、operation joining 与 progress 的非负整数毫秒预算；它不是本地 Backend 启动、连接、身份校验或一次 query 提交的 transport deadline。值为 `0` MUST 表示不额外等待模型或 progress：命令仍 MUST 安全提交或加入 operation，并返回可用的 complete result、`data.state: "preparing"` 或 `data.state: "indexing"`，而不得返回 `backend.deadline-exceeded`。预算耗尽 MUST 不取消 daemon operation。若 fixed model 的准备仍未完成，命令 MUST 输出 `data.state: "preparing"`、preparationId 和恢复提示，并以 exit code 1 结束。若没有满足 coverage policy 的 queryable progress，命令 MUST 输出 `data.state: "indexing"`、operationId、当前 indexed/total counts 和恢复提示，并以 exit code 1 结束。两种 pending 状态都 MUST 不伪造检索结果。失败 MUST 使用 `ok: false` 的 error envelope 并以 exit code 2 结束。
+
+#### Scenario: Zero observation budget remains usable
+
+- **WHEN** 调用方执行有效 semantic query 并传入 `--max-wait-ms 0`
+- **THEN** CLI MUST 允许本地 Backend 接入和 query 提交；若当前 target 未 ready，它 MUST 返回可观察的 `preparing` 或 `indexing` 状态，若当前 target 已 ready，它 MUST 返回 complete result，且不得将该合法预算映射为 `backend.deadline-exceeded`
 
 #### Scenario: A complete target finishes within the wait budget
 

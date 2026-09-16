@@ -54,16 +54,33 @@ test("publishes each completed ProjectContext vector batch for partial query bef
       releaseSecond = resolve;
     });
     let documentCalls = 0;
-    const service = new ProjectSemanticProgressService(snapshot, cache, profile, {
+    let queryCalls = 0;
+    const documentEmbedding = {
       maxBatchSize: 1,
-      async embed(inputs) {
+      async embed(inputs: readonly string[]) {
         if (inputs.length === 1 && inputs[0]?.startsWith("Practice:")) {
           documentCalls += 1;
           if (documentCalls === 2) await second;
         }
         return { encodingId, vectors: inputs.map(() => [1, 0]) };
       },
-    });
+    };
+    const queryEmbedding = {
+      maxBatchSize: 1,
+      async embed(inputs: readonly string[]) {
+        queryCalls += 1;
+        return { encodingId, vectors: inputs.map(() => [1, 0]) };
+      },
+    };
+    const service = new ProjectSemanticProgressService(
+      snapshot,
+      cache,
+      profile,
+      documentEmbedding,
+      undefined,
+      undefined,
+      queryEmbedding,
+    );
 
     const build = service.build();
     await waitFor(async () => (await service.status()).indexedPracticeCount === 1);
@@ -72,6 +89,7 @@ test("publishes each completed ProjectContext vector batch for partial query bef
       totalPracticeCount: 2,
       result: { coverage: "partial", results: [{ practiceId: "platform.first" }] },
     });
+    expect(queryCalls).toBe(1);
     releaseSecond();
     await expect(build).resolves.toEqual({
       state: "ready",

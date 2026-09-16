@@ -18,7 +18,7 @@ query:
   minCoveragePercent: 0
 ```
 
-`maxWaitMs` 是 `0` 到 `120000` 的整数毫秒；它只限制当前命令观察 Backend、model preparation 和 index progress 的时间，operation 会在后台继续。`minCoveragePercent` 是 `0` 到 `100` 的整数百分比；只要已验证 current progress 达到该值，query 就可以返回带 `coverage: "partial"` 和完成/总数的成功结果。`--max-wait-ms`、`--min-coverage-percent` 覆盖一次命令，`--require-complete` 等价于 `100`，且不能与后者同时使用。
+`maxWaitMs` 是 `0` 到 `120000` 的整数毫秒；Backend 接受 query 后，它只限制当前命令观察 model preparation 和 index progress 的时间，operation 会在后台继续。它不是本地 Backend 启动、连接或 RPC 的 deadline，因此 `0` 表示不额外等待 progress，仍会安全提交或加入 operation，并返回 ready、`preparing` 或 `indexing`。`minCoveragePercent` 是 `0` 到 `100` 的整数百分比；只要已验证 current progress 达到该值，query 就可以返回带 `coverage: "partial"` 和完成/总数的成功结果。`--max-wait-ms`、`--min-coverage-percent` 覆盖一次命令，`--require-complete` 等价于 `100`，且不能与后者同时使用。
 
 配置文件和模型缓存独立于 LocalStore；`--store-root` 不改变它们。
 

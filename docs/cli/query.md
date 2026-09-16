@@ -25,7 +25,7 @@ Parent and child `.lorelum/` layers inherit by default. A child config adds or o
 
 ## Semantic mode
 
-Semantic mode uses the fixed local Profile and the selected current query context. When no complete artifact is available, `query` accepts or joins a content-addressed background index operation itself; callers do not need to run `lore index build` first. The foreground observation budget is `query.maxWaitMs` (default integer `3000` milliseconds, overridable with `--max-wait-ms`); its timeout never cancels the accepted operation.
+Semantic mode uses the fixed local Profile and the selected current query context. When no complete artifact is available, `query` accepts or joins a content-addressed background index operation itself; callers do not need to run `lore index build` first. The foreground observation budget is `query.maxWaitMs` (default integer `3000` milliseconds, overridable with `--max-wait-ms`) after Backend accepts the query; it governs model preparation and index-progress observation, and never cancels the accepted operation. It is not a local Backend connection or RPC deadline: `--max-wait-ms 0` still submits or joins the operation, then returns a ready result or a recoverable `preparing`/`indexing` state.
 
 When the Backend is stopped, a query starts it. When the model is absent or unloaded, Backend records the same operation as `preparing`, starts or joins fixed-model preparation, then continues the build. `--min-coverage-percent` requires a current progress coverage from `0` through `100`; `--require-complete` is the strict `100` percent shortcut and cannot be combined with it.
 

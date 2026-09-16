@@ -121,7 +121,7 @@ Backend 的持久 queue 记录 opaque target/artifact/slot identity、Profile、
 
 queue 不持久化 project absolute path 或 Practice body，因此 daemon 重启后无法也不得扫描任意目录来恢复 ProjectContext source。它保留 progress/vector/operation，将未完成 project target 标记为 `waiting-for-source`；下次从同一 `projectRootId` 执行 query/build/rebuild 时，由当前解析出的 source reattach 并继续。这保留已经完成的批次，同时不留下目录 locator。
 
-`query.maxWaitMs` 和 `query.minCoveragePercent` 属于用户级 config。查询在总毫秒预算内观察 Backend、模型与 progress：complete 则返回 complete；达到 coverage policy 则返回带 indexed/total/operation 的 exit-0 partial；没有可接受 rows 时返回 exit-1 `indexing`；模型未就绪时返回 exit-1 `preparing`。超时不取消 queue。
+`query.maxWaitMs` 和 `query.minCoveragePercent` 属于用户级 config。CLI 必须先安全完成本地 Backend 的连接、身份校验和一次 query 提交；`maxWaitMs` 从 Backend 接受该请求后开始，只限制共享模型准备与 target progress 的前台观察。这样 `0` 是“不要额外等待 progress”，而不是无法完成一次本地 RPC 的即时 deadline。查询在该总毫秒预算内观察模型与 progress：complete 则返回 complete；达到 coverage policy 则返回带 indexed/total/operation 的 exit-0 partial；没有可接受 rows 时返回 exit-1 `indexing`；模型未就绪时返回 exit-1 `preparing`。超时不取消 queue。
 
 ## Risks / Trade-offs
 

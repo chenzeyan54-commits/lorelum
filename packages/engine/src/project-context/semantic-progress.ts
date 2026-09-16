@@ -192,9 +192,10 @@ export class ProjectSemanticProgressService {
     private readonly snapshot: ContentAddressedCorpus,
     private readonly cacheRoot: string,
     private readonly profile: EmbeddingProfile,
-    private readonly embedding: EmbeddingPort,
+    private readonly documentEmbedding: EmbeddingPort,
     private readonly shouldContinue?: () => boolean,
     private readonly onProgress?: (status: ProjectSemanticProgressStatus) => Promise<void>,
+    private readonly queryEmbedding: EmbeddingPort = documentEmbedding,
   ) {}
 
   private get paths() {
@@ -280,13 +281,17 @@ export class ProjectSemanticProgressService {
           const missing = documents(this.snapshot).filter(
             (document) => !completed.has(document.practiceId),
           );
-          for (let start = 0; start < missing.length; start += this.embedding.maxBatchSize) {
+          for (
+            let start = 0;
+            start < missing.length;
+            start += this.documentEmbedding.maxBatchSize
+          ) {
             if (this.shouldContinue !== undefined && !this.shouldContinue()) return this.status();
-            const batch = missing.slice(start, start + this.embedding.maxBatchSize);
+            const batch = missing.slice(start, start + this.documentEmbedding.maxBatchSize);
             // eslint-disable-next-line no-await-in-loop -- each completed batch must be queryable before the next one starts.
             const vectors = await vectorsForBatch(
               this.cacheRoot,
-              this.embedding,
+              this.documentEmbedding,
               this.profile,
               batch,
             );
@@ -354,7 +359,7 @@ export class ProjectSemanticProgressService {
         semanticProgressIndexDatabaseDefinition,
       );
       try {
-        const batch = await this.embedding.embed([input.text]);
+        const batch = await this.queryEmbedding.embed([input.text]);
         const [queryVector] = validateEmbeddingBatch(this.profile, [input.text], batch);
         if (queryVector === undefined)
           throw new SemanticIndexQueryError("Query embedding is missing");

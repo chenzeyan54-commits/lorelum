@@ -260,6 +260,9 @@ export class ProjectSemanticRuntime
       target.cacheRoot,
       this.profile,
       this.documentEmbedding,
+      undefined,
+      undefined,
+      this.queryEmbedding,
     );
   }
 
@@ -359,6 +362,7 @@ export class ProjectSemanticRuntime
             createdAt,
           });
         },
+        this.queryEmbedding,
       );
       const build = () => tracked.build({ force });
       try {
