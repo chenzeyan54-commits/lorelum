@@ -314,6 +314,7 @@ export class ProjectSemanticProgressService {
               filePath: this.progress,
               verified: false,
             });
+            // eslint-disable-next-line no-await-in-loop -- journal progress must commit before the next batch is visible.
             await this.onProgress?.({
               state: "indexing",
               indexedPracticeCount: readSemanticIndexMetadata(connection).vectorCount,
