@@ -63,7 +63,7 @@ lore --version
 
 Expected version: `__RELEASE_VERSION__`.
 
-The Windows installer now detects supported 64-bit Windows reliably, including x64 packages under ARM64 emulation. If it cannot continue, it reports the detected OS, bitness, and PowerShell details. It updates the user `Path` idempotently and treats shell environment broadcasts as best-effort, so Windows PowerShell 5.1 cannot turn an otherwise successful install into a failure.
+The Windows installer now detects supported 64-bit Windows reliably, including x64 packages under ARM64 emulation. If it cannot continue, it reports the detected OS, bitness, and PowerShell details. It updates the user `Path` idempotently and treats shell environment broadcasts as best-effort, so Windows PowerShell 5.1 cannot turn an otherwise successful install into a failure. It also disables PowerShell's expensive download-progress UI while fetching release archives.
 
 ## Upgrade official Packs
 
@@ -96,6 +96,7 @@ alpha.1 could make a normal query feel like error recovery: build an index first
 - **The result describes the context that was actually queried.** Semantic commands give the Backend the command's starting directory, and the Backend resolves and revalidates the final ProjectContext before publishing. This avoids CLI and Backend independently choosing different source layers or reporting mismatched context metadata.
 - **Recover without losing usable results.** Source/context changes are revalidated before publication, rapid edits supersede obsolete work, and a failed rebuild retains the last ready artifact. After a daemon restart, verified progress is retained and a `waiting-for-source` operation reattaches when you run query or index again from the same source.
 - **One bad local source does not block the rest.** A malformed project config, Pack, or single Practice degrades only the affected source. Valid neighbors and lower-priority fallbacks remain available; use `lore context status` to inspect warnings and `lore validate` for strict diagnostics.
+- **Upgrades no longer need to interrupt another task blindly.** If a semantic command finds an authenticated Backend from another Lorelum build or protocol, it returns structured recovery information. The supported Lorelum Agent only runs `lore backend stop --if-idle` and retries after the Backend is proven idle; active or unknown work is left untouched and can continue.
 
 `lore pack install` now commits the canonical Pack before derived-index synchronization. If model preparation or indexing is still running, installation succeeds with `indexSync.state: "pending"` and an operation ID. A failed derived sync does not roll back an installed Pack; it returns a stable recovery state instead.
 
@@ -132,6 +133,14 @@ Knowledge Packs can now ship on-demand `references/`, reusable `assets/`, and ex
 
 ## Other breaking changes
 
+### Backend compatibility errors and Agent recovery changed
+
+**Who is affected:** scripts, host integrations, and Agents that previously classified a local lifecycle mismatch as `backend.incompatible`.
+
+When a verified local Backend belongs to another Lorelum build or protocol, lifecycle failures now use `backend.build-mismatch` or `backend.protocol-mismatch` instead of the generic `backend.incompatible` code. Query failures include machine-readable `error.recovery` fields for the action, automation policy, reason, and retry behavior.
+
+Automation must consume that structured recovery data rather than parse the message, ask users to kill a process, or call ordinary `lore backend stop` autonomously. `lore backend stop --if-idle` is the narrow supported Agent action: it stops only a proven-idle, verified Lorelum Backend. Model preparation, semantic indexing, another Agent lease, and unknown activity are deferred without interrupting that work.
+
 ### ProjectContext changes the default retrieval corpus
 
 **Who is affected:** users and automation that run `lore query`, `lore get`, or `lore index` from a directory under `.lorelum/`.
@@ -166,9 +175,10 @@ Those consumers must accept the new required `packRoot` field. It is the support
 
 ## Fixes and reliability improvements
 
-- `lore backend stop` can now safely stop a verified, protocol-compatible Backend started by an older CLI build. Other operations remain build-strict.
+- After an upgrade, `lore backend stop` can safely release a verified older Backend even when its protocol no longer matches. Supported Agents use the stricter `--if-idle` handoff only when structured recovery proves the Backend is idle; active or unknown work is never stopped automatically.
 - Pack resource locators now use a stable readable `current` view and are repaired safely for compatible older Stores.
-- The Windows installer now gives actionable platform diagnostics, manages the user `Path` when necessary, and does not report a failed install solely because an optional environment-change notification fails in Windows PowerShell 5.1.
+- On Windows, index publication and LocalStore recovery now release Lorelum-owned SQLite statements before replacing a database file, avoiding false failures caused by a retained file handle.
+- The Windows installer now gives actionable platform diagnostics, manages the user `Path` when necessary, avoids slow archive downloads caused by PowerShell progress rendering, and does not report a failed install solely because an optional environment-change notification fails in Windows PowerShell 5.1.
 - A valid `--max-wait-ms 0` no longer becomes a transport deadline failure. Concurrent semantic targets are queued, source changes are revalidated before publication, and failed builds preserve a previously ready artifact.
 
 ## Downloads
