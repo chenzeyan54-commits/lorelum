@@ -97,6 +97,18 @@ test("discovers the supported Pack lifecycle and catalog commands", () => {
   expect(list.errorCodes).toContain("pack.not-installed");
 });
 
+test("describes query-context commands without reducing them to Store-only behavior", () => {
+  const query = describeCommand("query") as { summary: string };
+  const indexBuild = describeCommand("index.build") as { summary: string };
+  const indexRebuild = describeCommand("index.rebuild") as { summary: string };
+  const indexStatus = describeCommand("index.status") as { summary: string };
+
+  expect(query.summary).toBe("Find current Practices by semantic or keyword relevance.");
+  expect(indexBuild.summary).toBe("Build a semantic index for the selected query context.");
+  expect(indexRebuild.summary).toBe("Replace the selected query context's semantic index.");
+  expect(indexStatus.summary).toBe("Report the selected query context's semantic index status.");
+});
+
 test("rejects command metadata that omits framework errors or exit codes", () => {
   expect(() =>
     snapshotCommandDefinitions([{ ...futureCommand, errorCodes: [cliErrorCodes.usageInvalid] }]),

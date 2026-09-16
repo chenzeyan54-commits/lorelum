@@ -66,7 +66,7 @@ bun packages/cli/src/main.ts --store-root "$(git rev-parse --path-format=absolut
 bun packages/cli/src/main.ts --store-root "$(git rev-parse --path-format=absolute --git-path lorelum/dev-store)" query "responsibility boundary"
 ```
 
-The Backend and model are user-level resources; the explicit Store root selects only Pack data and its derived index. Stop a test Backend with `bun packages/cli/src/main.ts backend stop` when the check is complete.
+The Backend and model are user-level resources. The explicit Store root selects Pack base data, while `--cache-root` selects derived query artifacts. Stop a test Backend with `bun packages/cli/src/main.ts backend stop` when the check is complete.
 
 ### Source entrypoint and human helper
 
@@ -201,8 +201,8 @@ const result = await queryService.query(
 
 `text` is trimmed, must not be empty, and is limited to 4,096 Unicode code points. `limit` defaults to `5` and must be an integer from `1` to `50`. The result has `mode: "keyword"` and `results` containing `practiceId`, `title`, `stage`, `techStack`, `appliesWhen`, `severity`, and `contentDigest`; it does not include full bodies or internal scores. Invalid requests throw `InvalidQueryRequestError`. FTS5 runtime failures throw `KeywordIndexUnavailableError` or `KeywordIndexError`; callers at protocol boundaries translate these types to their own error codes. This is the Engine-only keyword use case used by CLI `--mode keyword`.
 
-QueryService keeps its public request/result contract local, but reuses a derived FTS5 SQLite index under the selected Store root across CLI processes. It binds that index to a verified effective revision, updates it from LocalStore's retained revision deltas, and rebuilds only when the index or its history cannot be trusted. Canonical Store rows remain the source of returned summaries; QueryService does not expose SQLite handles.
+For Store-only keyword retrieval, QueryService reuses a derived FTS5 SQLite index under the selected Store root across CLI processes. It binds that index to a verified effective revision, updates it from LocalStore's retained revision deltas, and rebuilds only when the index or its history cannot be trusted. ProjectContext keyword retrieval instead uses a content-addressed FTS5 artifact in the user cache. Canonical Store rows or project files remain the source of returned summaries; QueryService does not expose SQLite handles.
 
-Semantic query is a separate Engine use case composed inside the local Backend with the fixed Profile and the already loaded model. It reads one active semantic-index connection per request, verifies the selected Store snapshot, and returns `complete` or safely reduced `partial` coverage. CLI must route semantic requests through that Backend; Engine must not import the Backend client. See [Query](../cli/query.md) for lifecycle and CLI behavior.
+Semantic query is a separate Engine use case composed inside the local Backend with the fixed Profile and the already loaded model. It reads a content-addressed complete artifact or verified progress for the selected Store-only or ProjectContext snapshot, and returns `complete` or safely reduced `partial` coverage. CLI must route semantic requests through that Backend; Engine must not import the Backend client. See [Query](../cli/query.md) for lifecycle and CLI behavior.
 
 全局配置基础包是 `packages/config`，CLI、Engine 和 backend 可直接依赖它；它不依赖服务进程。各包自己的 config 模块负责 section schema 与业务默认值。共享文件初始化由应用组装层触发，不能放进某个消费方的读取函数。详见[配置包边界](../configuration/README.md#包边界与直接读取)。

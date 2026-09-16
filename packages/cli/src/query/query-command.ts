@@ -220,7 +220,7 @@ function queryRemoteErrorMessage(code: (typeof backendRemoteErrorCodes)[number])
 export function createQueryCommand(services: QueryCommandServices): CommandDefinition {
   return {
     name: "query",
-    summary: "Find installed Practices by semantic or keyword relevance.",
+    summary: "Find current Practices by semantic or keyword relevance.",
     positionals: [{ name: "text", required: true }],
     options: [
       {

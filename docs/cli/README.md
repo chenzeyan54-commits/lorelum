@@ -8,7 +8,7 @@ Lorelum CLI 的普通机器接口是单行 JSON envelope。成功输出包含 `c
 
 - [Backend 控制](backend.md)：启动、状态、停止本地 backend。
 - [Model 生命周期](model.md)：准备、加载、状态、卸载 embedding 模型。
-- [Semantic index](index.md)：查看、构建或替换某个 Store 的 semantic index。
+- [Semantic index](index.md)：查看、构建或替换当前 query context 的 semantic artifact。
 - [Query](query.md)：默认使用本地 semantic query；`--mode keyword` 保留离线 keyword query。
 - `lore cache status` / `lore cache prune`：查看或显式清理用户级、可重建的 query cache；不会扫描或修改项目源文件。
 - [Get](get.md)：读取一个已安装 Practice。

@@ -6,10 +6,10 @@ description: 为 AI coding task 和 moment 找到合适的已安装 Practice。
 `query` 搜索当前 query context，返回按相关性排序的 Practice 摘要。默认使用 semantic relevance；`keyword` 是明确指定的离线路径。当前目录或父目录有 `.lorelum/` 时，context 会按父到子继承并合并；`--no-project` 强制只使用 Store。
 
 ```sh
-lore query <text> [--mode semantic|keyword] [--top-k <n>] [--store-root <path>] [--cache-root <path>]
+lore query <text> [--mode semantic|keyword] [--top-k <n>] [--store-root <path>] [--project-root <path>] [--no-project] [--cache-root <path>]
 ```
 
-`text` 必填，去除首尾空白后不能为空，最多 4,096 个 Unicode 码点。`--top-k` 接受 1–50 的整数，默认 5。`--mode` 可选 `semantic`（默认）或 `keyword`。`--store-root` 选择 Store 基础语料，`--cache-root` 选择用户级派生 cache（默认 `~/.lorelum/cache`），不会写入项目目录；`--max-wait-ms` 与 `--min-coverage-percent` 覆盖用户级等待/partial 策略，`--require-complete` 只接受完整结果。
+`text` 必填，去除首尾空白后不能为空，最多 4,096 个 Unicode 码点。`--top-k` 接受 1–50 的整数，默认 5。`--mode` 可选 `semantic`（默认）或 `keyword`。`--store-root` 选择 Store 基础语料，`--project-root` 选择直接包含 `.lorelum/` 的目录，`--cache-root` 选择用户级派生 cache（默认 `~/.lorelum/cache`），不会写入项目目录；`--max-wait-ms` 与 `--min-coverage-percent` 覆盖用户级等待/partial 策略，`--require-complete` 只接受完整结果。
 
 ```sh
 lore query "我将为一个小型 UI 改动定义范围和验证方式"

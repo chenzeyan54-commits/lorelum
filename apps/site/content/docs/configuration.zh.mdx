@@ -15,7 +15,7 @@ lore --store-root /path/to/store pack install agentic-coding
 lore --store-root /path/to/store query "认证改动应该怎样验证？"
 ```
 
-安装、index、query 和 `get` 应使用同一个 Store root。这个选项只选择 Pack 数据与派生 index，不会改变模型、缓存、Backend 地址或 runtime 目录。
+安装、index、query 和 `get` 应使用同一个 Store root。这个选项只选择 Store 中的 Pack 数据，不会改变 query cache、模型、模型缓存、Backend 地址或 runtime 目录。
 
 ## Query cache 与等待策略
 

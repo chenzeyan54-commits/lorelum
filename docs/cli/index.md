@@ -19,7 +19,7 @@ lore --store-root /path/to/store index status
 
 空 Store 可以直接 `index build`；它会启动 Backend 来执行 Engine 用例，但不会请求或加载模型。对非空 Store，build/rebuild 会自动准备模型，但前台只短暂观察 operation。下载还在进行时，返回 `preparing` 或 `building` 加 operation ID；用 `lore index operation <operation-id>` 查看最终状态。它们不会因为 Store 内容变化自行启动。
 
-`index build` 在 index 已经 ready 时不重复编码。index 过期时，它优先读取 LocalStore 的连续变更记录：新增或语义投影变化的 Practice 才会重新编码；删除和只影响 Store metadata 的变化不请求模型。变更历史缺失、index 不兼容或无法安全复用时，才回退到完整构建。
+`index build` 在 index 已经 ready 时不重复编码。Store-only context 优先读取 LocalStore 的连续变更记录；ProjectContext 则复用相同最终语料的 artifact 和相同 projection 的 vector。两条路径都只为新增或语义投影变化的 Practice 请求 embedding；删除、shadowed、ignored 或只影响 metadata 的变化不请求模型。历史缺失、index 不兼容或无法安全复用时，才回退到完整构建。
 
 需要明确放弃已有 index 并强制完整重建时使用：
 
@@ -37,7 +37,7 @@ lore --store-root /path/to/store index operation <operation-id>
 
 ## 状态
 
-`lore index status` 不调用模型，只读取选中 Store 的 active index metadata：
+`lore index status` 不调用模型，只读取当前 query context 的 complete artifact 和 progress metadata：
 
 | `state` | 含义 |
 | --- | --- |
@@ -80,9 +80,9 @@ canonical Practice 仍在 LocalStore 或项目 layer source；artifact 不是正
 | Code | 含义和处理 |
 | --- | --- |
 | `backend.*` | 自动启动未能安全完成，或 Backend 在操作中断开；检查 `lore backend ...`。 |
-| `backend.operation-expired` | 该 operation 属于已经退出的 daemon；查看 `index status` 后按需重新 build。 |
+| `backend.operation-expired` | 找不到该 operation 的持久记录；查看 `index status` 后按当前 context 再次 build。未完成且保留记录的 operation 重启后会显示为 `waiting-for-source`，并在下次同一 source command 时 reattach。 |
 | `embedding.*` | 自动准备被禁用、失败或无法继续；查看 `lore model status`，修复后用 `lore model load` 重试。 |
-| `embedding.busy`、`backend.busy` | Backend 正在处理模型或另一条 index build；等待后重试。 |
+| `embedding.busy`、`backend.busy` | Backend 仍在启动、停止或处理模型状态转换；等待该状态收敛后重试。不同 index target 会被排队而不是因此返回 `backend.busy`。 |
 | `store.busy`、`store.recovery-required` | Store 正在变更或需要恢复；等待变更完成，或先修复 Store 后再重试。 |
 | `embedding.failed`、`backend.failed` | 模型或构建失败；查看 `lore model status`，修复后显式 build，必要时 rebuild。 |
 
@@ -90,4 +90,4 @@ canonical Practice 仍在 LocalStore 或项目 layer source；artifact 不是正
 
 `lore pack install` 在 canonical Pack commit 成功后，会对同一个 `--store-root` 提交普通 `index build`。在短观察期内 ready 时，`indexSync.state` 为 `ready`；下载或索引仍在继续时，它为 `pending`，并携带 operation ID 和 phase。它会复用 Engine 的 no-op 或增量规则，不会强制 rebuild。
 
-若 Backend busy、自动下载失败或 index 发布失败，Pack 仍已安装，`pack install` 仍返回 `ok: true`，但 `data.indexSync.state` 是 `failed` 并给出稳定错误码和恢复提示。调用方依赖 semantic query 时必须检查 `ready`/`pending`/`failed`；显式 `index build` 可以在资源恢复后重试。若 daemon 重启后查询旧 operation ID，`lore index operation <operation-id>` 返回 `backend.operation-expired`；检查 `index status` 后按需重新 build。v1 不提供 Hybrid、多个 Profile、自动重建或 daemon 重启后的后台补偿。
+若 Backend 启动失败、自动下载失败或 index 发布失败，Pack 仍已安装，`pack install` 仍返回 `ok: true`，但 `data.indexSync.state` 是 `failed` 并给出稳定错误码和恢复提示。调用方依赖 semantic query 时必须检查 `ready`/`pending`/`failed`；显式 `index build` 可以在资源恢复后重试。持久的非终态 operation 在 daemon restart 后保留已验证 progress；ProjectContext 下会等待下一次同 source query/build/rebuild 安全 reattach，不会扫描或记录项目绝对路径。

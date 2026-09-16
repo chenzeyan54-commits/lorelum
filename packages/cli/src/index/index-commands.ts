@@ -227,9 +227,9 @@ function storeCliError(code: (typeof indexOperationStoreErrorCodes)[number]): Cl
 
 export function createIndexCommands(services: IndexCommandServices): readonly CommandDefinition[] {
   return Object.freeze([
-    command("status", "Report the selected Store's semantic index status.", services),
-    command("build", "Build a semantic index for the selected Store.", services),
-    command("rebuild", "Replace the selected Store's semantic index.", services),
+    command("status", "Report the selected query context's semantic index status.", services),
+    command("build", "Build a semantic index for the selected query context.", services),
+    command("rebuild", "Replace the selected query context's semantic index.", services),
     command("operation", "Report a semantic index operation.", services),
   ]);
 }
