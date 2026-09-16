@@ -1,5 +1,6 @@
 import {
   createBackendRuntimeCoordinator,
+  type BackendRuntimeCoordinator,
   type RuntimeWaitOptions,
 } from "@lorelum/backend/coordination";
 import type { BackendQueryRequest } from "@lorelum/backend/client";
@@ -13,7 +14,7 @@ import type { OutputWriter } from "../output/protocol";
 export interface QueryPreparingResult {
   readonly state: "preparing";
   readonly preparationId: string;
-  readonly message: string;
+  readonly message?: string;
 }
 
 export type SemanticRuntimeResult = BackendQueryResult | QueryPreparingResult;
@@ -22,16 +23,24 @@ export interface SemanticRuntimeClient {
   query(root: StorageRoot, request: BackendQueryRequest): Promise<SemanticRuntimeResult>;
 }
 
+export type SemanticRuntimeCoordinator = Pick<
+  BackendRuntimeCoordinator,
+  "connect" | "beginModelPreparation" | "observeModelPreparation"
+>;
+
+const DEFAULT_MODEL_PREPARATION_OBSERVATION_MS = 3_000;
+
 /** CLI owns the transient query result; Backend owns the shared preparation lifetime. */
-export async function createProcessSemanticRuntimeClient(writer: OutputWriter = process.stderr) {
-  const coordinator = createBackendRuntimeCoordinator({
-    connect: createProcessBackendClient,
-    start: async () => (await createProcessBackendSupervisor()).start(),
-  });
+export function createSemanticRuntimeClient(
+  coordinator: SemanticRuntimeCoordinator,
+  writer: OutputWriter = process.stderr,
+): SemanticRuntimeClient {
   const onProgress = createRuntimeProgressReporter(writer);
-  const wait: RuntimeWaitOptions = { onProgress };
   return {
     async query(root: StorageRoot, request: BackendQueryRequest) {
+      const wait: RuntimeWaitOptions = {
+        onProgress,
+      };
       const client = await coordinator.connect(wait);
       try {
         return await client.query(root, { ...request, mode: "semantic" });
@@ -41,7 +50,12 @@ export async function createProcessSemanticRuntimeClient(writer: OutputWriter = 
       }
 
       const preparation = await coordinator.beginModelPreparation(client, wait);
-      const observed = await coordinator.observeModelPreparation(client, preparation, wait, 1_000);
+      const observed = await coordinator.observeModelPreparation(
+        client,
+        preparation,
+        wait,
+        request.maxWaitMs ?? DEFAULT_MODEL_PREPARATION_OBSERVATION_MS,
+      );
       if (observed.status.state === "ready") {
         return client.query(root, { ...request, mode: "semantic" });
       }
@@ -56,4 +70,12 @@ export async function createProcessSemanticRuntimeClient(writer: OutputWriter = 
       throw new EmbeddingError(observed.status.error ?? "embedding.failed");
     },
   } satisfies SemanticRuntimeClient;
+}
+
+export async function createProcessSemanticRuntimeClient(writer: OutputWriter = process.stderr) {
+  const coordinator = createBackendRuntimeCoordinator({
+    connect: createProcessBackendClient,
+    start: async () => (await createProcessBackendSupervisor()).start(),
+  });
+  return createSemanticRuntimeClient(coordinator, writer);
 }

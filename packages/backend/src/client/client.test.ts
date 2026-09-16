@@ -1,17 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { SemanticIndexNotReadyError } from "@lorelum/engine";
-import type {
-  QueryRequest,
-  QueryService,
-  SemanticQueryService,
-  StorageRoot,
-} from "@lorelum/engine";
+import type { QueryRequest, QueryService, StorageRoot } from "@lorelum/engine";
 
 import { createBackendApp } from "../app";
 import { createEmbeddingService, type EmbeddingService } from "../modules/embedding/service";
 import { createBackendService } from "../modules/backend/service";
-import type { IndexOperationService } from "../modules/index/operation-service";
 import type { InstanceIdentity } from "../protocol/identity";
 import { BackendRemoteError } from "../protocol/errors";
 import { EmbeddingError } from "../modules/embedding/errors";
@@ -19,6 +12,8 @@ import { EMBEDDING_MODEL, ENCODING_ID } from "../modules/embedding/model";
 import { PROTOCOL_VERSION } from "../protocol/constants";
 import { DEFAULT_BACKEND_SETTINGS } from "../config/model";
 import { createBackendClient } from "./client";
+import { createContentAddressedSemanticRuntimeStub } from "../modules/query/content-addressed-semantic-runtime.test-helper";
+import type { ContentAddressedSemanticRuntimePort } from "../modules/query/content-addressed-semantic-runtime";
 
 const identity = Object.freeze({
   instanceId: "test-instance",
@@ -36,8 +31,7 @@ function runningApp(
   keywordQueryService?: QueryService,
   backendIdentity: InstanceIdentity = identity,
   embedding?: EmbeddingService,
-  indexOperations?: IndexOperationService,
-  semanticQueryService?: SemanticQueryService,
+  semanticRuntime: ContentAddressedSemanticRuntimePort = createContentAddressedSemanticRuntimeStub(),
 ): {
   readonly app: ReturnType<typeof createBackendApp>;
   readonly url: string;
@@ -47,24 +41,11 @@ function runningApp(
       return { mode: "keyword", results: [] } as const;
     },
   };
-  const semantic =
-    semanticQueryService ??
-    ({
-      async query() {
-        return {
-          mode: "semantic",
-          profileId: "a".repeat(64),
-          coverage: "complete",
-          results: [],
-        } as const;
-      },
-    } satisfies SemanticQueryService);
   const app = createBackendApp({
     backend: createBackendService({ identity: backendIdentity, secret, onStop: () => undefined }),
     ...(embedding === undefined ? {} : { embedding }),
-    ...(indexOperations === undefined ? {} : { indexOperations }),
     keywordQueryService: keywordService,
-    semanticQueryService: semantic,
+    semanticRuntime,
   });
   apps.push(app);
   app.listen({ hostname: "127.0.0.1", port: 0, maxRequestBodySize: 65_536 });
@@ -432,18 +413,29 @@ describe("createBackendClient", () => {
 
   test("uses the authenticated semantic index operation contract", async () => {
     const operationId = "0f8fad5b-d9cb-469f-a165-70867728950e";
-    const indexOperations: IndexOperationService = {
-      status: async () => ({ state: "missing", profileId: "a".repeat(64) }),
-      build: () => ({ operationId, state: "building" }),
-      rebuild: () => ({ operationId, state: "building" }),
-      operation: () => ({
-        operationId,
-        state: "ready",
-        index: { state: "ready", profileId: "a".repeat(64), vectorCount: 1 },
+    const { url } = runningApp(
+      undefined,
+      identity,
+      undefined,
+      createContentAddressedSemanticRuntimeStub({
+        async indexStatus() {
+          return { state: "missing", profileId: "a".repeat(64) };
+        },
+        async build() {
+          return { operationId, state: "building" };
+        },
+        async rebuild() {
+          return { operationId, state: "building" };
+        },
+        async indexOperation() {
+          return {
+            operationId,
+            state: "ready",
+            index: { state: "ready", profileId: "a".repeat(64), vectorCount: 1 },
+          };
+        },
       }),
-      waitForIdle: async () => undefined,
-    };
-    const { url } = runningApp(undefined, identity, undefined, indexOperations);
+    );
     const client = createBackendClient({
       identity,
       secret,
@@ -468,14 +460,16 @@ describe("createBackendClient", () => {
 
   test("reports an index operation lost after a daemon restart as expired", async () => {
     const operationId = "0f8fad5b-d9cb-469f-a165-70867728950e";
-    const indexOperations: IndexOperationService = {
-      status: async () => ({ state: "missing", profileId: "a".repeat(64) }),
-      build: () => ({ operationId, state: "building" }),
-      rebuild: () => ({ operationId, state: "building" }),
-      operation: () => undefined,
-      waitForIdle: async () => undefined,
-    };
-    const { url } = runningApp(undefined, identity, undefined, indexOperations);
+    const { url } = runningApp(
+      undefined,
+      identity,
+      undefined,
+      createContentAddressedSemanticRuntimeStub({
+        async indexOperation() {
+          return undefined;
+        },
+      }),
+    );
     const client = createBackendClient({
       identity,
       secret,
@@ -508,17 +502,22 @@ test("rejects a mismatched protocol before sending control or model requests", a
 
 test("round-trips semantic query metadata", async () => {
   const calls: unknown[] = [];
-  const { url } = runningApp(undefined, identity, undefined, undefined, {
-    async query(_root: StorageRoot, request: QueryRequest) {
-      calls.push(request);
-      return {
-        mode: "semantic",
-        profileId: "b".repeat(64),
-        coverage: "complete" as const,
-        results: [],
-      };
-    },
-  });
+  const { url } = runningApp(
+    undefined,
+    identity,
+    undefined,
+    createContentAddressedSemanticRuntimeStub({
+      async query(_root: StorageRoot, _target, request: QueryRequest) {
+        calls.push(request);
+        return {
+          mode: "semantic",
+          profileId: "b".repeat(64),
+          coverage: "complete" as const,
+          results: [],
+        };
+      },
+    }),
+  );
   const client = createBackendClient({
     identity,
     secret,
@@ -538,11 +537,16 @@ test("round-trips semantic query metadata", async () => {
 });
 
 test("preserves semantic index errors through the client boundary", async () => {
-  const { url } = runningApp(undefined, identity, undefined, undefined, {
-    async query() {
-      throw new SemanticIndexNotReadyError();
-    },
-  });
+  const { url } = runningApp(
+    undefined,
+    identity,
+    undefined,
+    createContentAddressedSemanticRuntimeStub({
+      async query() {
+        throw new (await import("@lorelum/engine")).SemanticIndexNotReadyError();
+      },
+    }),
+  );
   const client = createBackendClient({
     identity,
     secret,

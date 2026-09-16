@@ -97,6 +97,18 @@ test("discovers the supported Pack lifecycle and catalog commands", () => {
   expect(list.errorCodes).toContain("pack.not-installed");
 });
 
+test("describes query-context commands without reducing them to Store-only behavior", () => {
+  const query = describeCommand("query") as { summary: string };
+  const indexBuild = describeCommand("index.build") as { summary: string };
+  const indexRebuild = describeCommand("index.rebuild") as { summary: string };
+  const indexStatus = describeCommand("index.status") as { summary: string };
+
+  expect(query.summary).toBe("Find current Practices by semantic or keyword relevance.");
+  expect(indexBuild.summary).toBe("Build a semantic index for the selected query context.");
+  expect(indexRebuild.summary).toBe("Replace the selected query context's semantic index.");
+  expect(indexStatus.summary).toBe("Report the selected query context's semantic index status.");
+});
+
 test("rejects command metadata that omits framework errors or exit codes", () => {
   expect(() =>
     snapshotCommandDefinitions([{ ...futureCommand, errorCodes: [cliErrorCodes.usageInvalid] }]),
@@ -256,6 +268,21 @@ test("describes registered commands from a single registry", () => {
         name: "--store-root <path>",
         scope: "global",
       },
+      {
+        behavior: "project-root",
+        name: "--project-root <path>",
+        scope: "global",
+      },
+      {
+        behavior: "no-project",
+        name: "--no-project",
+        scope: "global",
+      },
+      {
+        behavior: "cache-root",
+        name: "--cache-root <path>",
+        scope: "global",
+      },
     ],
     commands: [
       {
@@ -269,6 +296,10 @@ test("describes registered commands from a single registry", () => {
               "pack.update",
               "pack.remove",
               "get",
+              "init",
+              "context.status",
+              "cache.status",
+              "cache.prune",
               "query",
               "pack.list",
               "backend.start",
@@ -295,6 +326,10 @@ test("describes registered commands from a single registry", () => {
       { name: "pack.update", positionals: [{ name: "pack[@version]", required: true }] },
       { name: "pack.remove", positionals: [{ name: "pack", required: true }] },
       { name: "get", positionals: [{ name: "practice-id", required: true }] },
+      { name: "init", positionals: [] },
+      { name: "context.status", positionals: [] },
+      { name: "cache.status", positionals: [] },
+      { name: "cache.prune", positionals: [] },
       { name: "query", positionals: [{ name: "text", required: true }] },
       { name: "pack.list", positionals: [{ name: "pack", required: false }] },
       { name: "backend.start" },
@@ -363,6 +398,10 @@ test("derives parser options and describe metadata from registered commands", as
           "pack.update",
           "pack.remove",
           "get",
+          "init",
+          "context.status",
+          "cache.status",
+          "cache.prune",
           "query",
           "pack.list",
           "backend.start",

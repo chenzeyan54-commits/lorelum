@@ -42,7 +42,11 @@ export async function verifyGetAndQueryScenario(
   });
   assert.match(String(firstData.contentDigest), /^[0-9a-f]{64}$/);
   assert.deepEqual(firstData.sources, [
-    { packName: "integration-pack", sourcePath: "practices/retrieval-demo.md" },
+    {
+      packName: "integration-pack",
+      sourcePath: "practices/retrieval-demo.md",
+      packRoot: "selected-store",
+    },
   ]);
 
   const keyword = await runQuery(compiledBinary, "retrieval OR", fixture.storageRoot, 3);

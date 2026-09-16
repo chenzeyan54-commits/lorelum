@@ -19,8 +19,18 @@ export async function verifyListPacksScenario(
   assert.equal(listed.exitCode, 0);
   assert.equal(listed.stderr, "");
   assert.deepEqual(requireSuccessData(parseSingleResponse(listed.stdout), "pack.list").packs, [
-    { name: "integration-pack", version: "1.0.0", practiceCount: 2 },
-    { name: "minimal-pack", version: "1.0.0", practiceCount: 1 },
+    {
+      name: "integration-pack",
+      version: "1.0.0",
+      packRoot: join(fixture.storageRoot, "packs", "p-integration-pack", "current"),
+      practiceCount: 2,
+    },
+    {
+      name: "minimal-pack",
+      version: "1.0.0",
+      packRoot: join(fixture.storageRoot, "packs", "p-minimal-pack", "current"),
+      practiceCount: 1,
+    },
   ]);
 
   const details = await runList(compiledBinary, fixture.storageRoot, { details: true });
@@ -30,10 +40,16 @@ export async function verifyListPacksScenario(
     {
       name: "integration-pack",
       version: "1.0.0",
+      packRoot: join(fixture.storageRoot, "packs", "p-integration-pack", "current"),
       description: "Process integration fixture.",
       appliesTo: ["bun", "typescript"],
     },
-    { name: "minimal-pack", version: "1.0.0", appliesTo: [] },
+    {
+      name: "minimal-pack",
+      version: "1.0.0",
+      packRoot: join(fixture.storageRoot, "packs", "p-minimal-pack", "current"),
+      appliesTo: [],
+    },
   ]);
 
   const catalog = await runList(compiledBinary, fixture.storageRoot, {
@@ -42,7 +58,11 @@ export async function verifyListPacksScenario(
   assert.equal(catalog.exitCode, 0);
   assert.equal(catalog.stderr, "");
   const catalogData = requireSuccessData(parseSingleResponse(catalog.stdout), "pack.list");
-  assert.deepEqual(catalogData.pack, { name: "integration-pack", version: "1.0.0" });
+  assert.deepEqual(catalogData.pack, {
+    name: "integration-pack",
+    version: "1.0.0",
+    packRoot: join(fixture.storageRoot, "packs", "p-integration-pack", "current"),
+  });
   assert(Array.isArray(catalogData.practices));
   assert(
     catalogData.practices.some(
