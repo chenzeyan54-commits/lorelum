@@ -188,7 +188,11 @@ function throwVisibleQueryError(error: unknown): never {
   if (error instanceof CliError) throw error;
   if (error instanceof InvalidQueryRequestError) throw invalidInvocationError();
   if (error instanceof BackendError || error instanceof EmbeddingError) {
-    throw new CliError(error.code, error.message);
+    throw new CliError(
+      error.code,
+      error.message,
+      error instanceof BackendError ? error.recovery : undefined,
+    );
   }
   if (error instanceof BackendRemoteError) {
     throw new CliError(error.code, queryRemoteErrorMessage(error.code));

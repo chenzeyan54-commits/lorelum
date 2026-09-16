@@ -14,6 +14,7 @@ import {
 import { ContentAddressedSemanticRuntime } from "../modules/query/content-addressed-semantic-runtime";
 import { SemanticOperationJournal } from "../modules/query/project-operation-journal";
 import { isSameProcess } from "./process-identity";
+import { removeActivityRecord, setRuntimeActivity, withActivityLock } from "./activity-state";
 import { readRecord, removeRecord, writeRecord } from "./runtime-state";
 import { logEvent } from "./log";
 
@@ -32,9 +33,18 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
   )
     throw new BackendError("backend.unauthorized");
   const settings = resolveBackendSettings(record.settings);
+  const updateActivity = async (
+    kind: "daemon-startup" | "model-preparation" | "index-operation",
+    active: boolean,
+  ): Promise<void> => {
+    await withActivityLock(directory, settings.requestTimeoutMs, () =>
+      setRuntimeActivity(directory, instanceId, kind, active),
+    );
+  };
   const embeddingConfig = resolveEmbeddingConfig(record.embedding);
   const embedding = createEmbeddingService({
     settings,
+    onPreparationActivityChange: (active) => updateActivity("model-preparation", active),
     threads: embeddingConfig.threads,
     prepareModel: (signal, progress) => prepareModel(embeddingConfig, signal, progress),
     createRuntime: (modelPath) =>
@@ -81,6 +91,7 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
     createQueryEmbeddingAdapter(embedding),
     embedding,
     new SemanticOperationJournal(directory),
+    (active) => updateActivity("index-operation", active),
   );
   const app = createBackendApp({
     backend,
@@ -110,6 +121,9 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
       await app.stop(false);
       await logEvent(directory, "stopped");
       await removeRecord(directory, instanceId);
+      await withActivityLock(directory, settings.requestTimeoutMs, () =>
+        removeActivityRecord(directory, instanceId),
+      );
     } finally {
       clearTimeout(force);
       if (app.server) await app.stop(true);
@@ -126,11 +140,15 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
     });
     process.on("SIGTERM", signalHandler);
     process.on("SIGINT", signalHandler);
+    await updateActivity("daemon-startup", false);
     await logEvent(directory, "ready");
     ready = true;
   } catch (error) {
     await embedding.unload().catch(() => {});
     if (app.server) await app.stop(true);
+    await withActivityLock(directory, settings.requestTimeoutMs, () =>
+      removeActivityRecord(directory, instanceId),
+    ).catch(() => undefined);
     await logEvent(directory, "failed", "backend.failed");
     throw new BackendError("backend.failed", { cause: error });
   }

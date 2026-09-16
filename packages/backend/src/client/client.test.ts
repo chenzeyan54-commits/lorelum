@@ -171,9 +171,9 @@ describe("createBackendClient", () => {
 
     await expect(
       client.query({ rootPath: "/tmp/lorelum-client-test" }, { text: "search", mode: "keyword" }),
-    ).rejects.toEqual(expect.objectContaining({ code: "backend.incompatible" }));
+    ).rejects.toEqual(expect.objectContaining({ code: "backend.build-mismatch" }));
     await expect(client.statusModel()).rejects.toEqual(
-      expect.objectContaining({ code: "backend.incompatible" }),
+      expect.objectContaining({ code: "backend.build-mismatch" }),
     );
   });
 
@@ -492,11 +492,11 @@ test("rejects a mismatched protocol before sending control or model requests", a
     buildIdentity: "test-build",
     baseUrl: url,
   });
-  await expect(client.status()).rejects.toMatchObject({ code: "backend.incompatible" });
-  await expect(client.stop()).rejects.toMatchObject({ code: "backend.incompatible" });
-  await expect(client.loadModel()).rejects.toMatchObject({ code: "backend.incompatible" });
+  await expect(client.status()).rejects.toMatchObject({ code: "backend.protocol-mismatch" });
+  await expect(client.stop()).rejects.toMatchObject({ code: "backend.protocol-mismatch" });
+  await expect(client.loadModel()).rejects.toMatchObject({ code: "backend.protocol-mismatch" });
   await expect(client.beginModelPreparation()).rejects.toMatchObject({
-    code: "backend.incompatible",
+    code: "backend.protocol-mismatch",
   });
 });
 

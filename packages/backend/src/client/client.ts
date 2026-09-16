@@ -85,6 +85,8 @@ export interface CreateBackendClientOptions {
   readonly startupTimeoutMs?: number;
   /** Timeout budget for unloading the embedding model. */
   readonly shutdownTimeoutMs?: number;
+  /** Internal compatibility-test override; released clients always use PROTOCOL_VERSION. */
+  readonly protocolVersion?: number;
 }
 
 export interface BackendClient {
@@ -155,10 +157,13 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
   const timeoutMs = options.timeoutMs ?? DEFAULT_BACKEND_SETTINGS.requestTimeoutMs;
   const startupTimeoutMs = options.startupTimeoutMs ?? DEFAULT_BACKEND_SETTINGS.startupTimeoutMs;
   const shutdownTimeoutMs = options.shutdownTimeoutMs ?? DEFAULT_BACKEND_SETTINGS.shutdownTimeoutMs;
+  const protocolVersion = options.protocolVersion ?? PROTOCOL_VERSION;
   for (const timeout of [timeoutMs, startupTimeoutMs, shutdownTimeoutMs]) {
     if (!Number.isInteger(timeout) || timeout < 1)
       throw new TypeError("Timeout must be a positive integer");
   }
+  if (!Number.isSafeInteger(protocolVersion) || protocolVersion < 1)
+    throw new TypeError("Protocol version must be a positive integer");
   let expectedEncodingId: string | undefined;
   const baseUrl = validatedLoopbackUrl(options.baseUrl ?? BACKEND_URL);
 
@@ -217,12 +222,13 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
     }
     if (
       identity.instanceId !== options.identity.instanceId ||
-      identity.buildIdentity !== options.identity.buildIdentity ||
-      (!allowCurrentBuildMismatch && identity.buildIdentity !== options.buildIdentity) ||
-      identity.protocolVersion !== PROTOCOL_VERSION
-    ) {
-      throw new BackendError("backend.incompatible");
-    }
+      identity.buildIdentity !== options.identity.buildIdentity
+    )
+      throw new BackendError("backend.state-invalid");
+    if (identity.protocolVersion !== protocolVersion)
+      throw new BackendError("backend.protocol-mismatch");
+    if (!allowCurrentBuildMismatch && identity.buildIdentity !== options.buildIdentity)
+      throw new BackendError("backend.build-mismatch");
     return parsed.data;
   };
 

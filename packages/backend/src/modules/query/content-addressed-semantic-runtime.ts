@@ -136,6 +136,7 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
     private readonly queryEmbedding: EmbeddingPort,
     private readonly modelPreparation: ContentAddressedSemanticModelPreparation,
     private readonly journal?: SemanticOperationJournal,
+    private readonly onIndexActivityChange?: (active: boolean) => Promise<void>,
   ) {
     this.recovered = journal?.recover() ?? Promise.resolve([]);
   }
@@ -470,6 +471,7 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
         Object.freeze({ ...previous, state: "superseded", updatedAt: new Date().toISOString() }),
       );
     }
+    await this.onIndexActivityChange?.(true);
     await this.record(target, operationId, "queued", {
       indexedPracticeCount: recovered?.indexedPracticeCount ?? 0,
       totalPracticeCount: target.corpus.practices.length,
@@ -557,11 +559,16 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
     this.queue = task.catch(() => undefined);
     const operation = Object.freeze({ operationId, key, target, task });
     this.operations.set(key, operation);
-    void task.finally(() => {
-      if (this.operations.get(key) === operation) this.operations.delete(key);
-      if (this.desiredTargetBySlot.get(target.targetSlotId) === key)
-        this.desiredTargetBySlot.delete(target.targetSlotId);
-    });
+    void task
+      .finally(async () => {
+        if (this.operations.get(key) === operation) this.operations.delete(key);
+        if (this.desiredTargetBySlot.get(target.targetSlotId) === key)
+          this.desiredTargetBySlot.delete(target.targetSlotId);
+        if (this.operations.size === 0) await this.onIndexActivityChange?.(false);
+      })
+      .catch(() => {
+        // A failed clear remains conservative: activity inspection will defer recovery.
+      });
     return operation;
   }
 

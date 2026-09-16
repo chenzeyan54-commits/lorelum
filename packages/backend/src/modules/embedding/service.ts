@@ -29,6 +29,8 @@ export interface EmbeddingServiceOptions {
   ) => Promise<string>;
   readonly threads?: number;
   readonly settings: BackendSettings;
+  /** Publishes durable Backend activity before a preparation can begin. */
+  readonly onPreparationActivityChange?: (active: boolean) => Promise<void>;
 }
 export function createEmbeddingService(options: EmbeddingServiceOptions) {
   const threads = options.threads ?? DEFAULT_EMBEDDING_SETTINGS.threads;
@@ -85,7 +87,12 @@ export function createEmbeddingService(options: EmbeddingServiceOptions) {
     const signal = startup.signal;
     loading = Promise.resolve().then(async () => {
       let handle: EmbeddingRuntime | undefined;
+      let activityPublished = false;
       try {
+        if (options.onPreparationActivityChange !== undefined) {
+          await options.onPreparationActivityChange(true);
+          activityPublished = true;
+        }
         signal.throwIfAborted();
         const modelPath = await options.prepareModel?.(signal, (value) => {
           if (state === "loading" && !signal.aborted) progress = value;
@@ -117,6 +124,13 @@ export function createEmbeddingService(options: EmbeddingServiceOptions) {
         );
       } finally {
         loading = undefined;
+        if (activityPublished) {
+          try {
+            await options.onPreparationActivityChange?.(false);
+          } catch {
+            // A failed clear remains conservative: activity inspection will defer recovery.
+          }
+        }
       }
     });
     return loading;

@@ -27,6 +27,16 @@ Then read the complete body of every candidate Practice you will use:
 lore get <practice-id>
 ```
 
+## Protect a host Agent's long-running Backend work
+
+For a multi-step host task that must keep an already running Lorelum Backend available beyond one ordinary query, acquire a task lease before the long-running portion, renew it before expiry while the task continues, and release it in its completion/cancellation path. The lease is machine state, not a user decision: keep its opaque ID private and do not ask the user to operate it. Model preparation and semantic indexing publish their own Backend activity automatically; do not create a lease merely for a short one-shot query.
+
+```sh
+lore backend lease acquire
+lore backend lease renew <lease-id>
+lore backend lease release <lease-id>
+```
+
 ## Use Pack resources when a retrieved Practice points to them
 
 Packs may include optional `references/`, `assets/`, and `scripts/` directories. A Practice can point to one with a normal Markdown link whose target begins with `resource:`, for example:

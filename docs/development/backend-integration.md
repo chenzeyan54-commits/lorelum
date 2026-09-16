@@ -15,7 +15,7 @@ bun run test:native-smoke -- /absolute/path/to/granite-q4_0.gguf
 | 入口 | Review 时关注的场景 |
 | --- | --- |
 | `embedding.integration.ts` | HTTP 认证调用、占用编码槽时的控制响应与 busy 拒绝、重复加载/卸载 |
-| `daemon-embedding.integration.ts` | 常驻进程复用、native 无响应回收、native 崩溃、daemon 崩溃后的子进程回收和重启 |
+| `daemon-embedding.integration.ts` | 常驻进程复用、native 无响应回收、native 崩溃、daemon 崩溃后的子进程回收和重启，以及 current CLI 对 protocol-mismatched daemon/native child 的 graceful 与 force 回收 |
 | `model-download.integration.ts` | 本地传输在 1 MiB 后断开，按真实落盘偏移续传，校验后编码并复用缓存 |
 | `project-context-native-smoke.integration.ts` | 通过 CLI command registry、真实 HTTP Backend 和 native 模型验证普通目录 ProjectContext：空模型 cache 首次 query、`maxWaitMs: 0`、partial/strict/complete semantic result、目录语料复用、单条增量、rebuild、cache prune、model unload/reload 和坏 Practice fallback |
 

@@ -64,7 +64,7 @@ export async function run(arguments_: string[], options: RunOptions = {}): Promi
     return commandExitCode;
   } catch (error) {
     const cliError = toVisibleCliError(error, visibleErrorCodes);
-    renderFailure(stdout, command, cliError.code, cliError.message);
+    renderFailure(stdout, command, cliError.code, cliError.message, cliError.recovery);
     return cliError.exitCode;
   }
 }
