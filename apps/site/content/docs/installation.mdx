@@ -58,12 +58,14 @@ Follow [Quickstart](./quickstart) to install a Pack and run a query. [Configurat
 
 ## Update
 
-Read the target release's compatibility notes, then rerun the installer with its version. Stop a running local Backend so subsequent requests use the new installation:
+Read the target release's compatibility notes, then rerun the installer with its version. For an installation already managed by Lorelum, the installer safely stops the existing Backend before it activates a different CLI release. You do not need to stop it separately for the normal installer upgrade path.
+
+If the installer cannot confirm that the Backend stopped, it leaves the previous command entry active and reports that the new release was not activated. This avoids installing a CLI that would immediately talk to an incompatible Backend. Run `backend stop` with the previous release, resolve the reported local condition, then rerun the installer:
 
 ```sh
 lore backend stop
 ```
 
-If you already installed the update but forgot to stop the old Backend first, run the same command from the new CLI. It can safely stop a verified Backend from a different build when the internal protocol is compatible, so you do not need to kill the process manually. The next semantic command starts it again. Restart your agent application if it still uses the old CLI environment.
+Manual archive replacement does not have this handoff. Stop the Backend before replacing a manually managed executable. The next semantic command starts it again. Restart your agent application if it still uses the old CLI environment.
 
 CLI, Pack, and Plugin versions are managed separately. Use [Pack commands](./reference/packs) for Pack updates and [Codex integration](./codex) for Plugin updates. See [Alpha compatibility](./alpha) before moving an existing Store between versions.

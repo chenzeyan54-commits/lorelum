@@ -58,12 +58,14 @@ lore --version
 
 ## 更新
 
-阅读目标版本的兼容性说明，再使用对应版本重新运行安装器。停止正在运行的本地 Backend，使后续请求使用新安装：
+阅读目标版本的兼容性说明，再使用对应版本重新运行安装器。对于由 Lorelum 安装器管理的现有安装，安装器会在激活不同版本的 CLI 前安全停止正在运行的 Backend；正常升级不需要另外手动 stop。
+
+如果安装器无法确认 Backend 已停止，它会保留原来的命令入口，并明确说明新版本没有被激活。这样不会把用户留在“新 CLI 已安装、却立即连接到不兼容旧 Backend”的状态。请用原 release 处理所报告的本地问题、执行 stop，再重新运行安装器：
 
 ```sh
 lore backend stop
 ```
 
-如果已经完成更新、却忘了先停止旧 Backend，也可以直接用新 CLI 运行同一条命令：只要内部 protocol 仍兼容，它会安全停止已经验证的不同 build Backend，无需手动 kill 进程。下一次 semantic 命令会重新启动服务。如果 Agent 仍使用旧的 CLI 环境，也需要重启 Agent 应用。
+手工替换发行包不具备这段自动交接逻辑；替换手工管理的可执行文件前，请先停止 Backend。下一次 semantic 命令会重新启动服务。如果 Agent 仍使用旧的 CLI 环境，也需要重启 Agent 应用。
 
 CLI、Pack 和 Plugin 的版本分别管理。Pack 更新见 [Pack 命令](./reference/packs)，Plugin 更新见 [Codex 集成](./codex)。已有 Store 跨版本使用前，请阅读 [Alpha 兼容性](./alpha)。
