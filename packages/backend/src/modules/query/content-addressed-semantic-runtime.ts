@@ -21,6 +21,7 @@ import {
   type StorageRoot,
 } from "@lorelum/engine";
 
+import { waitForCompletionOrDeadline } from "../../lifecycle/deadline";
 import { EmbeddingError } from "../embedding/errors";
 import type { ModelPreparation, ModelStatus } from "../embedding/dto";
 import type { IndexOperation, IndexStatus } from "../index/model";
@@ -590,7 +591,10 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
       return this.withContext(target, await complete());
     const operation = await this.start(target);
     if (policy.maxWaitMs > 0) {
-      await Promise.race([operation.task.catch(() => undefined), Bun.sleep(policy.maxWaitMs)]);
+      await waitForCompletionOrDeadline(
+        operation.task.catch(() => undefined),
+        Date.now() + policy.maxWaitMs,
+      );
       if ((await progress.status()).state === "ready")
         return this.withContext(target, await complete());
     }
@@ -800,8 +804,7 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
   async waitForIdle(deadline?: number): Promise<void> {
     const task = this.queue;
     if (deadline === undefined) return task;
-    const remaining = deadline - Date.now();
-    if (remaining > 0) await Promise.race([task, Bun.sleep(remaining)]);
+    await waitForCompletionOrDeadline(task, deadline);
   }
 }
 

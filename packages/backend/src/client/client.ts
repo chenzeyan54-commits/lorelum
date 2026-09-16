@@ -1,6 +1,7 @@
 /* eslint-disable no-await-in-loop -- Model loading polls one shared operation without a transfer deadline. */
 import type { z } from "zod";
 import { readBoundedJson } from "../http/read-json";
+import { createTimeoutSignal } from "../lifecycle/timeout";
 import { randomBytes } from "node:crypto";
 
 import {
@@ -167,32 +168,35 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
     requestTimeoutMs = timeoutMs,
   ): Promise<unknown> => {
     const url = new URL(path, baseUrl);
-    const timeoutSignal = AbortSignal.timeout(requestTimeoutMs);
-    const signal = init.signal ? AbortSignal.any([timeoutSignal, init.signal]) : timeoutSignal;
-    const response = await fetch(url, {
-      ...init,
-      redirect: "error",
-      proxy: "",
-      signal,
-      headers: { host: baseUrl.host, ...init.headers },
-    }).catch((error: unknown) => {
-      if (init.signal?.aborted) throw init.signal.reason;
-      if (isTimeout(error)) {
-        throw new BackendError("backend.deadline-exceeded", { cause: error });
-      }
-      throw new BackendError("backend.unavailable", { cause: error });
-    });
-    const body = await readBoundedJson(response, MAX_RESPONSE_BYTES).catch((error: unknown) => {
-      if (init.signal?.aborted) throw init.signal.reason;
-      throw new BackendError(
-        timeoutSignal.aborted ? "backend.deadline-exceeded" : "backend.failed",
-        {
-          cause: error,
-        },
-      );
-    });
-    if (!response.ok) throw remoteError(body) ?? new BackendError("backend.failed");
-    return body;
+    const timeout = createTimeoutSignal(requestTimeoutMs, init.signal ?? undefined);
+    try {
+      const response = await fetch(url, {
+        ...init,
+        redirect: "error",
+        proxy: "",
+        signal: timeout.signal,
+        headers: { host: baseUrl.host, ...init.headers },
+      }).catch((error: unknown) => {
+        if (init.signal?.aborted) throw init.signal.reason;
+        if (timeout.timedOut() || isTimeout(error)) {
+          throw new BackendError("backend.deadline-exceeded", { cause: error });
+        }
+        throw new BackendError("backend.unavailable", { cause: error });
+      });
+      const body = await readBoundedJson(response, MAX_RESPONSE_BYTES).catch((error: unknown) => {
+        if (init.signal?.aborted) throw init.signal.reason;
+        throw new BackendError(
+          timeout.timedOut() ? "backend.deadline-exceeded" : "backend.failed",
+          {
+            cause: error,
+          },
+        );
+      });
+      if (!response.ok) throw remoteError(body) ?? new BackendError("backend.failed");
+      return body;
+    } finally {
+      timeout.dispose();
+    }
   };
 
   const identify = async (
