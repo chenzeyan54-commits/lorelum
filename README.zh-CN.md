@@ -84,7 +84,7 @@ Agent 判断何时查询、哪些 Practice 适用。Lorelum 提供检索到的�
 - **本地 semantic retrieval。** 用 `lore query` 围绕任务和时刻检索已安装 Practice，本地 Backend 在请求之间复用 embedding 模型。
 - **Practice 全文读取。** 用 `lore get` 阅读完整指导和适用条件，再决定如何应用。
 - **版本化 Knowledge Pack。** 安装、查看、更新和移除 Pack，通过 `--store-root` 管理独立知识集合。
-- **Agent 集成。** 在能执行命令的 Agent 中使用 Lorelum Skill；Codex 可使用包含已安装 Pack 目录的官方 Plugin。
+- **Agent 集成。** 在能执行命令的 Agent 中使用 Lorelum Skill；Codex 和 ZCode 都可使用包含已安装 Pack 目录的官方 Plugin。
 - **明确的离线路径。** 用 `lore query --mode keyword` 按关键词匹配，无需模型或 Backend。
 - **Pack 编写工具。** 通过 CLI 验证源文件、格式化 Practice，并维护本地化状态。
 
@@ -201,7 +201,7 @@ severity: warn
 
 Lorelum Core 不管理任务、不读取完整 transcript，也不判断实现是否通过验收。检索到的 Practice 是指导，不能代替验证证据。
 
-当前 Codex Hook 在受支持的会话事件中提供 Pack 目录。更完整的 compaction 前后指导取决于宿主能力，仍属于[研究方向](https://github.com/lorelum/lorelum/issues/32)。当前用户通过 CLI 和 Skill 接入。
+Codex 和 ZCode Plugin 会在各自受支持的会话事件中提供 Pack 目录。更完整的 compaction 前后指导取决于宿主能力，仍属于[研究方向](https://github.com/lorelum/lorelum/issues/32)。当前用户通过 CLI 和 Skill 接入。
 
 ## 文档与贡献
 

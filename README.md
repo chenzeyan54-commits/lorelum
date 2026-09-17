@@ -85,7 +85,7 @@ The agent decides when to query and which Practices apply. Lorelum retrieves the
 - **Local semantic retrieval.** Search installed Practices by task and moment with `lore query`. The local Backend reuses the embedding model across requests.
 - **Full Practice reads.** Use `lore get` to read complete guidance and its applicability conditions before acting on a summary.
 - **Versioned Knowledge Packs.** Install, inspect, update, and remove Packs. Keep separate collections with `--store-root`.
-- **Agent integration.** Use the Lorelum Skill in command-capable agents, or the official Codex Plugin with its installed-Pack catalog.
+- **Agent integration.** Use the Lorelum Skill in command-capable agents, or the official Codex and ZCode Plugins with their host-native Pack catalogs.
 - **An explicit offline path.** Use `lore query --mode keyword` for term matching without a model or Backend.
 - **Pack authoring tools.** Validate source files, format Practices, and maintain localization with the CLI.
 
@@ -205,7 +205,7 @@ Keep each Practice independently understandable: an agent may retrieve it withou
 
 Lorelum Core does not manage your task, inspect the full transcript, or decide that an implementation is accepted. A retrieved Practice is guidance, not verification evidence.
 
-The current Codex Hook supplies a Pack catalog at supported session events. Broader guidance before and after compaction depends on host capabilities and remains [research](https://github.com/lorelum/lorelum/issues/32). The current user integration is through the CLI and Skill.
+The Codex and ZCode Plugins supply a Pack catalog at their supported session events. Broader guidance before and after compaction depends on host capabilities and remains [research](https://github.com/lorelum/lorelum/issues/32). The current user integration is through the CLI and Skill.
 
 ## Documentation and contributing
 
