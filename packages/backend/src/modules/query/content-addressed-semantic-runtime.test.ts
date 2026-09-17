@@ -8,6 +8,7 @@ import { createEmbeddingProfile, type EffectivePractice } from "@lorelum/engine"
 import { canonicalizePractice } from "../../../../engine/src/local-store/model/canonical-practice";
 import { createIsolatedProjectSandbox } from "../../../../engine/src/project-context/project-sandbox.test-helper";
 
+import { EmbeddingError } from "../embedding/errors";
 import { ContentAddressedSemanticRuntime } from "./content-addressed-semantic-runtime";
 import { SemanticOperationJournal } from "./project-operation-journal";
 
@@ -618,6 +619,101 @@ test("joins one content-addressed operation for equivalent ordinary directories"
       rm(first, { recursive: true, force: true }),
       rm(second, { recursive: true, force: true }),
       rm(cache, { recursive: true, force: true }),
+    ]);
+  }
+});
+
+test("surfaces a persisted model preparation failure until explicit recovery makes a new attempt safe", async () => {
+  const [cache, runtimeDirectory] = await Promise.all([
+    mkdtemp(join(tmpdir(), "lorelum-backend-terminal-failure-cache-")),
+    realpath(await mkdtemp(join(tmpdir(), "lorelum-backend-terminal-failure-runtime-"))),
+  ]);
+  try {
+    const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
+    const practices = Object.freeze([storePractice("platform.failed")]);
+    let modelReady = false;
+    let preparations = 0;
+    const journal = new SemanticOperationJournal(runtimeDirectory);
+    const runtime = new ContentAddressedSemanticRuntime(
+      {
+        async readEffectivePracticeSnapshot() {
+          return {
+            identity: {
+              rootBinding: "terminal-failure-store",
+              generation: 1,
+              effectiveRevision: 1,
+              manifestDigest: "0".repeat(64),
+            },
+            practices,
+          };
+        },
+      },
+      profile,
+      {
+        maxBatchSize: 1,
+        async embed(inputs) {
+          if (!modelReady) throw new EmbeddingError("embedding.not-loaded");
+          return { encodingId, vectors: inputs.map(() => [1, 0]) };
+        },
+      },
+      {
+        maxBatchSize: 1,
+        async embed(inputs) {
+          return { encodingId, vectors: inputs.map(() => [1, 0]) };
+        },
+      },
+      {
+        status: () => ({ state: modelReady ? "ready" : "failed" }),
+        beginModelPreparation() {
+          preparations += 1;
+          return {
+            preparationId: "0f8fad5b-d9cb-469f-a165-70867728950e",
+            status: {
+              state: "loading",
+              encodingId,
+              device: "cpu",
+              dimensions: 384,
+              threads: 1,
+              progress: { phase: "downloading" },
+            },
+          };
+        },
+        async waitModelPreparation() {
+          if (!modelReady) throw new EmbeddingError("embedding.download-failed");
+          return { state: "ready", encodingId, device: "cpu", dimensions: 384, threads: 1 };
+        },
+      },
+      journal,
+    );
+    const root = { rootPath: "/isolated/terminal-failure-store" };
+    const target = { kind: "store" as const, cacheRoot: cache };
+    const query = { text: "terminal failure" };
+
+    await expect(
+      runtime.query(root, target, query, { maxWaitMs: 1_000, minCoveragePercent: 100 }),
+    ).rejects.toMatchObject({ code: "embedding.download-failed" });
+    const persisted = (await journal.recover()).find((record) => record.state === "failed");
+    expect(persisted).toMatchObject({ error: "embedding.download-failed" });
+    if (persisted === undefined) throw new Error("Expected a persisted failed operation");
+    await expect(runtime.indexOperation(persisted.operationId)).resolves.toEqual({
+      operationId: persisted.operationId,
+      state: "failed",
+      error: "embedding.download-failed",
+    });
+
+    await expect(
+      runtime.query(root, target, query, { maxWaitMs: 0, minCoveragePercent: 100 }),
+    ).rejects.toMatchObject({ code: "embedding.download-failed" });
+    expect(preparations).toBe(1);
+
+    modelReady = true;
+    await expect(
+      runtime.query(root, target, query, { maxWaitMs: 1_000, minCoveragePercent: 100 }),
+    ).resolves.toMatchObject({ mode: "semantic", coverage: "complete" });
+  } finally {
+    await Promise.all([
+      rm(cache, { recursive: true, force: true }),
+      rm(runtimeDirectory, { recursive: true, force: true }),
     ]);
   }
 });

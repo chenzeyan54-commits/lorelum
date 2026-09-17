@@ -19,7 +19,7 @@ lore query "token session cookie" --mode keyword
 
 首次 semantic query 会自动提交或加入当前语料的后台 index operation，而不是要求先运行 `lore index build`。成功结果包含 `mode` 和 `results`。每项包含 `practiceId`、`title`、`stage`、`techStack`、`appliesWhen`、`severity`、`contentDigest`；将该 `practiceId` 传给 [`get`](./get)。Semantic 结果还包含 `profileId` 与 `coverage`：`complete` 表示完整 artifact 与当前 Practice 完全一致；`partial` 只检索已验证的 current progress rows，并报告 `indexedPracticeCount`、`totalPracticeCount` 和 `operationId`。变更、删除、shadowed 或 ignored 的 Practice 不会从旧 artifact 泄漏。
 
-模型仍在准备时，data 为 `{ "state": "preparing", "preparationId": "...", "message": "..." }`，进程退出码为 `1`；查看 `lore model status`，用 `lore model load` 等待后重试。若当前 progress 尚未达到所需覆盖率，data 为 `{ "state": "indexing", "operationId": "...", "indexedPracticeCount": 50, "totalPracticeCount": 100 }`，同样退出 `1`。等待超时不会取消 operation。
+模型仍在准备时，data 为 `{ "state": "preparing", "preparationId": "...", "message": "..." }`，进程退出码为 `1`；查看 `lore model status`，用 `lore model load` 等待后重试。若当前 progress 尚未达到所需覆盖率，data 为 `{ "state": "indexing", "operationId": "...", "indexedPracticeCount": 50, "totalPracticeCount": 100 }`，同样退出 `1`。两者都只表示非终态；已确认的模型或 index 失败会以 typed error 和 exit `2` 返回，不会继续显示 `indexing`。等待超时不会取消 operation。
 
 | 错误 | 处理 |
 | --- | --- |

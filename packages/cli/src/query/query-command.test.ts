@@ -10,7 +10,7 @@ import {
   type QueryResult,
 } from "@lorelum/engine";
 import type { BackendClient } from "@lorelum/backend/client";
-import { BackendError } from "@lorelum/backend/protocol";
+import { BackendError, EmbeddingError } from "@lorelum/backend/protocol";
 
 import { run } from "../main.js";
 import {
@@ -177,6 +177,31 @@ test("returns preparing as a successful exit-1 result", async () => {
   expect(result.exitCode).toBe(1);
   expect(result.response).toMatchObject({ ok: true, data: preparation });
   expect(validateJsonSchema(result.response.data, result.definition.resultSchema)).toEqual([]);
+});
+
+test("surfaces a terminal embedding failure instead of an indexing result", async () => {
+  const result = await invoke(
+    ["query", "How do I verify a release?"],
+    {
+      async query() {
+        throw new Error("keyword path should not run");
+      },
+    },
+    async () =>
+      ({
+        async query() {
+          throw new EmbeddingError("embedding.download-failed");
+        },
+      }) as Pick<BackendClient, "query">,
+  );
+  expect(result.exitCode).toBe(2);
+  expect(result.response).toMatchObject({
+    command: "query",
+    ok: false,
+    error: { code: "embedding.download-failed" },
+  });
+  expect(JSON.stringify(result.response)).not.toContain("indexing");
+  expect(JSON.stringify(result.response)).not.toContain("Retry shortly");
 });
 
 test("requires complete coverage without cancelling the accepted semantic operation", async () => {

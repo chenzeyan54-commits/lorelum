@@ -32,6 +32,6 @@ Both commands can return while work continues. Follow the returned operation ID 
 
 Repeated edits to one directory pursue only its newest target. Identical artifacts join one operation; different artifacts become `queued`. Disconnecting the CLI does not cancel accepted work.
 
-After a daemon restart, an unfinished operation keeps verified progress and becomes `waiting-for-source`. The next query, build, or rebuild in the same Store or project directory reattaches safely; the journal stores neither project absolute paths nor Practice bodies.
+After a daemon restart, an unfinished operation keeps verified progress and becomes `waiting-for-source`. The next query, build, or rebuild in the same Store or project directory reattaches safely. A confirmed failure remains terminal and returns its stable typed error rather than another pending state; the journal stores neither project absolute paths, Practice bodies, nor private exception details.
 
 Status and accepted builds exit `0`; confirmed failures exit `2`. An accepted operation is not necessarily finished. Run `lore describe index.build` for the current schema.

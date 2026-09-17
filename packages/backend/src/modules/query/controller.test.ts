@@ -3,6 +3,7 @@ import { InvalidQueryRequestError, SemanticIndexNotReadyError } from "@lorelum/e
 
 import { createBackendApp } from "../../app";
 import { createBackendService } from "../backend/service";
+import { EmbeddingError } from "../embedding/errors";
 import type { QueryService } from "@lorelum/engine";
 import type { ContentAddressedSemanticRuntimePort } from "./content-addressed-semantic-runtime";
 import { createContentAddressedSemanticRuntimeStub } from "./content-addressed-semantic-runtime.test-helper";
@@ -117,6 +118,26 @@ test("maps semantic index readiness failures to a typed remote error", async () 
   );
   expect(response.status).toBe(503);
   expect(await response.json()).toMatchObject({ error: { code: "semantic.index-not-ready" } });
+});
+
+test("maps a terminal embedding failure to its stable public error", async () => {
+  const instance = app(
+    {
+      async query() {
+        return { mode: "keyword", results: [] };
+      },
+    },
+    createContentAddressedSemanticRuntimeStub({
+      async query() {
+        throw new EmbeddingError("embedding.download-failed");
+      },
+    }),
+  );
+  const response = await instance.handle(
+    request({ storageRoot: "/tmp/query-controller", query: { text: "deployment" } }),
+  );
+  expect(response.status).toBe(503);
+  expect(await response.json()).toMatchObject({ error: { code: "embedding.download-failed" } });
 });
 
 test("maps invalid Engine input before exposing an implementation failure", async () => {

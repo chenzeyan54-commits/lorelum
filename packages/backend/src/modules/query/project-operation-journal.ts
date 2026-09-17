@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { BackendError } from "../../protocol/errors";
 import { assertPrivateFile, checkDirectory, hasCode } from "../../runtime/runtime-state";
+import { indexOperationErrorCodes } from "../index/model";
 
 const MAX_JOURNAL_BYTES = 131_072;
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -35,6 +36,8 @@ export const semanticOperationRecordSchema = z.strictObject({
   profileId: digest,
   state: operationState,
   preparationId: z.string().uuid().optional(),
+  /** Omitted only by records written before terminal failure codes were persisted. */
+  error: z.enum(indexOperationErrorCodes).optional(),
   indexedPracticeCount: z.int().nonnegative(),
   totalPracticeCount: z.int().nonnegative(),
   attempts: z.int().nonnegative(),

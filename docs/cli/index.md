@@ -33,7 +33,7 @@ build/rebuild 被 Backend 接受后，CLI 最多观察约一秒。ready 时直�
 lore --store-root /path/to/store index operation <operation-id>
 ```
 
-`index operation` 只读取指定 operation，不会启动 Backend。daemon restart 后未完成 target 保留进度并进入 `waiting-for-source`；下一次同一 Store 或同一 `projectRootId` 的 query/build/rebuild 会 reattach 当前 source 并继续。journal 不保存项目绝对路径或 Practice 正文。
+`index operation` 只读取指定 operation，不会启动 Backend。daemon restart 后未完成 target 保留进度并进入 `waiting-for-source`；下一次同一 Store 或同一 `projectRootId` 的 query/build/rebuild 会 reattach 当前 source 并继续。已确认失败的 operation 保留稳定错误码并以 exit code `2` 返回；它不会再被表示为 `queued`、`preparing` 或 `building`。journal 不保存项目绝对路径、Practice 正文或私有异常信息。
 
 ## 状态
 
@@ -81,7 +81,7 @@ canonical Practice 仍在 LocalStore 或项目 layer source；artifact 不是正
 | --- | --- |
 | `backend.*` | 自动启动未能安全完成，或 Backend 在操作中断开；检查 `lore backend ...`。 |
 | `backend.operation-expired` | 找不到该 operation 的持久记录；查看 `index status` 后按当前 context 再次 build。未完成且保留记录的 operation 重启后会显示为 `waiting-for-source`，并在下次同一 source command 时 reattach。 |
-| `embedding.*` | 自动准备被禁用、失败或无法继续；查看 `lore model status`，修复后用 `lore model load` 重试。 |
+| `embedding.*` | 自动准备被禁用、失败或无法继续；已确认失败的 operation 会保留该码。查看 `lore model status`，修复后用 `lore model load` 重试。 |
 | `embedding.busy`、`backend.busy` | Backend 仍在启动、停止或处理模型状态转换；等待该状态收敛后重试。不同 index target 会被排队而不是因此返回 `backend.busy`。 |
 | `store.busy`、`store.recovery-required` | Store 正在变更或需要恢复；等待变更完成，或先修复 Store 后再重试。 |
 | `embedding.failed`、`backend.failed` | 模型或构建失败；查看 `lore model status`，修复后显式 build，必要时 rebuild。 |

@@ -81,6 +81,8 @@ When there are no eligible current vectors, or the caller requires more coverage
 }
 ```
 
+`preparing` and `indexing` only describe an operation that is still non-terminal. If the accepted model preparation or index operation has already failed, query returns its typed error envelope with exit code `2`; it does not keep returning `indexing`. For an `embedding.*` error, fix the reported model condition, run `lore model load` explicitly to retry preparation, then repeat the query.
+
 ## Errors and exit codes
 
 Ready query results exit `0`. A successful preparing result exits `1`. Failures use `ok: false` with `error: { code, message }` and exit `2`. Build/protocol mismatch additionally includes a machine-only `recovery` object; all paths still write exactly one JSON line to stdout. Callers should branch on `data.state`, `error.code`, and—when supplied—`error.recovery`, not parse the message.
@@ -101,7 +103,7 @@ For `auto`, a supported host Agent runs `lore backend stop --if-idle` and retrie
 | `usage.invalid` | Missing or invalid text, `--top-k`, or `--mode`. Validation happens before a semantic query connects to the Backend. |
 | `backend.build-mismatch` / `backend.protocol-mismatch` | A verified Backend belongs to another build or protocol. Consume `error.recovery`: auto handoff only uses `backend stop --if-idle`; active or unknown work is deferred and retried in the background. |
 | other `backend.*` | The automatic Backend start could not safely complete because of a port conflict, busy state, or deadline. Inspect the reported condition. |
-| `embedding.*` | Automatic preparation was disabled, failed, or cannot safely continue. Check `lore model status`; fix configuration/resources, then use `lore model load` to retry and wait. |
+| `embedding.*` | Automatic preparation was disabled, failed, or cannot safely continue. A failed accepted operation returns this code rather than `indexing`; check `lore model status`, fix configuration/resources, then use `lore model load` to retry and wait. |
 | `semantic.index-not-ready` | Compatibility-only Backend callers omitted the derived cache route. Normal CLI semantic query starts or joins its operation automatically. |
 | `semantic.index-incompatible` | A legacy Store index does not match the fixed Profile or selected Store. Normal cache-backed query safely rebuilds its current target. |
 | `semantic.index-failed` / `semantic.embedding-failed` | The stored index or query embedding violates its contract. Rebuild the index; inspect model status for embedding failures. |

@@ -32,6 +32,6 @@ lore index operation <operation-id>
 
 同一目录连续编辑只追赶最新 target；相同 artifact 会 join，不同 artifact 会 `queued`。CLI 断开不会取消已接受的 operation。
 
-daemon restart 后未完成 operation 保留可验证 progress 并进入 `waiting-for-source`。下一次在同一 Store 或同一项目目录执行 query/build/rebuild 时会安全 reattach；journal 不保存项目绝对路径或 Practice 正文。
+daemon restart 后未完成 operation 保留可验证 progress 并进入 `waiting-for-source`。下一次在同一 Store 或同一项目目录执行 query/build/rebuild 时会安全 reattach。已确认失败保持终态并返回稳定 typed error，不会再次显示为 pending；journal 不保存项目绝对路径、Practice 正文或私有异常信息。
 
 状态查询与已接受的构建退出 `0`，确认失败退出 `2`。任务被接受并不表示已经完成。当前 schema 见 `lore describe index.build`。

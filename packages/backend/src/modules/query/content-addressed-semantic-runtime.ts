@@ -19,12 +19,15 @@ import {
   type QueryRequest,
   type SemanticQueryResult,
   type StorageRoot,
+  StoreBusyError,
+  StoreRecoveryRequiredError,
 } from "@lorelum/engine";
 
 import { waitForCompletionOrDeadline } from "../../lifecycle/deadline";
-import { EmbeddingError } from "../embedding/errors";
+import { BackendError } from "../../protocol/errors";
+import { EmbeddingError, embeddingErrorCodes } from "../embedding/errors";
 import type { ModelPreparation, ModelStatus } from "../embedding/dto";
-import type { IndexOperation, IndexStatus } from "../index/model";
+import type { IndexOperation, IndexOperationErrorCode, IndexStatus } from "../index/model";
 import {
   SemanticOperationJournal,
   type SemanticOperationRecord,
@@ -91,6 +94,8 @@ export interface ContentAddressedSemanticRuntimePort {
   waitForIdle(deadline?: number): Promise<void>;
 }
 export interface ContentAddressedSemanticModelPreparation {
+  /** Read-only state lets a successful explicit model load clear an old terminal failure. */
+  status?(): Pick<ModelStatus, "state">;
   beginModelPreparation(): ModelPreparation;
   waitModelPreparation(preparationId: string): Promise<ModelStatus>;
 }
@@ -196,6 +201,7 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
       ) {
         continue;
       }
+      // eslint-disable-next-line no-await-in-loop -- predecessor validation is bounded and must preserve recency order.
       const changes = await readChanges.call(this.store, input.root, predecessor.sourceRevision);
       const touchedPracticeIds = revisionDeltaPracticeIds(
         changes?.deltas.map((change) => change.delta) ?? [],
@@ -256,6 +262,7 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
       readonly attempts: number;
       readonly createdAt: string;
       readonly preparationId?: string;
+      readonly error?: IndexOperationErrorCode;
     },
   ): Promise<SemanticOperationRecord> {
     const record: SemanticOperationRecord = Object.freeze({
@@ -269,6 +276,7 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
       profileId: this.profile.profileId,
       state,
       ...(input.preparationId === undefined ? {} : { preparationId: input.preparationId }),
+      ...(state !== "failed" ? {} : { error: input.error ?? "backend.failed" }),
       indexedPracticeCount: input.indexedPracticeCount,
       totalPracticeCount: input.totalPracticeCount,
       attempts: input.attempts,
@@ -549,6 +557,7 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
       .catch(async (error: unknown) => {
         const status = await progress.status().catch(() => ({ indexedPracticeCount: 0 }));
         await this.record(target, operationId, "failed", {
+          error: publicFailureCode(error),
           indexedPracticeCount: status.indexedPracticeCount,
           totalPracticeCount: target.corpus.practices.length,
           attempts: attempts + 1,
@@ -596,6 +605,8 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
     };
     if ((await progress.status()).state === "ready")
       return this.withContext(target, await complete());
+    const previousFailure = await this.unrecoveredEmbeddingFailure(target);
+    if (previousFailure !== undefined) throwIndexOperationFailure(previousFailure);
     const operation = await this.start(target);
     if (policy.maxWaitMs > 0) {
       await waitForCompletionOrDeadline(
@@ -607,6 +618,7 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
     }
     const pending = async (): Promise<ContentAddressedSemanticQueryResult> => {
       const observed = await this.indexOperation(operation.operationId);
+      if (observed?.state === "failed") throwIndexOperationFailure(observed);
       if (observed?.state === "preparing")
         return this.withContext(target, {
           state: "preparing",
@@ -664,6 +676,24 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
   ): T {
     if (target.context === undefined || "context" in result) return result;
     return Object.freeze({ ...result, context: target.context }) as unknown as T;
+  }
+
+  private async unrecoveredEmbeddingFailure(
+    target: SemanticTarget,
+  ): Promise<Extract<IndexOperation, { readonly state: "failed" }> | undefined> {
+    const record = await this.journal?.findByTarget(target.artifactId, target.cacheScopeId);
+    if (record?.state !== "failed") return undefined;
+    const operation = this.toIndexOperation(record);
+    if (operation.state !== "failed") return undefined;
+    if (!embeddingErrorCodes.includes(operation.error as (typeof embeddingErrorCodes)[number])) {
+      return undefined;
+    }
+    // A successful explicit `model load` makes the old embedding failure recoverable.
+    // Ordinary repeated queries keep reporting the same failure instead of creating a retry loop.
+    if (this.modelPreparation.status?.().state === "ready") {
+      return undefined;
+    }
+    return operation;
   }
 
   private async queryCurrent(
@@ -784,7 +814,7 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
       return Object.freeze({
         operationId: record.operationId,
         state: "failed",
-        error: "backend.failed",
+        error: record.error ?? "backend.failed",
       });
     if (record.state === "waiting-for-source" || record.state === "queued")
       return Object.freeze({
@@ -822,4 +852,22 @@ function isPending(state: SemanticOperationRecord["state"]): boolean {
     state === "preparing" ||
     state === "building"
   );
+}
+
+function publicFailureCode(error: unknown): IndexOperationErrorCode {
+  if (error instanceof EmbeddingError) return error.code;
+  if (error instanceof StoreBusyError) return "store.busy";
+  if (error instanceof StoreRecoveryRequiredError) return "store.recovery-required";
+  return "backend.failed";
+}
+
+function throwIndexOperationFailure(
+  operation: Extract<IndexOperation, { readonly state: "failed" }>,
+): never {
+  if (embeddingErrorCodes.includes(operation.error as (typeof embeddingErrorCodes)[number])) {
+    throw new EmbeddingError(operation.error as (typeof embeddingErrorCodes)[number]);
+  }
+  if (operation.error === "store.busy") throw new StoreBusyError("The local Pack store is busy.");
+  if (operation.error === "store.recovery-required") throw new StoreRecoveryRequiredError();
+  throw new BackendError("backend.failed");
 }
