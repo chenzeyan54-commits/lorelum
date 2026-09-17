@@ -7,6 +7,7 @@ import { createLocalStore, createQueryService, decodePackDirectory } from "@lore
 import { createGetCommand } from "../get/get-command";
 import { run } from "../main";
 import { validateJsonSchema } from "../output/protocol-schema.test-helper";
+import { createProjectContextCommands } from "../project-context/commands";
 import { createProjectContextResolver } from "../project-context/service";
 import { createIsolatedProjectSandbox } from "../project-context/project-sandbox.test-helper";
 import { createQueryCommand } from "../query/query-command";
@@ -255,5 +256,112 @@ test("query and get use project winners, retain valid neighbors, and keep --no-p
     expect(validateJsonSchema(childQuery.response.data, definitions[0]!.resultSchema)).toEqual([]);
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("automatic CLI discovery keeps a selected Store root and ordinary directories Store-only", async () => {
+  const home = await createIsolatedProjectSandbox("lorelum-cli-store-boundary-");
+  const storeRoot = join(home, ".lorelum");
+  const workingDirectory = join(home, "ordinary", "nested");
+  const cacheRoot = join(home, "cache");
+  const previousDirectory = process.cwd();
+  try {
+    const sourcePack = join(home, "source-pack");
+    await mkdir(join(sourcePack, "practices"), { recursive: true });
+    await writeFile(join(sourcePack, "pack.yaml"), "name: stored\nversion: 1.0.0\n");
+    await writePractice(
+      sourcePack,
+      "canonical.md",
+      "stored.canonical",
+      "Canonical Store Practice",
+      "canonical Store guidance",
+    );
+    const store = createLocalStore();
+    const decoded = await decodePackDirectory(sourcePack);
+    await store.install({ rootPath: storeRoot }, decoded.candidate, decoded.diagnostics);
+    await writeFile(join(storeRoot, "config.yaml"), "backend:\n  enabled: true\n");
+    await mkdir(workingDirectory, { recursive: true });
+
+    let semanticClientCalls = 0;
+    const resolveContext = createProjectContextResolver(store);
+    const definitions = snapshotCommandDefinitions([
+      ...createProjectContextCommands({
+        storageRoot: { rootPath: storeRoot },
+        resolveProjectContext: resolveContext,
+      }),
+      createQueryCommand({
+        queryService: createQueryService({ store }),
+        createClient: async () => {
+          semanticClientCalls += 1;
+          throw new Error("keyword retrieval must not connect to the Backend");
+        },
+        storageRoot: { rootPath: storeRoot },
+        resolveProjectContext: resolveContext,
+      }),
+      createGetCommand({
+        store,
+        storageRoot: { rootPath: storeRoot },
+        resolveProjectContext: resolveContext,
+      }),
+    ]);
+    const invoke = async (arguments_: readonly string[]) => {
+      const stdout = new MemoryWriter();
+      const exitCode = await run([...arguments_], { registry: definitions, stdout });
+      return {
+        exitCode,
+        response: JSON.parse(stdout.value) as Record<string, unknown>,
+        output: stdout.value,
+      };
+    };
+
+    process.chdir(workingDirectory);
+    const status = await invoke(["--store-root", storeRoot, "context", "status"]);
+    expect(status.exitCode).toBe(0);
+    expect(status.response).toMatchObject({ ok: true, data: { state: "none" } });
+
+    const query = await invoke([
+      "--store-root",
+      storeRoot,
+      "--cache-root",
+      cacheRoot,
+      "query",
+      "canonical Store",
+      "--mode",
+      "keyword",
+    ]);
+    expect(query.exitCode).toBe(0);
+    expect(query.response).toMatchObject({
+      ok: true,
+      data: { mode: "keyword", results: [{ practiceId: "stored.canonical" }] },
+    });
+    expect((query.response.data as Record<string, unknown>).context).toBeUndefined();
+    expect(query.output).not.toContain("config.invalid");
+    expect(query.output).not.toContain("pack.invalid");
+
+    const pointRead = await invoke(["--store-root", storeRoot, "get", "stored.canonical"]);
+    expect(pointRead.exitCode).toBe(0);
+    expect(pointRead.response).toMatchObject({
+      ok: true,
+      data: { practice: { title: "Canonical Store Practice", body: "canonical Store guidance\n" } },
+    });
+    expect(semanticClientCalls).toBe(0);
+
+    const explicitStoreRoot = await invoke([
+      "--store-root",
+      storeRoot,
+      "--project-root",
+      home,
+      "context",
+      "status",
+    ]);
+    expect(explicitStoreRoot.exitCode).toBe(2);
+    expect(explicitStoreRoot.response).toMatchObject({
+      command: "context.status",
+      ok: false,
+      error: { code: "usage.invalid" },
+    });
+  } finally {
+    process.chdir(previousDirectory);
+    await rm(home, { recursive: true, force: true });
   }
 });

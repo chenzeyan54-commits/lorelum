@@ -3,13 +3,13 @@ title: query
 description: Find the right current Practices for an AI coding task and moment.
 ---
 
-`query` searches the current query context and returns ranked Practice summaries. Semantic relevance is the default; keyword mode is an explicit offline path. When the current directory or an ancestor has `.lorelum/`, its layers are inherited and merged from parent to child. Use `--no-project` to use only the selected Store.
+`query` searches the current query context and returns ranked Practice summaries. Semantic relevance is the default; keyword mode is an explicit offline path. Valid project `.lorelum/` layers in the current directory or its ancestors are inherited and merged from parent to child; the selected Store root is never a project layer. When there is no valid project layer, including an ordinary path with no `.lorelum/`, query uses only the selected Store. Use `--no-project` to force that Store-only behavior.
 
 ```sh
 lore query <text> [--mode semantic|keyword] [--top-k <n>] [--store-root <path>] [--project-root <path>] [--no-project] [--cache-root <path>]
 ```
 
-`text` is required, must be non-empty after trimming, and is limited to 4,096 Unicode code points. `--top-k` accepts an integer from 1 to 50 and defaults to 5. `--mode` is `semantic` (default) or `keyword`. `--store-root` selects Store base data; `--project-root` selects a directory directly containing `.lorelum/`; `--cache-root` selects user-level derived cache and never writes into the project. `--max-wait-ms` and `--min-coverage-percent` override the user-level wait and partial-result policy; `--require-complete` accepts only complete semantic results.
+`text` is required, must be non-empty after trimming, and is limited to 4,096 Unicode code points. `--top-k` accepts an integer from 1 to 50 and defaults to 5. `--mode` is `semantic` (default) or `keyword`. `--store-root` selects Store base data; `--project-root` selects a directory directly containing a project `.lorelum/`, not the selected Store root; `--cache-root` selects user-level derived cache and never writes into the project. `--max-wait-ms` and `--min-coverage-percent` override the user-level wait and partial-result policy; `--require-complete` accepts only complete semantic results.
 
 ```sh
 lore query "I am about to define scope and validation for a small UI change"

@@ -97,6 +97,99 @@ test("builds a project semantic artifact during the query wait budget", async ()
   }
 });
 
+test("uses the Store target when automatic semantic discovery reaches the selected Store root", async () => {
+  const [home, cache, runtimeDirectory] = await Promise.all([
+    mkdtemp(join(tmpdir(), "lorelum-backend-store-boundary-")),
+    mkdtemp(join(tmpdir(), "lorelum-backend-store-boundary-cache-")),
+    mkdtemp(join(tmpdir(), "lorelum-backend-store-boundary-runtime-")),
+  ]);
+  const runtime = await realpath(runtimeDirectory);
+  try {
+    const storeRoot = join(home, ".lorelum");
+    const workingDirectory = join(home, "ordinary", "nested");
+    await mkdir(join(storeRoot, "packs", "agentic-coding", "artifact"), { recursive: true });
+    await mkdir(workingDirectory, { recursive: true });
+    await writeFile(join(storeRoot, "config.yaml"), "backend:\n  requestTimeoutMs: 1\n");
+    await writeFile(
+      join(storeRoot, "packs", "agentic-coding", "artifact", "pack.yaml"),
+      "name: agentic-coding\nversion: 1.0.0\n",
+    );
+    const profile = createEmbeddingProfile({ encodingId, dimensions: 2 });
+    const journal = new SemanticOperationJournal(runtime);
+    const service = new ContentAddressedSemanticRuntime(
+      {
+        async readEffectivePracticeSnapshot() {
+          return {
+            identity: {
+              rootBinding: "store-boundary",
+              generation: 0,
+              effectiveRevision: 0,
+              manifestDigest: "0".repeat(64),
+            },
+            practices: [storePractice("stored.canonical", "canonical Store guidance")],
+          };
+        },
+      },
+      profile,
+      {
+        maxBatchSize: 8,
+        async embed(inputs) {
+          return { encodingId, vectors: inputs.map(() => [1, 0]) };
+        },
+      },
+      {
+        maxBatchSize: 8,
+        async embed(inputs) {
+          return { encodingId, vectors: inputs.map(() => [1, 0]) };
+        },
+      },
+      {
+        beginModelPreparation() {
+          throw new Error("model preparation should not be needed");
+        },
+        async waitModelPreparation() {
+          throw new Error("model preparation should not be needed");
+        },
+      },
+      journal,
+    );
+    const request = {
+      kind: "project" as const,
+      startDirectory: workingDirectory,
+      cacheRoot: cache,
+    };
+
+    const operation = await service.build({ rootPath: storeRoot }, request);
+    if (operation.state !== "queued" && operation.state !== "building") {
+      throw new Error("Expected an accepted Store index operation");
+    }
+    await service.waitForIdle();
+    await expect(journal.findById(operation.operationId)).resolves.toMatchObject({
+      targetKind: "store",
+      state: "ready",
+    });
+
+    const result = await service.query(
+      { rootPath: storeRoot },
+      request,
+      { text: "canonical Store guidance" },
+      { maxWaitMs: 1_000, minCoveragePercent: 0 },
+    );
+    expect(result).toMatchObject({
+      mode: "semantic",
+      coverage: "complete",
+      results: [{ practiceId: "stored.canonical" }],
+    });
+    expect(result).not.toHaveProperty("context");
+  } finally {
+    await Promise.all([
+      rm(home, { recursive: true, force: true }),
+      rm(cache, { recursive: true, force: true }),
+      rm(runtime, { recursive: true, force: true }),
+    ]);
+  }
+});
+
 test("coalesces rapid edits for one directory to the latest semantic target", async () => {
   const [root, cache] = await Promise.all([
     createIsolatedProjectSandbox("lorelum-backend-project-coalesce-"),

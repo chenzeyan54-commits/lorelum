@@ -2,7 +2,7 @@
 
 当前可观察合同见 [retrieval query OpenSpec](../../openspec/specs/retrieval-query/spec.md)；本页说明 CLI 参数、JSON 输出与恢复操作。
 
-`lore query <text>` 在当前 query context 中检索 Practice 并返回小型 summary。默认使用本地 semantic retrieval；`--mode keyword` 保留离线 FTS5 路径。当前目录或父目录存在 `.lorelum/` 时，query context 会按父到子合并 ProjectContext；没有 marker 或传入 `--no-project` 时才是纯 LocalStore。
+`lore query <text>` 在当前 query context 中检索 Practice 并返回小型 summary。默认使用本地 semantic retrieval；`--mode keyword` 保留离线 FTS5 路径。有效项目目录或其父目录中的 `.lorelum/` 会按父到子合并为 ProjectContext；选中的 LocalStore 根目录不是项目 layer。没有有效项目 layer（包括整条路径没有 `.lorelum/`）或传入 `--no-project` 时，query 使用纯 LocalStore。
 
 ```sh
 # Semantic is the default. A normal query starts the Backend and automatically prepares the fixed local model when needed.
@@ -19,7 +19,7 @@ lore query "request validation" --cache-root /path/to/user-cache
 lore describe query
 ```
 
-The positional text is trimmed before validation. It must contain at least one non-whitespace character and may contain at most 4,096 Unicode code points after trimming. `--top-k` is optional, defaults to `5`, and accepts a decimal positive integer from `1` through `50`. `--mode` accepts `semantic` (the default) or `keyword`. `--project-root` selects an ordinary directory directly containing `.lorelum/`; it does not require Git. `--no-project` disables layer discovery. `--cache-root` selects only user-owned derived artifacts, never source Pack files or LocalStore.
+The positional text is trimmed before validation. It must contain at least one non-whitespace character and may contain at most 4,096 Unicode code points after trimming. `--top-k` is optional, defaults to `5`, and accepts a decimal positive integer from `1` through `50`. `--mode` accepts `semantic` (the default) or `keyword`. `--project-root` selects an ordinary directory directly containing a project `.lorelum/`; it does not require Git and cannot select the chosen Store root. `--no-project` disables layer discovery. `--cache-root` selects only user-owned derived artifacts, never source Pack files or LocalStore.
 
 Parent and child `.lorelum/` layers inherit by default. A child config adds or overrides declared fields and same-ID Practices, while unaffected parent/Store Practices stay in the candidate set. A malformed local Practice is ignored without hiding valid neighbors or a lower-priority fallback; query returns the remaining current winners and `lore context status` exposes the degraded context.
 

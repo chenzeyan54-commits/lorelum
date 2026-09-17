@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -63,10 +63,14 @@ function storePractice(id: string, title: string): EffectivePractice {
   });
 }
 
-function resolverOptions(root: string, practices: readonly EffectivePractice[] = []) {
+function resolverOptions(
+  root: string,
+  practices: readonly EffectivePractice[] = [],
+  storageRootPath = join(root, "store"),
+) {
   return {
     startDirectory: root,
-    storageRoot: { rootPath: join(root, "store") },
+    storageRoot: { rootPath: storageRootPath },
     store: {
       async readEffectivePracticeSnapshot() {
         return { practices };
@@ -190,6 +194,91 @@ test("uses parent configuration after a child config becomes invalid", () =>
     expect(snapshot?.effectiveConfig.base).toBe("none");
     expect(snapshot?.practices.map((item) => item.practiceId)).toEqual(["child.local"]);
     expect(snapshot?.warnings).toContainEqual({ code: "config.invalid", layerDepth: 1 });
+  }));
+
+test("does not discover the selected Store root or its ancestors as project layers", () =>
+  fixture(async (root) => {
+    const storeRoot = join(root, "home", ".lorelum");
+    await mkdir(join(storeRoot, "packs", "agentic-coding", "artifact"), { recursive: true });
+    await writeFile(join(storeRoot, "config.yaml"), "backend:\n  requestTimeoutMs: 1\n");
+    await writeFile(
+      join(storeRoot, "packs", "agentic-coding", "artifact", "pack.yaml"),
+      "name: agentic-coding\nversion: 1.0.0\n",
+    );
+    await mkdir(join(root, ".lorelum"), { recursive: true });
+    await writeFile(join(root, ".lorelum", "config.yaml"), "base: none\n");
+    await writePack(root, "outside", "outside", {
+      outside: practice("outside.only", "Outside"),
+    });
+    await mkdir(join(root, "home", "nested"), { recursive: true });
+    const storeConfig = await readFile(join(storeRoot, "config.yaml"), "utf8");
+    const storePack = await readFile(
+      join(storeRoot, "packs", "agentic-coding", "artifact", "pack.yaml"),
+      "utf8",
+    );
+
+    const snapshot = await resolveProjectContext(
+      resolverOptions(join(root, "home", "nested"), [], storeRoot),
+    );
+
+    expect(snapshot).toBeUndefined();
+    expect(await readFile(join(storeRoot, "config.yaml"), "utf8")).toBe(storeConfig);
+    expect(
+      await readFile(join(storeRoot, "packs", "agentic-coding", "artifact", "pack.yaml"), "utf8"),
+    ).toBe(storePack);
+  }));
+
+test("keeps child project layers below the selected Store root boundary", () =>
+  fixture(async (root) => {
+    const home = join(root, "home");
+    const storeRoot = join(home, ".lorelum");
+    const project = join(home, "project");
+    const child = join(project, "child");
+    await mkdir(join(storeRoot, "packs", "agentic-coding", "artifact"), { recursive: true });
+    await writeFile(join(storeRoot, "config.yaml"), "backend:\n  requestTimeoutMs: 1\n");
+    await writeFile(
+      join(storeRoot, "packs", "agentic-coding", "artifact", "pack.yaml"),
+      "name: agentic-coding\nversion: 1.0.0\n",
+    );
+    await mkdir(project, { recursive: true });
+    await mkdir(join(project, ".lorelum"), { recursive: true });
+    await writeFile(join(project, ".lorelum", "config.yaml"), "base: none\n");
+    await writePack(project, "parent", "parent", {
+      parent: practice("parent.only", "Parent"),
+    });
+    await mkdir(child, { recursive: true });
+    await mkdir(join(child, ".lorelum"), { recursive: true });
+    await writeFile(join(child, ".lorelum", "config.yaml"), "base: none\n");
+    await writePack(child, "child", "child", { local: practice("child.local", "Child") });
+
+    const snapshot = await resolveProjectContext(resolverOptions(child, [], storeRoot));
+
+    expect(snapshot?.layers).toEqual([{ depth: 0 }, { depth: 1 }]);
+    expect(snapshot?.practices.map((item) => item.practiceId)).toEqual([
+      "child.local",
+      "parent.only",
+    ]);
+    expect(snapshot?.warnings).toEqual([]);
+  }));
+
+test("rejects an explicit project root whose marker is the selected Store root", () =>
+  fixture(async (root) => {
+    const projectRoot = join(root, "home");
+    const storeRoot = join(projectRoot, ".lorelum");
+    await mkdir(storeRoot, { recursive: true });
+    await writeFile(join(storeRoot, "config.yaml"), "backend:\n  requestTimeoutMs: 1\n");
+
+    await expect(
+      resolveProjectContext({
+        ...resolverOptions(projectRoot, [], storeRoot),
+        projectRoot,
+      }),
+    ).rejects.toBeInstanceOf(InvalidProjectRootError);
+  }));
+
+test("returns Store-only for an ordinary directory without a project marker", () =>
+  fixture(async (root) => {
+    await expect(resolveProjectContext(resolverOptions(root))).resolves.toBeUndefined();
   }));
 
 test.skipIf(process.platform === "win32")(

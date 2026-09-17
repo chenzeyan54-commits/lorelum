@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { lstat, readdir, realpath } from "node:fs/promises";
-import { dirname, join, parse } from "node:path";
+import { dirname, join, parse, resolve } from "node:path";
 
 import {
   loadProjectConfig,
@@ -92,11 +92,25 @@ async function resolvedDirectory(path: string): Promise<string | undefined> {
   return info?.isDirectory() ? resolved : undefined;
 }
 
-async function discoverLayerPaths(startDirectory: string): Promise<readonly string[]> {
+async function canonicalPath(path: string): Promise<string> {
+  return (await realpath(path).catch(() => undefined)) ?? resolve(path);
+}
+
+async function discoverLayerPaths(
+  startDirectory: string,
+  storeRootPath: string | undefined,
+): Promise<readonly string[]> {
   const start = await resolvedDirectory(startDirectory);
   if (start === undefined) return Object.freeze([]);
   const paths: string[] = [];
   for (let current = start; ; current = dirname(current)) {
+    const markerPath = resolveProjectPaths(current).lorelumDirectory;
+    // eslint-disable-next-line no-await-in-loop -- ancestor discovery must stop at the first Store boundary.
+    const markerIdentity = await canonicalPath(markerPath);
+    if (storeRootPath !== undefined && markerIdentity === storeRootPath) {
+      break;
+    }
+    // eslint-disable-next-line no-await-in-loop -- preserve the existing ordered ancestor traversal.
     if (await directLayer(current)) paths.push(current);
     if (current === parse(current).root) break;
   }
@@ -104,9 +118,18 @@ async function discoverLayerPaths(startDirectory: string): Promise<readonly stri
   return Object.freeze(paths);
 }
 
-async function explicitLayerPath(projectRoot: string): Promise<string> {
+async function explicitLayerPath(
+  projectRoot: string,
+  storeRootPath: string | undefined,
+): Promise<string> {
   const path = await resolvedDirectory(projectRoot);
-  if (path === undefined || !(await directLayer(path))) throw new InvalidProjectRootError();
+  if (
+    path === undefined ||
+    !(await directLayer(path)) ||
+    (storeRootPath !== undefined &&
+      (await canonicalPath(resolveProjectPaths(path).lorelumDirectory)) === storeRootPath)
+  )
+    throw new InvalidProjectRootError();
   return path;
 }
 
@@ -186,12 +209,17 @@ export async function resolveProjectContext(
   options: ResolveProjectContextOptions,
 ): Promise<ProjectContextSnapshot | undefined> {
   if (options.noProject === true) return undefined;
+  const storeRootPath = await resolvedDirectory(options.storageRoot.rootPath);
+  const storeRootIdentity =
+    storeRootPath === undefined ? undefined : await canonicalPath(storeRootPath);
   const leaf =
-    options.projectRoot === undefined ? undefined : await explicitLayerPath(options.projectRoot);
+    options.projectRoot === undefined
+      ? undefined
+      : await explicitLayerPath(options.projectRoot, storeRootIdentity);
   const discovered =
     leaf === undefined
-      ? await discoverLayerPaths(options.startDirectory ?? process.cwd())
-      : await discoverLayerPaths(leaf);
+      ? await discoverLayerPaths(options.startDirectory ?? process.cwd(), storeRootIdentity)
+      : await discoverLayerPaths(leaf, storeRootIdentity);
   if (discovered.length === 0) return undefined;
   const leafPath = discovered.at(-1);
   if (leafPath === undefined) return undefined;
