@@ -27,14 +27,14 @@ Windows 不要运行 `install.sh`，也不要双击安装脚本。请在已经�
 检查已安装 CLI 和 Pack：
 
 ```sh
-lore describe
-lore pack list --details
+lore describe --json
+lore pack list --details --json
 ```
 
 用户需要的 Pack 缺失时安装它。官方工程 Pack 的安装命令是：
 
 ```sh
-lore pack install agentic-coding
+lore pack install agentic-coding --json
 ```
 
 按[接入 Agent](./agent-setup)配置当前宿主。Codex 使用[官方 Plugin](./codex)。围绕当前仓库执行一次查询并读取完整 Practice，验证配置。
@@ -48,7 +48,7 @@ lore pack install agentic-coding
 说明具体任务和当前时刻：
 
 ```sh
-lore query "我正在实现账户设置，局部组件测试已通过，准备判断整个功能是否已经完成。"
+lore query "我正在实现账户设置，局部组件测试已通过，准备判断整个功能是否已经完成。" --json
 ```
 
 不要将 Pack 目录当作完整指导，也不要假定它穷尽所有相关知识。查询应服务于当前判断，无需在每条命令前机械检索。
@@ -58,7 +58,7 @@ lore query "我正在实现账户设置，局部组件测试已通过，准备�
 根据结果中的 `title` 和 `appliesWhen` 选择候选，然后读取全文：
 
 ```sh
-lore get <practice-id>
+lore get <practice-id> --json
 ```
 
 使用 query 或 Pack 列表返回的精确 `practiceId`。结合当前代码和用户要求检查适用条件。Practice 辅助工程判断，不会授权新增任务范围，也不能替代完成证据。
@@ -73,7 +73,7 @@ link 是默认任务路由，不是文件访问 allowlist。Codex SessionStart C
 
 ## 处理 JSON 和退出状态
 
-stdout 包含一个 JSON 响应，stderr 包含诊断和进度。先检查 `ok`，再检查 `data` 中该命令的具体字段。
+Agent 调用必须始终追加 `--json`：此时 stdout 包含一个 JSON 响应，stderr 包含诊断和进度。不带 `--json` 时 Lorelum 输出完整人类 text，Agent MUST NOT 解析它。先检查 `ok`，再检查 `data` 中该命令的具体字段。
 
 | 结果 | 后续动作 |
 | --- | --- |
@@ -88,10 +88,10 @@ stdout 包含一个 JSON 响应，stderr 包含诊断和进度。先检查 `ok`�
 ## 查询已安装版本的合同
 
 ```sh
-lore describe query
-lore describe get
-lore describe pack.list
-lore describe index.build
+lore describe query --json
+lore describe get --json
+lore describe pack.list --json
+lore describe index.build --json
 ```
 
 通过这些 schema 查询参数、字段、错误和退出码，不要假定当前版本与其他版本相同。更多内容见 [CLI 参考](./cli)和[文档概述](./index.md)。

@@ -31,6 +31,8 @@ export {
   type PositionalArgument,
 } from "./registry.js";
 export {
+  createFailureEnvelope,
+  createSuccessEnvelope,
   protocolResponseSchema,
   protocolVersion,
   toolVersion,
@@ -40,3 +42,4 @@ export {
   type ProtocolFailure,
   type ProtocolSuccess,
 } from "./output/protocol.js";
+export { renderResult, type OutputFormat, type TextRenderer } from "./output/render.js";

@@ -27,14 +27,14 @@ Do not run `install.sh` or double-click the installer on Windows. Run the PowerS
 Inspect the installed CLI and Packs:
 
 ```sh
-lore describe
-lore pack list --details
+lore describe --json
+lore pack list --details --json
 ```
 
 Install the requested Pack if it is missing. To start with the official engineering Pack:
 
 ```sh
-lore pack install agentic-coding
+lore pack install agentic-coding --json
 ```
 
 Follow [Agent integration](./agent-setup) for the current host. Codex uses the [official Plugin](./codex). Verify setup with a query about the current repository and a full Practice read.
@@ -48,7 +48,7 @@ Useful moments include defining scope, deciding implementation boundaries, choos
 Describe the concrete task and moment:
 
 ```sh
-lore query "I am implementing account settings. Focused component tests pass, and I am about to declare the whole feature complete."
+lore query "I am implementing account settings. Focused component tests pass, and I am about to declare the whole feature complete." --json
 ```
 
 Do not treat a Pack catalog as full guidance or a complete inventory of relevant knowledge. Query when it helps the decision; avoid mechanical retrieval before every command.
@@ -58,7 +58,7 @@ Do not treat a Pack catalog as full guidance or a complete inventory of relevant
 Select results using their `title` and `appliesWhen`, then read the full body:
 
 ```sh
-lore get <practice-id>
+lore get <practice-id> --json
 ```
 
 Use the exact `practiceId` from the query or Pack listing. Check applicability against the current code and user request. A Practice helps engineering judgment; it does not authorize new scope or replace evidence of completion.
@@ -73,7 +73,7 @@ The link is the default task route, not a file-access allowlist. The Codex Sessi
 
 ## Handle JSON and process status
 
-stdout contains one JSON response; stderr contains diagnostics and progress. Inspect `ok`, then the command-specific fields in `data`.
+For Agent calls, always append `--json`: stdout then contains one JSON response and stderr contains diagnostics and progress. Without `--json`, Lorelum emits complete human text and an Agent MUST NOT parse it. Inspect `ok`, then the command-specific fields in `data`.
 
 | Result | Next action |
 | --- | --- |
@@ -88,10 +88,10 @@ Semantic query is the default. A failed semantic query does not mean that releva
 ## Discover the installed contract
 
 ```sh
-lore describe query
-lore describe get
-lore describe pack.list
-lore describe index.build
+lore describe query --json
+lore describe get --json
+lore describe pack.list --json
+lore describe index.build --json
 ```
 
 Use these schemas for arguments, fields, errors, and exit codes rather than assuming another version's behavior. Start from the [CLI reference](./cli) or [documentation overview](./index.md) for further guidance.
