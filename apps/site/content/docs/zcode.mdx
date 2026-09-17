@@ -1,0 +1,50 @@
+---
+title: ZCode
+description: Install Lorelum in ZCode and use the /lore command in a new task.
+icon: Plug
+---
+
+The Lorelum Plugin adds engineering guidance and the `/lore` command to ZCode.
+
+## Before you start
+
+Complete [Quickstart](./quickstart). The `lore` command must be available to
+ZCode, and you need at least one installed Pack.
+
+ZCode must have Plugin Hooks enabled. In its host configuration, set
+`hooks.enabled` to `true`, then restart ZCode.
+
+## Install
+
+1. In ZCode, open **Settings → Plugin Management → Discover**.
+2. Select **+** and add the Lorelum repository (`lorelum/lorelum`) or your
+   local checkout as a marketplace.
+3. Install **Lorelum** from `lorelum-plugins`.
+4. Start a new session.
+
+## Use Lorelum
+
+Check that `/lore` appears in the command menu. You can run:
+
+```text
+/lore How should I verify this change?
+```
+
+Or ask ZCode to use Lorelum before it finalizes an important decision.
+
+## Update
+
+Open **Settings → Plugin Management**, select Lorelum, and install the offered
+update. For a local checkout, uninstall and reinstall it from Discover after
+you change Plugin files.
+
+## Troubleshoot
+
+If `/lore` or guidance is missing:
+
+1. Confirm `hooks.enabled: true` and restart ZCode.
+2. Confirm Lorelum is installed and enabled in Plugin Management.
+3. Confirm `lore --version` works in the environment used by ZCode.
+4. Start a new session after installing or updating.
+
+For retrieval or model problems, see [Troubleshooting](./troubleshooting).

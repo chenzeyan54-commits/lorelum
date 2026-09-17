@@ -1,0 +1,45 @@
+---
+title: ZCode
+description: 在 ZCode 中安装 Lorelum，并在新任务里使用 /lore 命令。
+icon: Plug
+---
+
+Lorelum Plugin 会为 ZCode 提供工程指导和 `/lore` 命令。
+
+## 开始前
+
+请先完成[快速开始](./quickstart)。运行 ZCode 的环境需要能使用 `lore` 命令，并且至少安装了一个 Pack。
+
+ZCode 必须启用 Plugin Hooks。在宿主配置中将 `hooks.enabled` 设为 `true`，然后重启 ZCode。
+
+## 安装
+
+1. 在 ZCode 中打开 **Settings → Plugin Management → Discover**。
+2. 点击 **+**，添加 Lorelum 仓库（`lorelum/lorelum`）或本地 checkout 作为 marketplace。
+3. 在 `lorelum-plugins` 中安装 **Lorelum**。
+4. 启动一个新会话。
+
+## 使用 Lorelum
+
+确认命令菜单中出现 `/lore`。你可以运行：
+
+```text
+/lore 这个改动应该怎样验证？
+```
+
+也可以要求 ZCode 在确定重要决定前使用 Lorelum。
+
+## 更新
+
+在 **Settings → Plugin Management** 中选择 Lorelum，安装可用更新。使用本地 checkout 开发时，修改 Plugin 文件后在 Discover 中卸载并重新安装。
+
+## 排查问题
+
+如果没有出现 `/lore` 或工程指导：
+
+1. 确认 `hooks.enabled: true`，并重启 ZCode。
+2. 确认 Lorelum 已在 Plugin Management 中安装并启用。
+3. 确认 ZCode 运行环境中的 `lore --version` 可用。
+4. 安装或更新后启动一个新会话。
+
+检索或模型问题请查看[故障排查](./troubleshooting)。

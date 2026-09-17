@@ -1,0 +1,17 @@
+{
+  "name": "lorelum-plugins",
+  "plugins": [
+    {
+      "name": "lorelum",
+      "source": "./plugins/zcode/lorelum",
+      "version": "0.1.0-alpha.1",
+      "description": "On-demand engineering Practices for ZCode: a compact installed Knowledge Pack catalog with targeted semantic retrieval.",
+      "author": {
+        "name": "Lorelum",
+        "url": "https://lorelum.com"
+      },
+      "category": "productivity",
+      "icon": "https://lorelum.com/brand/lorelum-icon.svg"
+    }
+  ]
+}
