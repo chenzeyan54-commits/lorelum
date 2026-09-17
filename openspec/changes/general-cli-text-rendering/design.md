@@ -82,13 +82,13 @@ scalar 直接可读；空 string、空 array、空 object 与 `null` 用无歧�
 
 这保证 parser usage error 也进入正确 stdout/stderr 路径。`--json` 本身保持无值；若它出现在另一 option 的值位置，扫描必须跳过它并让 Commander 依照原参数规则处理。
 
-### 5. JSON-consuming integrations 显式表达机器意图
+### 5. Skill 直接阅读 text；JSON parser 显式表达机器意图
 
-普通调用默认 text 后，官方 Skills、Plugin、native smoke、integration helper、documentation code block 和其他 JSON parse callsite 全部改为 `--json`。这不是让它们迁移到 text；相反，显式 flag 让机器入口在未来文案改进中仍稳定。Hook 继续不添加 `--json`，因为它有独立 ABI。
+普通调用默认 text 后，官方 Skills 和 Plugin 在正常 discovery、query、get、资源定位与 lease 流程中直接阅读完整 text，不为取回业务信息而追加 `--json`。它们不得按缩进、行号或 key 排版解析 text；当排查异常、核对 protocol envelope 或检查精确机器字段时，才以 `--json` 复现对应调用。native smoke、integration helper、CI、documentation code block 和其他实际执行 JSON parse 的调用继续显式传入 `--json`，使真正的机器 parser 不受文案布局演进影响。Hook 继续不添加 `--json`，因为它有独立 ABI。
 
 ## Risks / Trade-offs
 
-- **默认值是 breaking change** → `--json` 保留原 envelope，所有受控 Agent/Skill/test 调用在同一 change 显式迁移；文档把人类默认和机器路径分开说明。
+- **默认值是 breaking change** → `--json` 保留原 envelope，所有实际 JSON parser/test 调用在同一 change 显式迁移；Agent/Skill 的普通检索改为直接阅读完整 text，文档明确它不是可解析协议。
 - **完整 data 可能令 text 冗长或暴露本机路径** → 这是现有 JSON public contract 的可视化，不是新的暴露；若某字段确实无公开价值，后续必须先改 JSON data contract。
 - **generic layout 不如手写命令摘要精炼** → 以信息完整和小改造为当前优先级；只有 Help/version 有已确认的人类浏览需求，先使用受约束 custom layout。
 - **raw argv scanner 与 Commander 规则漂移** → scanner 只复用 registry option metadata 并有 `--`、inline value、option-value、未知 command 和 usage-error tests；不复制业务 validation。

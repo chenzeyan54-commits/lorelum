@@ -29,7 +29,7 @@ PR #191 已于 **2026 年 9 月 17 日**关闭；不会在该分支上继续修�
 | --- | --- | --- |
 | 默认覆盖 | 仅 get/list/install/query/version 五类命令 | root、describe、Help、version 和全部普通 command |
 | text 内容 | 每个 command 手写投影，部分字段被省略 | 同一次公开 `data` 的完整树形视觉表现，object field、array item、scalar、空值、多行内容全部可见 |
-| JSON | 支持 `--json`，但同时改变既有裸调用 | `--json` 返回完整、原样 envelope；Agent/脚本显式使用它 |
+| JSON | 支持 `--json`，但同时改变既有裸调用 | `--json` 返回完整、原样 envelope；Agent/Skill 正常阅读 text，排查或实际 parser 才使用它 |
 | 业务职责 | command-specific renderer 需要了解 query/list/install shape | handler 不感知 format；唯一 render 层不读 Store、不连 Backend、不等待或推导状态 |
 | Help | 没有面向人类的 Help | 允许纯布局 custom renderer；仍必须保留完整 capability data |
 | error | text 与 JSON 分流 | 默认 text error 在 stderr 完整显示 code/message/recovery；`--json` error 保持 stdout envelope |
@@ -56,7 +56,7 @@ PR #191 已于 **2026 年 9 月 17 日**关闭；不会在该分支上继续修�
 | `contentDigest` | 机器身份和变化检测 |
 | `sources[].packName`、`sourcePath`、`packRoot` | source provenance 与正确的 `resource:` 解析，尤其是一个 Practice 有多个 source 时 |
 
-**审阅含义：** Agent 或脚本只要需要 `sources[].packRoot`、`data` 或 `error.code`，就不能使用默认输出，必须传 `--json`。官方 Lorelum Skill 的资源解析正属于这一类。
+**审阅含义：** 这是 PR #191 的缺陷：它的 text 没有这些公开字段。当前通用 renderer 必须完整显示它们，因此 Agent/Skill 可以直接阅读默认 text；只有排查或实际机器 parser 才使用 `--json`。
 
 ### 2. `lore pack list [pack] [--details]`
 
@@ -169,7 +169,7 @@ Lorelum 0.1.0-alpha.2 (protocol 1)
 ## 已解决的设计结论
 
 1. **权威来源：** 新 `general-cli-text-rendering` OpenSpec 明确默认 text、显式 JSON 和 Agent contract；旧方向相反的 draft 已移除。
-2. **Agent 兼容：** 官方 Skill、Plugin、tests、process/native smoke 与 Agent 文档中的 JSON consumer 全部显式加 `--json`。
+2. **Agent 兼容：** 官方 Skill 与 Plugin 在正常检索时阅读默认 text；仅排查/协议核对使用 `--json`。tests、process/native smoke 与真实 JSON consumer 保留显式 `--json`。
 3. **人类流程：** 不再接受 get/list/install/query 的字段省略；通用 renderer 自动覆盖所有既有和未来普通 command。
 4. **异步恢复：** `operationId`、coverage、warning、recovery 与所有 data 内状态会完整显示，renderer 不编造下一步或后台状态。
 5. **Help：** custom renderer 只能重排同一 capability data，不能形成第二套 Help schema 或丢弃 result schema/error/exit metadata。

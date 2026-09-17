@@ -4,7 +4,7 @@ description: 命令发现、默认 text 输出、JSON 机器响应和退出码�
 icon: Terminal
 ---
 
-`lore` CLI 默认向 stdout 输出完整、可读的 text，包括 help 和 version。它是命令公开 `data` 的可视化，而不是摘要：source locator、ID、状态、进度、diagnostic 和 metadata 都会保留。Agent、脚本或 CI 需要完整单行 JSON protocol envelope 时，显式传入 `--json`。诊断和进度输出到 stderr；默认命令失败也输出到 stderr。
+`lore` CLI 默认向 stdout 输出完整、可读的 text，包括 help 和 version。它是命令公开 `data` 的可视化，而不是摘要：source locator、ID、状态、进度、diagnostic 和 metadata 都会保留。Agent 直接阅读默认 text；只有结果异常、需要排查或核对 protocol 细节，以及脚本或 CI 需要程序化解析完整单行 JSON envelope 时，才显式传入 `--json`。诊断和进度输出到 stderr；默认命令失败也输出到 stderr。
 
 ## 命令目录
 
@@ -79,6 +79,6 @@ lore --store-root /path/to/store query "评审一个局部 UI 修改的需求范
 | `1`    | 命令特定的诊断或尚未完成的结果，例如 query 准备中或验证发现问题。 |
 | `2`    | 调用失败，检查 `error.code`。                                     |
 
-query 返回 `ok: true` 且 `data.state: "preparing"` 时退出码为 `1`，不代表查询结果为空。index 命令接受后台工作后可以退出 `0`；需要根据返回的 operation ID 继续检查是否完成。默认 text 也会完整展示相同状态和 ID；机器调用方必须使用 `--json`。
+query 返回 `ok: true` 且 `data.state: "preparing"` 时退出码为 `1`，不代表查询结果为空。index 命令接受后台工作后可以退出 `0`；需要根据返回的 operation ID 继续检查是否完成。默认 text 也会完整展示相同状态和 ID；只有程序化 parser 需要使用 `--json`。
 
 各命令参考说明其支持的状态和退出码。

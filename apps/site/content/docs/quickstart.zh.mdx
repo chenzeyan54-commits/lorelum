@@ -34,7 +34,7 @@ Lorelum 以可读 text 显示已安装的工具/协议版本。自动化需要 e
 lore pack install agentic-coding
 ```
 
-安装会保存 Pack，并启动所需的 semantic index 工作。默认 text 会完整显示 index 状态；Agent 使用 `lore pack install agentic-coding --json` 检查 `data.indexSync`。Pack 已安装时，模型准备或索引构建仍可能尚未完成。具体字段见 [Pack 命令](./reference/packs)。
+安装会保存 Pack，并启动所需的 semantic index 工作。默认 text 会完整显示 index 状态，Agent 直接阅读即可。Pack 已安装时，模型准备或索引构建仍可能尚未完成；只有状态异常、需要 protocol 级排查时才使用 `--json`。具体字段见 [Pack 命令](./reference/packs)。
 
 ## 3. 描述任务和时刻
 
@@ -42,7 +42,7 @@ lore pack install agentic-coding
 lore query "我正在按现有设计实现设置卡片，准备确定改动范围、实现计划和验证方式。"
 ```
 
-可用的查询结果会显示与 JSON 相同的 Practice ID、title 和 applicability 字段。需要读取 `data.results` 的 Agent 使用 `lore query "…" --json`。
+可用的查询结果会显示与 JSON 相同的 Practice ID、title 和 applicability 字段。Agent 直接阅读默认 text，不解析其排版；只有结果异常、需要排查时才使用 `--json`。
 
 首次 query 可能在本地模型下载或加载期间返回 `data.state: "preparing"`。等待加载后重试：
 
@@ -64,7 +64,7 @@ lore get <practice-id>
 
 ## 5. 接入 Agent
 
-按[接入 Agent](./agent-setup)安装 Lorelum Skill；Codex 用户使用 [Codex Plugin](./codex)。在新任务中向 Agent 发出指令：
+按[接入 Agent](./agent-setup)安装 Lorelum Skill；使用 Codex 或 ZCode 时，分别安装 [Codex Plugin](./codex) 或 [ZCode Plugin](./zcode)。在新任务中向 Agent 发出指令：
 
 ```text
 规划这次改动前先使用 Lorelum。描述当前任务和需要做出的判断，

@@ -35,7 +35,7 @@ The official `agentic-coding` Pack covers engineering decisions during planning,
 lore pack install agentic-coding
 ```
 
-Installation saves the Pack and starts the semantic index work it needs. Default text fully shows the index state; an Agent checks `data.indexSync` with `lore pack install agentic-coding --json`. The Pack can be installed while model preparation or indexing is pending. See [Pack commands](./reference/packs).
+Installation saves the Pack and starts the semantic index work it needs. Default text fully shows the index state, so an Agent reads it directly. The Pack can be installed while model preparation or indexing is pending. Use `--json` only if an unexpected state needs protocol-level diagnosis. See [Pack commands](./reference/packs).
 
 ## 3. Describe the task and moment
 
@@ -43,7 +43,7 @@ Installation saves the Pack and starts the semantic index work it needs. Default
 lore query "I am implementing a settings card from an existing design. I am about to define the scope, implementation plan, and validation."
 ```
 
-A ready result visibly contains the same Practice IDs, titles, and applicability fields as JSON. An Agent that needs `data.results` uses `lore query "…" --json`.
+A ready result visibly contains the same Practice IDs, titles, and applicability fields as JSON. An Agent reads those fields directly from default text and does not parse its layout; use `--json` only to diagnose an unexpected result.
 
 The first query may return `data.state: "preparing"` while the local model downloads or loads. Wait for it, then retry:
 
@@ -65,7 +65,7 @@ Read the full instructions and applicability conditions. The summary helps you c
 
 ## 5. Connect your agent
 
-Follow [Agent integration](./agent-setup) to install the Lorelum Skill, or the [Codex Plugin](./codex) if you use Codex. In a new task, ask:
+Follow [Agent integration](./agent-setup) to install the Lorelum Skill, or install the [Codex Plugin](./codex) or [ZCode Plugin](./zcode) for those hosts. In a new task, ask:
 
 ```text
 Use Lorelum before planning this change. Describe the task and current

@@ -4,7 +4,7 @@ description: Command discovery, default text output, JSON machine responses, and
 icon: Terminal
 ---
 
-The `lore` CLI defaults to complete, readable text on stdout, including Help and version. It is a visual representation of the command's public `data`, not a summary: source locators, IDs, state, progress, diagnostics, and metadata remain visible. Pass `--json` when an agent, script, or CI job needs the complete one-line JSON protocol envelope. Diagnostics and progress go to stderr; default command failures also go to stderr.
+The `lore` CLI defaults to complete, readable text on stdout, including Help and version. It is a visual representation of the command's public `data`, not a summary: source locators, IDs, state, progress, diagnostics, and metadata remain visible. Agents read this default text directly. Use `--json` only to diagnose an unexpected result, inspect protocol details, or let a script or CI job programmatically parse the complete one-line JSON envelope. Diagnostics and progress go to stderr; default command failures also go to stderr.
 
 ## Commands
 
@@ -79,6 +79,6 @@ Branch on error codes instead of parsing messages. Within a successful result, i
 | `1` | A command-specific diagnostic or non-final result, such as query preparation or validation diagnostics. |
 | `2` | Failed invocation; inspect `error.code`. |
 
-A query with `ok: true` and `data.state: "preparing"` exits `1`. This is not an empty search result. Index commands can exit `0` after accepting work; use the returned operation ID to check completion. In default text the same state and ID remain visible; machine consumers must select `--json`.
+A query with `ok: true` and `data.state: "preparing"` exits `1`. This is not an empty search result. Index commands can exit `0` after accepting work; use the returned operation ID to check completion. In default text the same state and ID remain visible; only programmatic parsers need `--json`.
 
 The command references specify which states and exit codes each command supports.

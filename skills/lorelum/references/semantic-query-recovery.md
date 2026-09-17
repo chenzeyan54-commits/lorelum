@@ -1,6 +1,6 @@
 # Semantic query recovery
 
-Read this reference only after a semantic `lore query ... --json` has returned `data.state: "preparing"` or an error. Do not use it as a preflight checklist before the first query.
+Read this reference only after a semantic `lore query ...` has reported `state: "preparing"` or an error. Do not use it as a preflight checklist before the first query. Default text is sufficient to detect that recovery is needed; rerun the query with `--json` only when diagnosing exact envelope fields.
 
 ## Model preparation or embedding errors
 

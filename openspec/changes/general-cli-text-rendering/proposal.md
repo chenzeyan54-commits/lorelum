@@ -11,7 +11,7 @@ Lorelum 的 JSON envelope 同时承载机器协议外壳和业务结果。把它
 - text MUST 呈现公开 `data` 的全部字段和值，包括 identity、状态、source、ID、进度、metadata、`null`、空集合和多行内容。只有 JSON envelope 外壳的 `protocolVersion`、顶层 `toolVersion`、`command`、`ok` 可不重复；若这些值位于 `data` 内，仍必须展示。
 - 默认使用通用树形 text renderer。为 Help、version 等天然需要更舒适排版的命令预留仅布局用途的内部 custom renderer；它仍必须消费同一数据、保留全部公开信息，且不成为新的命令语义、外部插件接口或第二个数据模型。
 - text failure 将现有 `error.code`、`message` 和完整 `recovery` 写入 stderr，并保持原 exit code；`--json` failure 继续在 stdout 写完整 envelope。`lore hook codex` 不参与普通 format 协商。
-- 将 Agent/Skill/Hook、native smoke、CLI 文档和双语网站的机器消费改为显式 `--json`，并为默认 text 和显式 JSON 建立同一 fixture 的完整性/进程测试。
+- 让 Agent/Skill 在普通检索时直接阅读默认完整 text，而不把它当作可解析协议；只有排查异常、核对 protocol envelope 或显式交给机器 parser 时才使用 `--json`。native smoke、CLI 测试、CI 与其他实际解析 JSON 的调用仍显式传入 `--json`，并为默认 text 和显式 JSON 建立同一 fixture 的完整性/进程测试。
 
 ## Capabilities
 
@@ -21,7 +21,7 @@ Lorelum 的 JSON envelope 同时承载机器协议外壳和业务结果。把它
 
 ### Modified Capabilities
 
-- `agent-integration`: 将面向 Agent、Skill 与 Hook 的 CLI 调用明确为 `--json` machine contract，避免它们解析供人阅读的默认 text。
+- `agent-integration`: 将 Agent/Skill 的普通 CLI 使用明确为阅读默认完整 text，`--json` 仅作为诊断或机器解析的显式入口；Hook 保持其专用 ABI。
 - `retrieval-query`: 将 query 的业务结果/exit 语义与输出格式拆开；`--json` 保持现有 envelope，默认 text 可完整展示同一 ready、partial、preparing、indexing 与 degraded data。
 
 ## Impact

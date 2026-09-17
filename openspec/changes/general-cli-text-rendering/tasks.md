@@ -11,10 +11,10 @@
 - [x] 2.2 为 root/command Help 与 version 增加仅布局用途的 custom renderer，且以字段/值完整性 tests 验证它们不遗漏 capability data 或 version data；其余 command 不新增按命令投影的 renderer。
 - [x] 2.3 删除或不引入 PR #191 风格的 command-specific text decoding、data filtering、Store/Backend I/O 或 state synthesis；用 focused diff review 和 output tests 验证 text 只消费 handler 已返回的 data。
 
-## 3. 迁移机器调用方与用户文档
+## 3. 迁移 JSON parser 与用户文档
 
 - [x] 3.1 审计并修正 CLI unit/process/native smoke/integration helpers 中的 JSON parse 路径，使其显式传 `--json`；新增默认 text process coverage，验证 Hook ABI 保持未改。
-- [x] 3.2 更新 `packages/cli/AGENTS.md`、`docs/cli` 和双语 site documentation：默认 text 是完整人类视图，`--json` 是完整 machine envelope，Agent/Skill 不解析 text；运行相关链接/构建检查。
+- [x] 3.2 更新 `packages/cli/AGENTS.md`、`docs/cli`、双语 site documentation 与官方 Skills：默认 text 是 Agent/人类可直接阅读的完整视图，任何调用方都不解析它的排版；`--json` 仅供排查、protocol 核对或实际 machine parser 使用；运行相关链接/构建检查。
 - [x] 3.3 保留 PR #191 的 text-output 对照审阅文档作为本地交付证据，并确认关闭的 PR、旧分支实现和方向相反的未合并 OpenSpec 不进入新 PR diff。
 
 ## 4. 验收与提交前收口

@@ -17,7 +17,7 @@
 
 #### Scenario: Explicit JSON preserves the machine envelope
 
-- **WHEN** Agent、Skill、脚本或用户执行任一普通命令并传入适用的 `--json`
+- **WHEN** 调用方为诊断、protocol 核对或显式机器解析执行任一普通命令并传入适用的 `--json`
 - **THEN** stdout SHALL 只写一行完整 JSON envelope，调用方 SHALL 可继续读取相同的 `data`、`error.code`、source provenance、operation ID、状态与退出码
 
 #### Scenario: A JSON-looking argument is not mistaken for the format option
@@ -29,7 +29,7 @@
 
 text MUST 从同一次成功 handler result 的公开 `data` 生成，并呈现其中每一个 object field、array item 和 scalar value。identity、status、source、ID、进度、diagnostics、metadata、`null`、空 object、空 array 与多行 string 均 MUST 可见；位于 `data` 的 protocol/tool version 同样 MUST 可见。text 可以不重复 JSON envelope 外壳的 `protocolVersion`、顶层 `toolVersion`、`command` 与 `ok`。
 
-默认 text SHALL 使用稳定的树形可读排版。单个 command MAY 使用内部 custom renderer 改善 Help、version 或其他天然面向人类的布局，但 custom renderer MUST 保留同一公开数据的完整信息、顺序和值；它 MUST NOT 读取 Store、连接 Backend、等待 operation、重新排序、过滤字段、推导状态或成为外部 custom-render plugin contract。text 不是供 Agent、Skill、Hook 或脚本解析的协议。
+默认 text SHALL 使用稳定的树形可读排版。单个 command MAY 使用内部 custom renderer 改善 Help、version 或其他天然面向人类的布局，但 custom renderer MUST 保留同一公开数据的完整信息、顺序和值；它 MUST NOT 读取 Store、连接 Backend、等待 operation、重新排序、过滤字段、推导状态或成为外部 custom-render plugin contract。Agent 与 Skill 可直接阅读 text 的完整信息，但 text 不是供任何调用方以格式化规则解析的协议；需要机器解析时使用 `--json`。
 
 #### Scenario: Generic text retains nested, empty and multiline data
 
