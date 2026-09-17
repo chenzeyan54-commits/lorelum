@@ -20,4 +20,4 @@
 ## 4. 验收与提交前收口
 
 - [x] 4.1 运行 `openspec validate general-cli-text-rendering --type change --strict --no-interactive`、focused CLI output tests、`bun test packages/cli`、`bun run test:integration`、`bun run test:native-smoke`、`bun run typecheck`、`bun run lint`、`bun run build:site` 与 `git diff --check`；native smoke 已按脚本执行，但本机没有它必需的 `/absolute/path/to/granite-q4_0.gguf`，其余检查通过（lint 仅有既有 warning，`fmt:check` 仅报告未修改的 `scripts/release/install-ps1.integration.test.ts`）。
-- [ ] 4.2 复查完整 diff、staged file list 和 secret-pattern scan，确认没有 Engine/Backend/Store/Hook/MCP 语义改动，没有公共 renderer plugin，没有丢失公开 data 的 text filter，并为新分支创建关联 Issue 和 PR。
+- [x] 4.2 复查完整 diff、staged file list 和 secret-pattern scan，确认没有 Engine/Backend/Store/Hook/MCP 语义改动，没有公共 renderer plugin，没有丢失公开 data 的 text filter，并为新分支创建关联 Issue #194 和 PR #195。
