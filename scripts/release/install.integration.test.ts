@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const version = "0.1.0-alpha.1";
-const upgradeVersion = "0.1.0-alpha.2";
+const upgradeVersion = "0.1.0-alpha.3";
 const stableVersion = "0.1.0";
 const repositoryRoot = join(import.meta.dir, "..", "..");
 
