@@ -28,5 +28,5 @@ Read this reference only after a semantic `lore query ...` has reported `state: 
 Do not use keyword retrieval as an automatic fallback. Use it only when the user intentionally wants offline lexical lookup or when diagnosing the semantic runtime, and identify the result as keyword retrieval. Use concise concrete terms rather than a full natural-language request:
 
 ```sh
-lore query "idempotency key database uniqueness safe retry" --mode keyword --json
+lore query "idempotency key database uniqueness safe retry" --mode keyword
 ```
