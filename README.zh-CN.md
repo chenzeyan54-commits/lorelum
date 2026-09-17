@@ -158,7 +158,7 @@ lore get <practice-id>
 | 官方 Pack | 版本 | 重点 |
 | --- | --- | --- |
 | `agentic-coding` | `0.4.0` | 规划、实现、校验边界、恢复、验证和交付中的工程判断 |
-| `pack-creator` | `0.1.0` | Practice 与 Pack 的编写、评审和发布 |
+| `pack-creator` | `0.2.0` | Practice 与 Pack 的编写、评审和发布 |
 | `react-web-craft` | `0.1.0` | React Web 应用设计与性能：组件状态、异步数据流、代码加载、渲染与组合 |
 | `issue-pr-etiquette` | `0.1.0` | 可验证的单问题 Issue、单范围 PR、审查沟通与诚实披露 AI 协助 |
 

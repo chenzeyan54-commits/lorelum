@@ -106,7 +106,7 @@ The function anchors the source entrypoint to the current worktree while leaving
 ```zsh
 lore-dev query "responsibility boundary" --top-k 2
 lore-dev --store-root "$(git rev-parse --path-format=absolute --git-path lorelum/store)" \
-  pack install pack-creator@0.1.0
+  pack install pack-creator@0.2.0
 ```
 
 The `ld` alias above is optional and specific to the zsh example.
