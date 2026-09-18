@@ -92,7 +92,8 @@ test(
       expect(results[0]?.state).toBe("ready");
       const record = (await readRecord(directory))!;
       expect(record.pid).not.toBe(process.pid);
-      if (process.platform !== "win32")
+      // Bun argv0 changes the macOS process display name; Linux `ps comm` keeps `bun`.
+      if (process.platform === "darwin")
         expect(await processDisplayName(record.pid)).toBe("lore-backend");
       // Directory and record permission bits only exist on POSIX.
       if (process.platform !== "win32") {
