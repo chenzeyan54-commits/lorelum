@@ -10,7 +10,7 @@ import {
   type LogEmitter,
   type TraceId,
 } from "@lorelum/log";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 import { CliStderrLogSink } from "../runtime/diagnostics.js";
 import { Logger } from "../runtime/logger.js";
@@ -61,9 +61,7 @@ export async function createProcessLogRuntime(
   const level = await configuredLevel(options.debug);
   const rootDirectory = options.rootDirectory ?? defaultLogDirectory();
   const trustedDirectory =
-    options.rootDirectory === undefined
-      ? resolveLorelumPaths().rootDirectory
-      : dirname(rootDirectory);
+    options.rootDirectory === undefined ? resolveLorelumPaths().rootDirectory : rootDirectory;
   const fileSink =
     options.persist === false
       ? undefined

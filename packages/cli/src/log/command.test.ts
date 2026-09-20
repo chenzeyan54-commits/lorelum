@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -57,7 +57,9 @@ test("views one trace through the public logs command and prunes only managed fi
 });
 
 test("debug is a per-invocation persistent collection override", async () => {
-  const root = await mkdtemp(join(tmpdir(), "lorelum-cli-debug-"));
+  const parent = await mkdtemp(join(tmpdir(), "lorelum-cli-debug-parent-"));
+  await chmod(parent, 0o777);
+  const root = await mkdtemp(join(parent, "logs-"));
   try {
     const stdout = new MemoryWriter();
     const traceId = "00000000-0000-4000-8000-000000000302" as never;
@@ -73,6 +75,6 @@ test("debug is a per-invocation persistent collection override", async () => {
       expect.arrayContaining([expect.objectContaining({ message: "command.debug-enabled" })]),
     );
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
   }
 });
