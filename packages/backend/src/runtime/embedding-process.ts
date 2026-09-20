@@ -4,7 +4,9 @@ import { llamaArguments } from "./llama-options";
 /* eslint-disable no-await-in-loop -- Child startup and shutdown polling are sequential and bounded. */
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
+import { noopEmitter, type LogEmitter, type LogEventInput } from "@lorelum/log";
 import { platformEnvironment } from "../config/launch";
 import type { EmbeddingConfig } from "../config/embedding";
 import { EmbeddingError } from "../modules/embedding/errors";
@@ -28,16 +30,58 @@ export interface EmbeddingProcessDeps {
   ): ReturnType<typeof spawn>;
 }
 
+export interface EmbeddingProcessDiagnosticOptions {
+  readonly diagnostics?: LogEmitter;
+  /** A preparation is a shared resource identity, not a trace owner. */
+  readonly preparationId?: string;
+}
+
+export function nativeExitLogRecord(input: {
+  readonly nativeRunId: string;
+  readonly preparationId?: string;
+  readonly buildIdentity?: string;
+  readonly readiness: "pending" | "ready" | "failed";
+  readonly stopped: boolean;
+  readonly exitCode: number | null;
+  readonly signal: string | null;
+  readonly stdoutBytes: number;
+  readonly stderrBytes: number;
+}): LogEventInput {
+  return {
+    time: new Date().toISOString(),
+    level: input.stopped ? "info" : input.readiness === "ready" ? "warn" : "error",
+    component: "backend",
+    event: input.stopped
+      ? "native.stopped"
+      : input.readiness === "ready"
+        ? "native.exited-after-ready"
+        : "native.exited-before-ready",
+    nativeRunId: input.nativeRunId,
+    ...(input.preparationId === undefined ? {} : { preparationId: input.preparationId }),
+    ...(input.buildIdentity === undefined ? {} : { buildIdentity: input.buildIdentity }),
+    readiness: input.stopped ? input.readiness : input.readiness === "ready" ? "ready" : "failed",
+    ...(input.exitCode === null ? {} : { exitCode: input.exitCode }),
+    ...(input.signal === null ? {} : { signal: input.signal }),
+    stdoutBytes: input.stdoutBytes,
+    stderrBytes: input.stderrBytes,
+    ...(input.stopped ? {} : { code: "embedding.failed" }),
+  };
+}
+
+export interface EmbeddingProcessOptions
+  extends EmbeddingProcessDeps, EmbeddingProcessDiagnosticOptions {}
+
 /** This object owns a single lifetime, including failed startup and bounded bind retries. */
 export function createEmbeddingProcess(
   config: Pick<EmbeddingConfig, "modelPath" | "threads"> | undefined,
   recordProcess?: (
     identity: (ProcessIdentity & { nativeBuild: string }) | undefined,
   ) => Promise<void>,
-  deps: EmbeddingProcessDeps = {},
+  options: EmbeddingProcessOptions = {},
 ): EmbeddingRuntime {
-  const resolveResources = deps.resolveResources ?? resolveEmbeddingResources;
-  const spawnProcess = deps.spawnProcess ?? spawn;
+  const resolveResources = options.resolveResources ?? resolveEmbeddingResources;
+  const spawnProcess = options.spawnProcess ?? spawn;
+  const diagnostics = options.diagnostics ?? noopEmitter;
   let child: ReturnType<typeof spawn> | undefined;
   let completion: Promise<void> | undefined;
   let startTask: Promise<void> | undefined;
@@ -69,7 +113,7 @@ export function createEmbeddingProcess(
   }
   async function launch(signal: AbortSignal, deadline: number) {
     if (!config?.modelPath) throw new EmbeddingError("embedding.not-configured");
-      resources = await resolveResources(config.modelPath, signal);
+    resources = await resolveResources(config.modelPath, signal);
     for (let attempt = 0; attempt < MAX_BIND_ATTEMPTS; attempt++) {
       signal.throwIfAborted();
       const port = await reservePort();
@@ -78,11 +122,18 @@ export function createEmbeddingProcess(
       const alias = randomBytes(32).toString("hex");
       await resources.assertUnchanged();
       signal.throwIfAborted();
+      const nativeRunId = randomUUID();
+      let readiness: "pending" | "ready" | "failed" = "pending";
+      let stdoutBytes = 0;
+      let stderrBytes = 0;
       const owned = spawnProcess(
         resources.executable,
         llamaArguments(config.modelPath, port, alias, config),
         {
-          stdio: ["pipe", "ignore", "ignore"],
+          // Streams are continuously drained only to retain byte counts. The
+          // first release does not capture raw native output, which means a
+          // provider cannot leak credentials by echoing its environment.
+          stdio: ["pipe", "pipe", "pipe"],
           env: {
             ...platformEnvironment(),
             LLAMA_API_KEY: secret,
@@ -93,10 +144,32 @@ export function createEmbeddingProcess(
       );
       child = owned;
       completion = new Promise<void>((resolve) => {
-        owned.once("close", () => {
+        owned.once("close", (exitCode, exitSignal) => {
+          const stopped = lifetime.signal.aborted;
+          diagnostics.emit(
+            nativeExitLogRecord({
+              nativeRunId,
+              ...(options.preparationId === undefined
+                ? {}
+                : { preparationId: options.preparationId }),
+              ...(resources === undefined ? {} : { buildIdentity: resources.buildIdentity }),
+              readiness,
+              stopped,
+              exitCode,
+              signal: exitSignal,
+              stdoutBytes,
+              stderrBytes,
+            }),
+          );
           if (client) resolveExit();
           resolve();
         });
+      });
+      owned.stdout?.on("data", (chunk: Buffer | string) => {
+        stdoutBytes += Buffer.byteLength(chunk);
+      });
+      owned.stderr?.on("data", (chunk: Buffer | string) => {
+        stderrBytes += Buffer.byteLength(chunk);
       });
       // A dead native child closes its pipe; never log the credential or native stderr.
       owned.stdin?.on("error", () => {});
@@ -105,6 +178,18 @@ export function createEmbeddingProcess(
         owned.once("error", reject);
       });
       if (owned.pid === undefined) throw new EmbeddingError("embedding.failed");
+      diagnostics.emit({
+        time: new Date().toISOString(),
+        level: "info",
+        component: "backend",
+        event: "native.spawned",
+        nativeRunId,
+        ...(options.preparationId === undefined ? {} : { preparationId: options.preparationId }),
+        buildIdentity: resources.buildIdentity,
+        readiness,
+        stdoutBytes,
+        stderrBytes,
+      });
       const identity = await processIdentity(owned.pid);
       if (!identity) {
         await completion;
@@ -127,6 +212,21 @@ export function createEmbeddingProcess(
             signal.throwIfAborted();
             if (owned.exitCode !== null || owned.signalCode !== null) break;
             client = candidate;
+            readiness = "ready";
+            diagnostics.emit({
+              time: new Date().toISOString(),
+              level: "info",
+              component: "backend",
+              event: "native.readiness-confirmed",
+              nativeRunId,
+              ...(options.preparationId === undefined
+                ? {}
+                : { preparationId: options.preparationId }),
+              buildIdentity: resources.buildIdentity,
+              readiness,
+              stdoutBytes,
+              stderrBytes,
+            });
             return;
           } finally {
             probeTimeout.dispose();

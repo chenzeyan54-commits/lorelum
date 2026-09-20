@@ -16,7 +16,14 @@ import {
   type SemanticQueryResult,
 } from "@lorelum/engine";
 import { Elysia, status } from "elysia";
-import { reject, requireJson } from "../../plugins/local-auth";
+import { randomUUID } from "node:crypto";
+import {
+  reject,
+  requestDiagnosticLevel,
+  requestTraceId,
+  requireJson,
+} from "../../plugins/local-auth";
+import { noopEmitter, withDiagnosticLevel, type LogEmitter } from "@lorelum/log";
 import { backendErrorBody, errorSchema } from "../../protocol/errors";
 import { EmbeddingError } from "../embedding/errors";
 import { queryRequestSchema, queryResultSchema, type BackendQueryResult } from "./model";
@@ -32,7 +39,11 @@ export interface QueryControllerServices {
 }
 
 /** The controller selects the Engine use case; it does not implement retrieval rules. */
-export function queryController(services: QueryControllerServices, available: () => boolean) {
+export function queryController(
+  services: QueryControllerServices,
+  available: () => boolean,
+  diagnostics: LogEmitter = noopEmitter,
+) {
   return new Elysia({ normalize: false })
     .onBeforeHandle(({ request }) => {
       if (!available()) return reject(503, "backend.busy");
@@ -40,29 +51,116 @@ export function queryController(services: QueryControllerServices, available: ()
     })
     .post(
       BACKEND_ROUTES.query,
-      async ({ body }) => {
+      async ({ body, request }) => {
+        const traceId = requestTraceId(request);
+        const requestDiagnostics = withDiagnosticLevel(
+          diagnostics,
+          requestDiagnosticLevel(request),
+        );
+        const requestId = randomUUID();
+        const startedAt = Date.now();
+        if (traceId !== undefined) {
+          requestDiagnostics.emit({
+            time: new Date().toISOString(),
+            level: "info",
+            component: "backend",
+            event: "backend.request.started",
+            traceId,
+            requestId,
+            route: "query",
+            query: body.query.text,
+          });
+          requestDiagnostics.emit({
+            time: new Date().toISOString(),
+            level: "info",
+            component: "backend",
+            event: "trace.request.accepted",
+            traceId,
+            requestId,
+          });
+        }
         try {
           const query = {
             text: body.query.text,
             ...(body.query.limit === undefined ? {} : { limit: body.query.limit }),
           };
-          if ((body.query.mode ?? "semantic") === "keyword") {
-            return toResponse(
-              await services.keywordQueryService.query({ rootPath: body.storageRoot }, query),
-            );
+          const result =
+            (body.query.mode ?? "semantic") === "keyword"
+              ? await services.keywordQueryService.query(
+                  { rootPath: body.storageRoot },
+                  query,
+                  traceId === undefined ? undefined : { emitter: requestDiagnostics, traceId },
+                )
+              : await services.semanticRuntime.query(
+                  { rootPath: body.storageRoot },
+                  targetFor(body.query),
+                  query,
+                  {
+                    maxWaitMs: body.query.maxWaitMs ?? 3_000,
+                    minCoveragePercent: body.query.minCoveragePercent ?? 0,
+                  },
+                );
+          const response = toResponse(result);
+          if (traceId !== undefined) {
+            const operationId = "operationId" in response ? response.operationId : undefined;
+            const preparationId = "preparationId" in response ? response.preparationId : undefined;
+            if (operationId !== undefined) {
+              requestDiagnostics.emit({
+                time: new Date().toISOString(),
+                level: "info",
+                component: "backend",
+                event: "trace.operation.accepted",
+                traceId,
+                requestId,
+                operationId,
+              });
+            }
+            if (preparationId !== undefined) {
+              requestDiagnostics.emit({
+                time: new Date().toISOString(),
+                level: "info",
+                component: "backend",
+                event: "trace.preparation.accepted",
+                traceId,
+                requestId,
+                preparationId,
+              });
+            }
+            requestDiagnostics.emit({
+              time: new Date().toISOString(),
+              level: "info",
+              component: "backend",
+              event: "backend.request.completed",
+              traceId,
+              requestId,
+              route: "query",
+              method: "POST",
+              status: 200,
+              ...(operationId === undefined ? {} : { operationId }),
+              ...(preparationId === undefined ? {} : { preparationId }),
+              durationMs: Date.now() - startedAt,
+            });
           }
-          return toResponse(
-            await services.semanticRuntime.query(
-              { rootPath: body.storageRoot },
-              targetFor(body.query),
-              query,
-              {
-                maxWaitMs: body.query.maxWaitMs ?? 3_000,
-                minCoveragePercent: body.query.minCoveragePercent ?? 0,
-              },
-            ),
-          );
+          return response;
         } catch (error) {
+          const failure = queryFailureDiagnostic(error);
+          const rawError = rawErrorEvidence(error);
+          if (traceId !== undefined) {
+            requestDiagnostics.emit({
+              time: new Date().toISOString(),
+              level: "error",
+              component: "backend",
+              event: "backend.request.failed",
+              traceId,
+              requestId,
+              route: "query",
+              method: "POST",
+              status: failure.status,
+              durationMs: Date.now() - startedAt,
+              code: failure.code,
+              ...(rawError === undefined ? {} : { rawError }),
+            });
+          }
           return queryFailure(error);
         }
       },
@@ -101,6 +199,29 @@ function targetFor(input: {
   });
 }
 
+function queryFailureDiagnostic(error: unknown): {
+  readonly status: number;
+  readonly code: string;
+} {
+  if (error instanceof InvalidQueryRequestError) return { status: 400, code: "usage.invalid" };
+  if (error instanceof KeywordIndexUnavailableError)
+    return { status: 503, code: "query.unavailable" };
+  if (error instanceof KeywordIndexError) return { status: 500, code: "query.failed" };
+  if (error instanceof SemanticIndexNotReadyError)
+    return { status: 503, code: "semantic.index-not-ready" };
+  if (error instanceof SemanticIndexIncompatibleError)
+    return { status: 503, code: "semantic.index-incompatible" };
+  if (error instanceof SemanticEmbeddingError)
+    return { status: 503, code: "semantic.embedding-failed" };
+  if (error instanceof SemanticIndexQueryError || error instanceof SemanticIndexError)
+    return { status: 500, code: "semantic.index-failed" };
+  if (error instanceof EmbeddingError) return { status: 503, code: error.code };
+  if (error instanceof StoreBusyError) return { status: 503, code: "store.busy" };
+  if (error instanceof StoreRecoveryRequiredError)
+    return { status: 503, code: "store.recovery-required" };
+  return { status: 500, code: "backend.failed" };
+}
+
 function queryFailure(error: unknown) {
   if (error instanceof InvalidQueryRequestError)
     return status(400, domainError("usage.invalid", "The command invocation is invalid."));
@@ -135,6 +256,16 @@ function queryFailure(error: unknown) {
       domainError("store.recovery-required", "The local Pack store requires recovery."),
     );
   return status(500, backendErrorBody("backend.failed"));
+}
+
+function rawErrorEvidence(error: unknown): string | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const value = `${error.name}: ${error.message}`;
+  return /\b(?:authorization|cookie)\s*[:=]|\bbearer\s+\S+|-----BEGIN(?: [A-Z]+)? PRIVATE KEY-----/i.test(
+    value,
+  )
+    ? undefined
+    : value;
 }
 
 function domainError(code: string, message: string) {

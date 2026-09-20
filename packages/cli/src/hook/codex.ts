@@ -1,6 +1,7 @@
 import type { ListPackDetailsResult } from "@lorelum/engine";
 
 import type { OutputWriter } from "../output/protocol.js";
+import type { Logger } from "@lorelum/log";
 import {
   buildHostHookResponse,
   createHostHookResponse,
@@ -27,6 +28,7 @@ export interface RunCodexHookOptions {
   readonly stderr: OutputWriter;
   readonly services?: CodexHookServices;
   readonly storeRoot?: string;
+  readonly log?: Logger;
 }
 
 /** Detect the raw Codex Hook ABI and consume its only supported global option. */

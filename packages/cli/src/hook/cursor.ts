@@ -1,4 +1,5 @@
 import type { OutputWriter } from "../output/protocol.js";
+import type { Logger } from "@lorelum/log";
 import {
   buildCursorHookResponse,
   createHostHookResponse,
@@ -23,6 +24,7 @@ export interface RunCursorHookOptions {
   readonly stderr: OutputWriter;
   readonly services?: CursorHookServices;
   readonly storeRoot?: string;
+  readonly log?: Logger;
 }
 
 /** Detect the raw Cursor Hook ABI and consume its only supported global option. */

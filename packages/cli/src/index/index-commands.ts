@@ -14,6 +14,7 @@ import type { StorageRoot } from "@lorelum/engine";
 
 import type { JsonSchema, JsonValue } from "../output/protocol";
 import type { CommandDefinition } from "../registry";
+import type { TraceId } from "@lorelum/log";
 import { CliError, frameworkErrorCodes } from "../runtime/errors";
 import { resolveInvocationStorageRoot } from "../store/storage-root";
 import {
@@ -23,9 +24,9 @@ import {
 
 export interface IndexCommandServices {
   /** Read-only status keeps its existing non-starting Backend path. */
-  readonly createClient: () => Promise<BackendClient>;
+  readonly createClient: (traceId?: TraceId, debug?: boolean) => Promise<BackendClient>;
   /** Build/rebuild observe Backend-owned execution without waiting for model downloads. */
-  readonly createRuntimeClient: () => Promise<IndexRuntimeClient>;
+  readonly createRuntimeClient: (traceId?: TraceId, debug?: boolean) => Promise<IndexRuntimeClient>;
   readonly storageRoot: StorageRoot;
 }
 
@@ -166,7 +167,10 @@ function command(
         const projectOptions = resolveProjectInvocationOptions(invocation.options);
         const indexOptions = isOperation ? undefined : backendProjectTargetOptions(projectOptions);
         if (isStatus || isOperation) {
-          const client = await services.createClient();
+          const client = await services.createClient(
+            invocation.traceId,
+            invocation.options.debug === true,
+          );
           if (isStatus)
             return {
               data: toStatus(await client.indexStatus(root, indexOptions)),
@@ -175,7 +179,10 @@ function command(
           if (operationId === undefined) throw new BackendError("backend.invalid-request");
           return { data: toOperation(await client.indexOperation(operationId)) };
         }
-        const client = await services.createRuntimeClient();
+        const client = await services.createRuntimeClient(
+          invocation.traceId,
+          invocation.options.debug === true,
+        );
         return {
           data: toOperation(
             name === "build"

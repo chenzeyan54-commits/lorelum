@@ -13,9 +13,10 @@ import {
 } from "@lorelum/backend/protocol";
 import type { JsonSchema, JsonValue } from "../output/protocol";
 import type { CommandDefinition } from "../registry";
+import type { TraceId } from "@lorelum/log";
 
 export interface ModelCommandServices {
-  readonly createClient: () => Promise<BackendClient>;
+  readonly createClient: (traceId?: TraceId, debug?: boolean) => Promise<BackendClient>;
   readonly progressWriter?: OutputWriter;
 }
 
@@ -45,7 +46,10 @@ const modelStatusResultSchema: JsonSchema = {
 };
 
 /** Connect to the verified daemon record without starting it or creating runtime state. */
-export async function createProcessBackendClient(): Promise<BackendClient> {
+export async function createProcessBackendClient(
+  traceId?: TraceId,
+  debug = false,
+): Promise<BackendClient> {
   const [clientModule, controlModule] = await Promise.all([
     import("@lorelum/backend/client"),
     import("@lorelum/backend/control"),
@@ -64,6 +68,8 @@ export async function createProcessBackendClient(): Promise<BackendClient> {
     timeoutMs: settings.requestTimeoutMs,
     startupTimeoutMs: settings.startupTimeoutMs,
     shutdownTimeoutMs: settings.shutdownTimeoutMs,
+    ...(traceId === undefined ? {} : { traceId }),
+    ...(debug ? { diagnosticLevel: "debug" as const } : {}),
   });
 }
 
@@ -92,8 +98,11 @@ export function createModelCommands(services: ModelCommandServices): readonly Co
       summary,
       resultSchema: modelStatusResultSchema,
       errorCodes: [...backendErrorCodes, ...embeddingErrorCodes],
-      execute: async () => {
-        const client = await services.createClient();
+      execute: async (invocation) => {
+        const client = await services.createClient(
+          invocation.traceId,
+          invocation.options.debug === true,
+        );
         return toResult(
           operation === "loadModel"
             ? await client.loadModel({

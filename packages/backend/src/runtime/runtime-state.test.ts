@@ -11,7 +11,7 @@ import {
   type RuntimeRecord,
 } from "./runtime-state";
 import { processIdentity } from "./process-identity";
-import { logEvent } from "./log";
+import { createPrivateJsonlSink } from "./private-jsonl-sink";
 
 async function fixture(run: (directory: string) => Promise<void>) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "backend-state-")));
@@ -108,11 +108,18 @@ test.skipIf(process.platform !== "win32")(
       });
     }),
 );
-test("lifecycle log rotates at a bounded size", async () =>
+test("private diagnostic lifecycle log rotates at a bounded size", async () =>
   fixture(async (directory) => {
     await writeFile(join(directory, "backend.log"), "x".repeat(65_536), { mode: 0o600 });
-    await logEvent(directory, "ready");
+    const sink = await createPrivateJsonlSink({ directory });
+    await sink.write({
+      time: new Date().toISOString(),
+      level: "info",
+      component: "backend",
+      event: "backend.daemon.ready",
+    });
+    await sink.close();
     const current = await readFile(join(directory, "backend.log"), "utf8");
-    expect(JSON.parse(current).event).toBe("ready");
+    expect(JSON.parse(current).message).toBe("backend.daemon.ready");
     expect((await readFile(join(directory, "backend.log.1"))).length).toBe(65_536);
   }));

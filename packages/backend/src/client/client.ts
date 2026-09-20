@@ -3,12 +3,15 @@ import type { z } from "zod";
 import { readBoundedJson } from "../http/read-json";
 import { createTimeoutSignal } from "../lifecycle/timeout";
 import { randomBytes } from "node:crypto";
+import { isTraceId, type TraceId } from "@lorelum/log";
 
 import {
   BACKEND_URL,
   BACKEND_ROUTES,
   PROTOCOL_VERSION,
   MAX_RESPONSE_BYTES,
+  DIAGNOSTIC_LEVEL_HEADER,
+  TRACE_ID_HEADER,
 } from "../protocol/constants";
 import {
   errorSchema,
@@ -66,6 +69,10 @@ export type BackendQueryRequest = QueryRequest & {
 export interface BackendRequestOptions {
   readonly signal?: AbortSignal | undefined;
   readonly deadline?: number | undefined;
+  /** Invocation-scoped local diagnostic correlation; never used for authorization. */
+  readonly traceId?: TraceId | undefined;
+  /** Authenticated local-only request override; it never changes daemon configuration. */
+  readonly diagnosticLevel?: "debug" | undefined;
 }
 
 export interface BackendIndexRequestOptions extends BackendRequestOptions {
@@ -87,6 +94,10 @@ export interface CreateBackendClientOptions {
   readonly shutdownTimeoutMs?: number;
   /** Internal compatibility-test override; released clients always use PROTOCOL_VERSION. */
   readonly protocolVersion?: number;
+  /** Applies to every authenticated request created by this client instance. */
+  readonly traceId?: TraceId;
+  /** Applies to every authenticated request created by this client instance. */
+  readonly diagnosticLevel?: "debug";
 }
 
 export interface BackendClient {
@@ -164,6 +175,12 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
   }
   if (!Number.isSafeInteger(protocolVersion) || protocolVersion < 1)
     throw new TypeError("Protocol version must be a positive integer");
+  if (options.traceId !== undefined && !isTraceId(options.traceId)) {
+    throw new TypeError("Trace ID must be a UUID v4.");
+  }
+  if (options.diagnosticLevel !== undefined && options.diagnosticLevel !== "debug") {
+    throw new TypeError("Diagnostic level must be debug when provided.");
+  }
   let expectedEncodingId: string | undefined;
   const baseUrl = validatedLoopbackUrl(options.baseUrl ?? BACKEND_URL);
 
@@ -242,6 +259,8 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
       timeout = timeoutMs,
       signal,
       deadline,
+      traceId: requestTraceId,
+      diagnosticLevel: requestDiagnosticLevel,
       allowCurrentBuildMismatch = false,
     }: {
       payload?: unknown;
@@ -249,12 +268,20 @@ export function createBackendClient(options: CreateBackendClientOptions): Backen
       timeout?: number;
       signal?: AbortSignal | undefined;
       deadline?: number | undefined;
+      traceId?: TraceId | undefined;
+      diagnosticLevel?: "debug" | undefined;
       allowCurrentBuildMismatch?: boolean;
     } = {},
   ): Promise<T> => {
     const budget = { signal, deadline: deadline ?? Date.now() + timeout };
     await identify(budget, allowCurrentBuildMismatch);
-    const headers: Record<string, string> = { authorization: `Bearer ${options.secret}` };
+    const traceId = requestTraceId ?? options.traceId;
+    const diagnosticLevel = requestDiagnosticLevel ?? options.diagnosticLevel;
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${options.secret}`,
+      ...(traceId === undefined ? {} : { [TRACE_ID_HEADER]: traceId }),
+      ...(diagnosticLevel === undefined ? {} : { [DIAGNOSTIC_LEVEL_HEADER]: diagnosticLevel }),
+    };
     const init: RequestInit = { method, headers, signal: signal ?? null };
     if (payload !== undefined) {
       init.method = "POST";

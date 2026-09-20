@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { MemoryLogSink, SinkLogEmitter } from "@lorelum/log";
 
 import type { QueryService, StorageRoot } from "@lorelum/engine";
 
@@ -37,6 +38,7 @@ function request(path: string, init: RequestInit = {}): Request {
 function app(
   indexOperations: IndexOperationStub,
   semanticRuntime?: ContentAddressedSemanticRuntimePort,
+  diagnostics?: SinkLogEmitter,
 ) {
   const keywordQueryService: QueryService = {
     async query() {
@@ -55,8 +57,8 @@ function app(
       async rebuild(root) {
         return indexOperations.rebuild(root);
       },
-      async indexOperation(operationId) {
-        return indexOperations.operation(operationId);
+      async indexOperation(requestedOperationId) {
+        return indexOperations.operation(requestedOperationId);
       },
       async waitForIdle(deadline) {
         await indexOperations.waitForIdle(deadline);
@@ -66,6 +68,7 @@ function app(
     backend: createBackendService({ identity, secret, onStop: () => undefined }),
     keywordQueryService,
     semanticRuntime: runtime,
+    ...(diagnostics === undefined ? {} : { diagnostics }),
   });
 }
 
@@ -95,6 +98,49 @@ test("index status is authenticated and does not start an index operation", asyn
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ state: "missing", profileId });
   expect(statusCalls).toBe(1);
+});
+
+test("records accepted build and rebuild operation relations for the requesting trace", async () => {
+  const sink = new MemoryLogSink();
+  const traceId = "00000000-0000-4000-8000-000000000002" as never;
+  const instance = app(
+    {
+      status: async () => ({ state: "missing", profileId }),
+      build: () => ({ operationId, state: "building" }),
+      rebuild: () => ({ operationId, state: "building" }),
+      operation: () => undefined,
+      waitForIdle: async () => undefined,
+    },
+    undefined,
+    new SinkLogEmitter(sink),
+  );
+  const responses = await Promise.all(
+    (["build", "rebuild"] as const).map((route) =>
+      instance.handle(
+        request(`/internal/v1/index/${route}`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-lorelum-trace-id": traceId,
+          },
+          body: JSON.stringify({ storageRoot: "/tmp/index-controller" }),
+        }),
+      ),
+    ),
+  );
+  expect(responses.map((response) => response.status)).toEqual([202, 202]);
+  expect(sink.records).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ message: "trace.request.accepted", traceId }),
+      expect.objectContaining({ message: "trace.operation.accepted", traceId, operationId }),
+      expect.objectContaining({
+        message: "backend.request.completed",
+        traceId,
+        operationId,
+        context: expect.objectContaining({ route: "index", method: "POST", status: 202 }),
+      }),
+    ]),
+  );
 });
 
 test("build returns an accepted operation and operation reads are bounded", async () => {

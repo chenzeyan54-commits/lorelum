@@ -73,15 +73,17 @@ async function invoke(args: readonly string[], store: GetCommandServices["store"
     },
   };
   const definition = createGetCommand({ store, storageRoot: { rootPath: "unused-default" } });
-  const exitCode = await run([...args], {
+  const exitCode = await run(["--json", ...args], {
     registry: snapshotCommandDefinitions([definition]),
     stdout,
     stderr,
   });
   expect(stdout.value.endsWith("\n")).toBe(true);
   expect(stdout.value.trim().split("\n")).toHaveLength(1);
-  expect(stderr.value).toBe("");
   const response = JSON.parse(stdout.value);
+  if (exitCode === 0 || exitCode === 1) {
+    expect(stderr.value).toBe("");
+  } else expect(stderr.value).toBe("");
   expect(validateProtocolSchema(response, protocolResponseSchema)).toEqual([]);
   return { exitCode, response, definition };
 }

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { noopEmitter, type LogEmitter } from "@lorelum/log";
 
 import {
   createContentAddressedSemanticServices,
@@ -142,6 +143,7 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
     private readonly modelPreparation: ContentAddressedSemanticModelPreparation,
     private readonly journal?: SemanticOperationJournal,
     private readonly onIndexActivityChange?: (active: boolean) => Promise<void>,
+    private readonly diagnostics: LogEmitter = noopEmitter,
   ) {
     this.recovered = journal?.recover() ?? Promise.resolve([]);
   }
@@ -486,6 +488,14 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
       attempts,
       createdAt,
     });
+    this.diagnostics.emit({
+      time: new Date().toISOString(),
+      level: "info",
+      component: "backend",
+      event: "backend.operation.started",
+      operationId,
+      count: target.corpus.practices.length,
+    });
     const desired = () => this.desiredTargetBySlot.get(target.targetSlotId) === key;
     const progress = this.progress(target);
     const run = async (): Promise<"ready" | "superseded"> => {
@@ -553,6 +563,15 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
           attempts: attempts + 1,
           createdAt,
         });
+        this.diagnostics.emit({
+          time: new Date().toISOString(),
+          level: "info",
+          component: "backend",
+          event: "backend.operation.completed",
+          operationId,
+          count: status.indexedPracticeCount,
+          ...(outcome === "ready" ? {} : { code: "superseded" }),
+        });
       })
       .catch(async (error: unknown) => {
         const status = await progress.status().catch(() => ({ indexedPracticeCount: 0 }));
@@ -562,6 +581,15 @@ export class ContentAddressedSemanticRuntime implements ContentAddressedSemantic
           totalPracticeCount: target.corpus.practices.length,
           attempts: attempts + 1,
           createdAt,
+        });
+        this.diagnostics.emit({
+          time: new Date().toISOString(),
+          level: "error",
+          component: "backend",
+          event: "backend.operation.failed",
+          operationId,
+          count: status.indexedPracticeCount,
+          code: error instanceof EmbeddingError ? error.code : "backend.failed",
         });
         throw error;
       });

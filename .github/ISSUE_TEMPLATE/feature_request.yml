@@ -1,7 +1,7 @@
 name: ✨ Feature request
 description: Propose a new feature or improvement
 title: "[feat] "
-labels: ["feature", "needs-triage"]
+labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
@@ -54,14 +54,30 @@ body:
       options:
         - CLI (`lore`)
         - Retrieval engine
-        - MCP server
         - Practice / pack format
-        - Decision graph (`decisions.yaml`)
-        - Registry
+        - Agent Skill / Plugin
         - Documentation
+        - Evaluation / examples
         - Other
     validations:
       required: true
+
+  - type: textarea
+    id: field-evidence
+    attributes:
+      label: Optional field feedback or local draft evidence
+      description: If you created a local `lore feedback draft`, paste only the reviewed parts that help explain the problem, constraints, or missed guidance. This does not submit diagnostics automatically.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: disclosure-review
+    attributes:
+      label: Public disclosure review
+      description: Decide separately whether your query, Practice content, native output, paths, environment details, and free text are appropriate to publish.
+      options:
+        - label: I reviewed the local details I chose to disclose and removed credentials or other secrets.
+          required: true
 
   - type: checkboxes
     id: terms

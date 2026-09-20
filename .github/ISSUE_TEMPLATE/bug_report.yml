@@ -1,7 +1,7 @@
 name: 🐛 Bug report
 description: Report something that's broken or behaves unexpectedly
 title: "[bug] "
-labels: ["bug", "needs-triage"]
+labels: ["bug"]
 body:
   - type: markdown
     attributes:
@@ -13,7 +13,7 @@ body:
     attributes:
       label: What happened?
       description: A clear description of the unexpected behavior.
-      placeholder: "When I ran `lore decide ...`, I expected X but got Y."
+      placeholder: "When I ran `lore query ...`, I expected X but got Y."
     validations:
       required: true
 
@@ -58,11 +58,31 @@ body:
   - type: textarea
     id: logs
     attributes:
-      label: Logs / error output
-      description: Paste relevant logs or stack traces. No screenshots of text please.
+      label: Reviewed feedback draft, logs, or error output
+      description: Optionally attach the relevant part of a local `lore feedback draft` report, logs, or stack trace. Do not paste unreviewed full logs.
       render: shell
     validations:
       required: false
+
+  - type: textarea
+    id: evidence-boundary
+    attributes:
+      label: Verified and missing evidence
+      description: What did you verify locally? What diagnostic facts, reproduction steps, or environment details are still missing?
+      placeholder: "Verified: native process exited before readiness. Missing: a minimal reproduction outside this project."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: disclosure-review
+    attributes:
+      label: Public disclosure review
+      description: Before submitting, decide which local details are safe to make public. A local feedback draft is not automatically redacted or submitted.
+      options:
+        - label: I reviewed any query, Practice content, native output, environment details, paths, and free text that I chose to disclose.
+          required: true
+        - label: I removed credentials, cookies, tokens, private keys, signed URLs, and other secrets.
+          required: true
 
   - type: checkboxes
     id: terms

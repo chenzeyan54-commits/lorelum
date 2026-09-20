@@ -1,4 +1,5 @@
 import type { ListPackDetailsResult } from "@lorelum/engine";
+import type { Logger } from "@lorelum/log";
 
 import type { OutputWriter } from "../output/protocol.js";
 import {
@@ -27,6 +28,7 @@ export interface RunWorkbuddyHookOptions {
   readonly stderr: OutputWriter;
   readonly services?: WorkbuddyHookServices;
   readonly storeRoot?: string;
+  readonly log?: Logger;
 }
 
 /** Detect the raw WorkBuddy Hook ABI and consume its only supported global option. */

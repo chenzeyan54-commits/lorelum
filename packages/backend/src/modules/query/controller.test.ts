@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { InvalidQueryRequestError, SemanticIndexNotReadyError } from "@lorelum/engine";
+import { MemoryLogSink, SinkLogEmitter } from "@lorelum/log";
 
 import { createBackendApp } from "../../app";
 import { createBackendService } from "../backend/service";
@@ -31,11 +32,13 @@ function request(body: unknown): Request {
 function app(
   keywordQueryService: QueryService,
   semanticRuntime: ContentAddressedSemanticRuntimePort,
+  diagnostics?: SinkLogEmitter,
 ) {
   return createBackendApp({
     backend: createBackendService({ identity, secret, onStop: () => undefined }),
     keywordQueryService,
     semanticRuntime,
+    ...(diagnostics === undefined ? {} : { diagnostics }),
   });
 }
 
@@ -71,6 +74,94 @@ test("defaults query mode to semantic and preserves semantic result metadata", a
     results: [],
   });
   expect(calls).toEqual(["/tmp/query-controller:deployment"]);
+});
+
+test("records one trace's declared query evidence without serializing request credentials", async () => {
+  const sink = new MemoryLogSink();
+  const traceId = "00000000-0000-4000-8000-000000000001" as never;
+  const instance = app(
+    {
+      async query() {
+        return { mode: "keyword", results: [] };
+      },
+    },
+    createContentAddressedSemanticRuntimeStub(),
+    new SinkLogEmitter(sink),
+  );
+  const response = await instance.handle(
+    new Request("http://127.0.0.1/internal/v1/query", {
+      method: "POST",
+      headers: {
+        host: "127.0.0.1:26186",
+        authorization: `Bearer ${secret}`,
+        cookie: "session=must-not-serialize",
+        "content-type": "application/json",
+        "x-lorelum-trace-id": traceId,
+      },
+      body: JSON.stringify({ storageRoot: "/tmp/query-controller", query: { text: "keep raw" } }),
+    }),
+  );
+  expect(response.status).toBe(200);
+  expect(sink.records).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        message: "backend.request.started",
+        traceId,
+        context: expect.objectContaining({ route: "query", query: "keep raw" }),
+      }),
+      expect.objectContaining({ message: "trace.request.accepted", traceId }),
+      expect.objectContaining({
+        message: "backend.request.completed",
+        traceId,
+        context: expect.objectContaining({ route: "query", method: "POST", status: 200 }),
+      }),
+    ]),
+  );
+  expect(JSON.stringify(sink.records)).not.toContain("must-not-serialize");
+  expect(JSON.stringify(sink.records)).not.toContain(secret);
+});
+
+test("records a controlled failure outcome while withholding credential-like error text", async () => {
+  const sink = new MemoryLogSink();
+  const traceId = "00000000-0000-4000-8000-000000000014" as never;
+  const instance = app(
+    {
+      async query() {
+        throw new Error("Bearer must-not-serialize");
+      },
+    },
+    createContentAddressedSemanticRuntimeStub(),
+    new SinkLogEmitter(sink),
+  );
+  const response = await instance.handle(
+    new Request("http://127.0.0.1/internal/v1/query", {
+      method: "POST",
+      headers: {
+        host: "127.0.0.1:26186",
+        authorization: `Bearer ${secret}`,
+        "content-type": "application/json",
+        "x-lorelum-trace-id": traceId,
+      },
+      body: JSON.stringify({
+        storageRoot: "/tmp/query-controller",
+        query: { text: "failing keyword", mode: "keyword" },
+      }),
+    }),
+  );
+  expect(response.status).toBe(500);
+  expect(sink.records).toContainEqual(
+    expect.objectContaining({
+      message: "backend.request.failed",
+      traceId,
+      context: expect.objectContaining({
+        route: "query",
+        method: "POST",
+        status: 500,
+        code: "backend.failed",
+      }),
+    }),
+  );
+  expect(JSON.stringify(sink.records)).not.toContain("must-not-serialize");
 });
 
 test("explicit keyword mode selects only the keyword facade", async () => {

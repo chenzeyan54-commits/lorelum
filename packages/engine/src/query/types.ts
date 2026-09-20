@@ -1,5 +1,6 @@
 import type { LocalStore, StorageRoot } from "../local-store";
 import type { Practice } from "@lorelum/format";
+import type { LogEmitter, TraceId } from "@lorelum/log";
 
 export interface QueryRequest {
   readonly text: string;
@@ -22,7 +23,17 @@ export interface QueryResult {
 }
 
 export interface QueryService {
-  query(root: StorageRoot, request: QueryRequest): Promise<QueryResult>;
+  query(
+    root: StorageRoot,
+    request: QueryRequest,
+    diagnostics?: KeywordQueryDiagnostics,
+  ): Promise<QueryResult>;
+}
+
+/** Optional, caller-scoped signals keep Engine independent of process I/O. */
+export interface KeywordQueryDiagnostics {
+  readonly emitter: LogEmitter;
+  readonly traceId?: TraceId;
 }
 
 export interface QueryDependencies {

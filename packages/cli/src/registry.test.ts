@@ -60,6 +60,7 @@ test("discovers the supported Pack lifecycle and catalog commands", () => {
   expect(update.options.map((option) => option.name)).toEqual([
     "-h, --help",
     "--json",
+    "--debug",
     "--log-level <level>",
     "--store-root <path>",
     "--registry <repository>",
@@ -77,6 +78,7 @@ test("discovers the supported Pack lifecycle and catalog commands", () => {
   expect(remove.options.map((option) => option.name)).toEqual([
     "-h, --help",
     "--json",
+    "--debug",
     "--log-level <level>",
     "--store-root <path>",
   ]);
@@ -93,6 +95,7 @@ test("discovers the supported Pack lifecycle and catalog commands", () => {
   expect(list.options.map((option) => option.name)).toEqual([
     "-h, --help",
     "--json",
+    "--debug",
     "--log-level <level>",
     "--store-root <path>",
     "--details",
@@ -262,6 +265,11 @@ test("describes registered commands from a single registry", () => {
         },
       },
       {
+        behavior: "debug",
+        name: "--debug",
+        scope: "global",
+      },
+      {
         behavior: "log-level",
         defaultValue: "error",
         name: "--log-level <level>",
@@ -304,6 +312,8 @@ test("describes registered commands from a single registry", () => {
               "context.status",
               "cache.status",
               "cache.prune",
+              "logs",
+              "feedback.draft",
               "query",
               "pack.list",
               "backend.start",
@@ -337,6 +347,8 @@ test("describes registered commands from a single registry", () => {
       { name: "context.status", positionals: [] },
       { name: "cache.status", positionals: [] },
       { name: "cache.prune", positionals: [] },
+      { name: "logs", positionals: [{ name: "action", required: false }] },
+      { name: "feedback.draft", positionals: [] },
       { name: "query", positionals: [{ name: "text", required: true }] },
       { name: "pack.list", positionals: [{ name: "pack", required: false }] },
       { name: "backend.start" },
@@ -361,6 +373,7 @@ test("describes registered commands from a single registry", () => {
     options: [
       { behavior: "help", scope: "global" },
       { behavior: "json", scope: "global" },
+      { behavior: "debug", scope: "global" },
       { behavior: "log-level", scope: "global" },
       { behavior: "store-root", scope: "global" },
     ],
@@ -374,6 +387,7 @@ test("describes registered commands from a single registry", () => {
   expect(install.options.map((option) => option.name)).toEqual([
     "-h, --help",
     "--json",
+    "--debug",
     "--log-level <level>",
     "--store-root <path>",
     "--registry <repository>",
@@ -396,6 +410,7 @@ test("derives parser options and describe metadata from registered commands", as
     options: [
       { behavior: "help", scope: "global" },
       { behavior: "json", scope: "global" },
+      { behavior: "debug", scope: "global" },
       { behavior: "log-level", scope: "global" },
       { behavior: "store-root", scope: "global" },
       { name: "--future-mode <mode>", scope: "command" },
@@ -415,6 +430,8 @@ test("derives parser options and describe metadata from registered commands", as
           "context.status",
           "cache.status",
           "cache.prune",
+          "logs",
+          "feedback.draft",
           "query",
           "pack.list",
           "backend.start",

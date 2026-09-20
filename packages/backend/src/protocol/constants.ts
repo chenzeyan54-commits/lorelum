@@ -4,6 +4,9 @@ export const BACKEND_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
 export const PROTOCOL_VERSION = 3;
 export const MAX_BODY_BYTES = 65_536;
 export const MAX_RESPONSE_BYTES = 262_144;
+export const TRACE_ID_HEADER = "x-lorelum-trace-id";
+/** Authenticated local transport metadata; it only widens this request's local log collection. */
+export const DIAGNOSTIC_LEVEL_HEADER = "x-lorelum-diagnostic-level";
 
 const INTERNAL_API_PREFIX = "/internal/v1";
 export const BACKEND_ROUTES = {

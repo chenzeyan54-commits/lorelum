@@ -9,12 +9,14 @@ import { indexController } from "./modules/index/controller";
 import type { ContentAddressedSemanticRuntimePort } from "./modules/query/content-addressed-semantic-runtime";
 import { localBoundary, reject } from "./plugins/local-auth";
 import { BACKEND_HOST, BACKEND_PORT } from "./protocol/constants";
+import { noopEmitter, type LogEmitter } from "@lorelum/log";
 
 export interface CreateBackendAppOptions {
   readonly backend: BackendService;
   readonly embedding?: EmbeddingService;
   readonly keywordQueryService: QueryService;
   readonly semanticRuntime: ContentAddressedSemanticRuntimePort;
+  readonly diagnostics?: LogEmitter;
   /** Internal test injection; production always uses the fixed IPv4 endpoint. */
   readonly host?: string;
   readonly port?: number;
@@ -32,6 +34,7 @@ export function createBackendApp(options: CreateBackendAppOptions) {
     throw new TypeError("Invalid local backend configuration");
   }
   const { backend } = options;
+  const diagnostics = options.diagnostics ?? noopEmitter;
   return new Elysia({ normalize: false })
     .use(localBoundary(port, backend.authenticate))
     .onError(({ code, error }) => {
@@ -42,9 +45,11 @@ export function createBackendApp(options: CreateBackendAppOptions) {
     })
     .use(backendController(backend))
     .use(
-      options.embedding ? embeddingController(options.embedding, backend.available) : new Elysia(),
+      options.embedding
+        ? embeddingController(options.embedding, backend.available, diagnostics)
+        : new Elysia(),
     )
-    .use(indexController(options.semanticRuntime, backend.available))
+    .use(indexController(options.semanticRuntime, backend.available, diagnostics))
     .use(
       queryController(
         {
@@ -52,6 +57,7 @@ export function createBackendApp(options: CreateBackendAppOptions) {
           semanticRuntime: options.semanticRuntime,
         },
         backend.available,
+        diagnostics,
       ),
     );
 }

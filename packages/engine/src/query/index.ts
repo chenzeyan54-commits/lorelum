@@ -5,7 +5,14 @@ export {
   KeywordIndexUnavailableError,
 } from "./errors";
 export { parseQueryRequest } from "./request";
-export type { QueryRequest, QueryHit, QueryResult, QueryService, QueryDependencies } from "./types";
+export type {
+  QueryRequest,
+  QueryHit,
+  QueryResult,
+  QueryService,
+  QueryDependencies,
+  KeywordQueryDiagnostics,
+} from "./types";
 export * from "./artifacts";
 export { queryContentAddressedKeyword } from "./keyword/content-addressed-query";
 export * from "./semantic";

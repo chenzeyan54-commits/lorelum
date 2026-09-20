@@ -105,9 +105,28 @@ Pure bug fixes, refactors, perf improvements, and docs don't need upfront design
 
 - 🐛 **Bug** → [bug report template](https://github.com/lorelum/lorelum/issues/new?template=bug_report.yml)
 - ✨ **Feature** → [feature request template](https://github.com/lorelum/lorelum/issues/new?template=feature_request.yml) — include background, goal, and acceptance criteria
+- 🧭 **Field feedback** → [field feedback template](https://github.com/lorelum/lorelum/issues/new?template=field_feedback.yml) — for useful-but-incomplete guidance, retrieval misses, integration timing, or observations that still need evidence
 - 💬 **Discussion / question** → [Discussions](https://github.com/lorelum/lorelum/discussions)
 
 Before opening a new issue, please search existing ones to avoid duplicates.
+
+### Local feedback drafts and public reporting
+
+When a local CLI invocation has a relevant `diagnostics.traceId`, you can prepare a local-only draft before deciding whether to open an issue:
+
+```sh
+lore feedback draft --trace-id <traceId> --kind bug
+```
+
+The default command writes a private `report.json` and `report.md` below `~/.lorelum/feedback/` unless you select an output directory. It includes same-trace error/lifecycle summary facts, not every local query or debug record. If you explicitly need already-recorded detail, add `--include-logs info` or `--include-logs debug` and review that added content before sharing. The command does **not** upload data, open a browser, create an Issue, or contact maintainers. A successful draft only means that the local files were written.
+
+Treat these as three distinct states:
+
+1. **Local draft generated** — you can inspect the report and its missing evidence. Original query, Practice, path, native output, or error text may still be present because the report is local.
+2. **User manually submitted an Issue** — you choose which fields to disclose in the public form and remove credentials, cookies, tokens, private keys, signed URLs, and other secrets.
+3. **Maintainer triaged the Issue** — a maintainer records a suggested disposition, the evidence boundary, and a next step. The result may be Pack, Core, Skill/Plugin, documentation, evaluation, or defer pending evidence.
+
+Neither a draft nor an Issue automatically authorizes a Pack, Core, Skill, docs, or evaluation change. In particular, a retrieval observation is not a ranking-quality conclusion until it has suitable retrieval evidence, and a structurally valid report is not proof of downstream Agent behavior.
 
 ## Development workflow
 

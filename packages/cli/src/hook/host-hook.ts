@@ -9,6 +9,7 @@ import {
 import type { OutputWriter } from "../output/protocol.js";
 import { resolveInvocationStorageRoot } from "../store/storage-root.js";
 import { renderPackCatalog } from "./pack-catalog.js";
+import type { Logger } from "@lorelum/log";
 
 /** Hosts with a versioned raw session Hook ABI (`lore hook <host>`). */
 export type HostHookName = "codex" | "cursor" | "workbuddy" | "zcode";
@@ -51,10 +52,12 @@ export interface RunHostHookOptions {
   readonly stderr: OutputWriter;
   readonly services?: HostHookServices;
   readonly storeRoot?: string;
+  readonly log?: Logger;
 }
 
 export interface HostHookInvocation {
   readonly storeRoot?: string;
+  readonly debug?: boolean;
 }
 
 const defaultServices: HostHookServices = Object.freeze({
@@ -72,9 +75,15 @@ export function parseHostHookInvocation(
 ): HostHookInvocation | undefined {
   const positionals: string[] = [];
   let storeRoot: string | undefined;
+  let debug = false;
 
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index]!;
+    if (argument === "--debug") {
+      if (debug) return undefined;
+      debug = true;
+      continue;
+    }
     if (argument === "--store-root") {
       const value = arguments_[index + 1];
       if (storeRoot !== undefined || typeof value !== "string" || value.length === 0) {
@@ -94,7 +103,7 @@ export function parseHostHookInvocation(
   }
 
   return positionals.length === 2 && positionals[0] === "hook" && positionals[1] === host
-    ? { ...(storeRoot === undefined ? {} : { storeRoot }) }
+    ? { ...(storeRoot === undefined ? {} : { storeRoot }), ...(debug ? { debug } : {}) }
     : undefined;
 }
 
@@ -105,15 +114,31 @@ export function parseHostHookInvocation(
  */
 export async function runHostHook(options: RunHostHookOptions): Promise<0> {
   try {
-    const input = parseHostHookInput(await options.stdin.text(), options.host);
+    const serialized = await options.stdin.text();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(serialized);
+    } catch {
+      options.log?.debug("hook.payload.invalid", { byteLength: Buffer.byteLength(serialized) });
+      throw new Error(`Lorelum ${hostLabel(options.host)} Hook input must be valid JSON.`);
+    }
+    const input = parseHostHookInput(serialized, options.host);
+    options.log?.debug("hook.payload.received", {
+      byteLength: Buffer.byteLength(serialized),
+      ...(isRecord(parsed) && typeof parsed.hook_event_name === "string"
+        ? { hookEventName: parsed.hook_event_name }
+        : {}),
+    });
     const response = await respondToHostHook(
       input,
       options.host,
       options.services ?? defaultServices,
       options.storeRoot,
     );
+    options.log?.info("hook.catalog.rendered", { event: input.hook_event_name });
     options.stdout.write(`${JSON.stringify(response)}\n`);
   } catch (error) {
+    options.log?.error("hook.degraded", { host: options.host }, error);
     options.stderr.write(`lore hook ${options.host} degraded: ${diagnosticMessage(error)}\n`);
     options.stdout.write('{"continue":true}\n');
   }

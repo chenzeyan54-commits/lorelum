@@ -28,7 +28,8 @@ import {
   type KnownCommand,
 } from "./registry.js";
 import { toVisibleCliError } from "./runtime/errors.js";
-import { Logger } from "./runtime/logger.js";
+import { createProcessLogRuntime } from "./log/runtime.js";
+import { createTraceId, noopEmitter, type TraceId } from "@lorelum/log";
 
 export interface RunOptions {
   /** Complete registry replacement; omit to use the immutable built-in `commandRegistry`. */
@@ -47,45 +48,99 @@ export interface RunOptions {
   workbuddyHookServices?: WorkbuddyHookServices;
   stderr?: OutputWriter;
   stdout?: OutputWriter;
+  /** Source-test override; production calls always create a fresh invocation trace. */
+  traceId?: TraceId;
+  /** Source-test override for a private, disposable managed log root. */
+  logDirectory?: string;
 }
 
 /** Executes one argv invocation and owns its single protocol response and exit code. */
 export async function run(arguments_: string[], options: RunOptions = {}): Promise<number> {
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
+  const traceId = options.traceId ?? createTraceId();
   const codexHook = parseCodexHookInvocation(arguments_);
   if (codexHook !== undefined) {
-    return runCodexHook({
+    const runtime = await createProcessLogRuntime(stderr, traceId, {
+      debug: codexHook.debug ?? false,
+      source: "hook",
+      host: "codex",
+      ...(options.logDirectory === undefined ? {} : { rootDirectory: options.logDirectory }),
+      persist:
+        (options.stdout === undefined && options.stderr === undefined) ||
+        options.logDirectory !== undefined,
+    });
+    runtime.log.info("hook.started", { event: "SessionStart" });
+    const exitCode = await runCodexHook({
       stdin: options.stdin ?? standardInput,
       stdout,
       stderr,
       ...(options.codexHookServices === undefined ? {} : { services: options.codexHookServices }),
       ...(codexHook.storeRoot === undefined ? {} : { storeRoot: codexHook.storeRoot }),
+      log: runtime.log,
     });
+    await runtime.flush();
+    return exitCode;
   }
   const zcodeHook = parseZcodeHookInvocation(arguments_);
   if (zcodeHook !== undefined) {
-    return runZcodeHook({
+    const runtime = await createProcessLogRuntime(stderr, traceId, {
+      debug: zcodeHook.debug ?? false,
+      source: "hook",
+      host: "zcode",
+      ...(options.logDirectory === undefined ? {} : { rootDirectory: options.logDirectory }),
+      persist:
+        (options.stdout === undefined && options.stderr === undefined) ||
+        options.logDirectory !== undefined,
+    });
+    runtime.log.info("hook.started", { event: "SessionStart" });
+    const exitCode = await runZcodeHook({
       stdin: options.stdin ?? standardInput,
       stdout,
       stderr,
       ...(options.zcodeHookServices === undefined ? {} : { services: options.zcodeHookServices }),
       ...(zcodeHook.storeRoot === undefined ? {} : { storeRoot: zcodeHook.storeRoot }),
+      log: runtime.log,
     });
+    await runtime.flush();
+    return exitCode;
   }
   const cursorHook = parseCursorHookInvocation(arguments_);
   if (cursorHook !== undefined) {
-    return runCursorHook({
+    const runtime = await createProcessLogRuntime(stderr, traceId, {
+      debug: cursorHook.debug ?? false,
+      source: "hook",
+      host: "cursor",
+      ...(options.logDirectory === undefined ? {} : { rootDirectory: options.logDirectory }),
+      persist:
+        (options.stdout === undefined && options.stderr === undefined) ||
+        options.logDirectory !== undefined,
+    });
+    runtime.log.info("hook.started", { event: "sessionStart" });
+    const exitCode = await runCursorHook({
       stdin: options.stdin ?? standardInput,
       stdout,
       stderr,
       ...(options.cursorHookServices === undefined ? {} : { services: options.cursorHookServices }),
       ...(cursorHook.storeRoot === undefined ? {} : { storeRoot: cursorHook.storeRoot }),
+      log: runtime.log,
     });
+    await runtime.flush();
+    return exitCode;
   }
   const workbuddyHook = parseWorkbuddyHookInvocation(arguments_);
   if (workbuddyHook !== undefined) {
-    return runWorkbuddyHook({
+    const runtime = await createProcessLogRuntime(stderr, traceId, {
+      debug: workbuddyHook.debug ?? false,
+      source: "hook",
+      host: "workbuddy",
+      ...(options.logDirectory === undefined ? {} : { rootDirectory: options.logDirectory }),
+      persist:
+        (options.stdout === undefined && options.stderr === undefined) ||
+        options.logDirectory !== undefined,
+    });
+    runtime.log.info("hook.started", { event: "SessionStart" });
+    const exitCode = await runWorkbuddyHook({
       stdin: options.stdin ?? standardInput,
       stdout,
       stderr,
@@ -93,13 +148,41 @@ export async function run(arguments_: string[], options: RunOptions = {}): Promi
         ? {}
         : { services: options.workbuddyHookServices }),
       ...(workbuddyHook.storeRoot === undefined ? {} : { storeRoot: workbuddyHook.storeRoot }),
+      log: runtime.log,
     });
+    await runtime.flush();
+    return exitCode;
   }
+  const invocationId = crypto.randomUUID();
+  const startedAt = Date.now();
   let command: KnownCommand | "unknown" = "unknown";
   let commandExitCode: 0 | 1 = 0;
   let outputFormat: OutputFormat = "text";
   let visibleErrorCodes = rootCommand.errorCodes;
 
+  const processRuntime =
+    options.runtime === undefined
+      ? await createProcessLogRuntime(stderr, traceId, {
+          debug: arguments_.includes("--debug"),
+          ...(options.logDirectory === undefined ? {} : { rootDirectory: options.logDirectory }),
+          persist:
+            (options.stdout === undefined && options.stderr === undefined) ||
+            options.logDirectory !== undefined,
+        })
+      : undefined;
+  const runtime = options.runtime ?? processRuntime;
+  if (runtime === undefined) throw new Error("CLI runtime was not constructed.");
+  const diagnostics = runtime.diagnostics ?? noopEmitter;
+  runtime.log?.info("command.started", { invocationId });
+  if (arguments_.includes("--debug")) runtime.log?.debug("command.debug-enabled", { invocationId });
+  diagnostics.emit({
+    time: new Date().toISOString(),
+    level: "info",
+    component: "cli",
+    event: "cli.command.started",
+    traceId,
+    invocationId,
+  });
   try {
     const definitions = snapshotCommandDefinitions(options.registry ?? commandRegistry);
     const selection = resolveOutputFormat(arguments_, definitions);
@@ -121,10 +204,28 @@ export async function run(arguments_: string[], options: RunOptions = {}): Promi
         command: "describe",
         data,
         textRenderer: renderHelpText,
+        diagnostics: { traceId },
       });
+      diagnostics.emit({
+        time: new Date().toISOString(),
+        level: "info",
+        component: "cli",
+        event: "cli.command.completed",
+        traceId,
+        invocationId,
+        command,
+        durationMs: Date.now() - startedAt,
+        exitCode: 0,
+      });
+      runtime.log?.info("command.completed", {
+        invocationId,
+        command,
+        durationMs: Date.now() - startedAt,
+        exitCode: 0,
+      });
+      await processRuntime?.flush();
       return 0;
     }
-    const runtime = options.runtime ?? { logger: new Logger(stderr) };
     const program = createProgram(
       runtime,
       stdout,
@@ -139,17 +240,61 @@ export async function run(arguments_: string[], options: RunOptions = {}): Promi
       },
       definitions,
       outputFormat,
+      traceId,
     );
     await program.parseAsync(arguments_, { from: "user" });
+    diagnostics.emit({
+      time: new Date().toISOString(),
+      level: "info",
+      component: "cli",
+      event: "cli.command.completed",
+      traceId,
+      invocationId,
+      command,
+      durationMs: Date.now() - startedAt,
+      exitCode: commandExitCode,
+    });
+    runtime.log?.info("command.completed", {
+      invocationId,
+      command,
+      durationMs: Date.now() - startedAt,
+      exitCode: commandExitCode,
+    });
+    await processRuntime?.flush();
     return commandExitCode;
   } catch (error) {
     const cliError = toVisibleCliError(error, visibleErrorCodes);
+    diagnostics.emit({
+      time: new Date().toISOString(),
+      level: "info",
+      component: "cli",
+      event: "cli.command.completed",
+      traceId,
+      invocationId,
+      command,
+      durationMs: Date.now() - startedAt,
+      exitCode: cliError.exitCode,
+      code: cliError.code,
+    });
+    runtime.log?.error(
+      "command.failed",
+      {
+        invocationId,
+        command,
+        durationMs: Date.now() - startedAt,
+        exitCode: cliError.exitCode,
+        code: cliError.code,
+      },
+      error,
+    );
+    await processRuntime?.flush();
     renderResult(outputFormat === "json" ? stdout : stderr, outputFormat, {
       kind: "failure",
       command,
       code: cliError.code,
       message: cliError.message,
       ...(cliError.recovery === undefined ? {} : { recovery: cliError.recovery }),
+      diagnostics: { traceId },
     });
     return cliError.exitCode;
   }

@@ -1,5 +1,4 @@
 import {
-  createBackendRuntimeCoordinator,
   type BackendRuntimeCoordinator,
   type RuntimeWaitOptions,
 } from "@lorelum/backend/coordination";
@@ -11,10 +10,11 @@ import {
   type BackendQueryResult,
 } from "@lorelum/backend/protocol";
 import type { StorageRoot } from "@lorelum/engine";
-import { createProcessBackendClient } from "../model/commands";
 import { createProcessBackendSupervisor } from "../backend/control-commands";
+import { createProcessBackendRuntimeCoordinator } from "../backend/process-runtime-coordinator";
 import { createRuntimeProgressReporter } from "../backend/runtime-progress";
 import type { OutputWriter } from "../output/protocol";
+import type { TraceId } from "@lorelum/log";
 
 export interface QueryPreparingResult {
   readonly state: "preparing";
@@ -84,11 +84,12 @@ export function createSemanticRuntimeClient(
   } satisfies SemanticRuntimeClient;
 }
 
-export async function createProcessSemanticRuntimeClient(writer: OutputWriter = process.stderr) {
-  const coordinator = createBackendRuntimeCoordinator({
-    connect: createProcessBackendClient,
-    start: async () => (await createProcessBackendSupervisor()).start(),
-  });
+export async function createProcessSemanticRuntimeClient(
+  traceId?: TraceId,
+  debug = false,
+  writer: OutputWriter = process.stderr,
+) {
+  const coordinator = createProcessBackendRuntimeCoordinator(traceId, debug);
   return createSemanticRuntimeClient(coordinator, writer, async () =>
     (await createProcessBackendSupervisor()).inspectCompatibilityRecovery(),
   );

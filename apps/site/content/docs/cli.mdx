@@ -16,6 +16,8 @@ The `lore` CLI defaults to complete, readable text on stdout, including Help and
 | [index](./reference/indexing) | Inspect, build, and rebuild the semantic index. |
 | [model](./reference/model) | Inspect, load, and unload the embedding model. |
 | [backend](./reference/backend) | Start, inspect, and stop the local service. |
+| `logs` | View managed local logs by source, level, or trace; `logs prune` removes only expired Lorelum log files. |
+| `feedback draft` | Create a local reviewable bug or improvement draft; it never submits an Issue or uploads diagnostics. |
 | [validate, format, i18n sync](./reference/authoring) | Validate Pack content and maintain localization. |
 | `describe` | Return command capabilities and schemas. |
 
@@ -35,13 +37,14 @@ Use the installed schema when automating against a particular release. Alpha ver
 
 ## Global options
 
-| Option                | Purpose                                                        |
-| --------------------- | -------------------------------------------------------------- |
+| Option | Purpose |
+| --- | --- |
 | `--store-root <path>` | Select the Store used by Pack, query, get, and index commands. |
-| `--log-level <level>` | Set stderr diagnostic verbosity; default `error`.              |
-| `--json`              | Return the complete one-line JSON protocol envelope.            |
-| `--help`, `-h`        | Show readable Help; add `--json` for capability data.          |
-| `--version`, `-V`     | Show tool/protocol version; add `--json` for its envelope.     |
+| `--debug` | Record debug-level local logs for this invocation without changing configuration. |
+| `--log-level <level>` | Set stderr diagnostic verbosity; default `error`. |
+| `--json` | Return the complete one-line JSON protocol envelope. |
+| `--help`, `-h` | Show readable Help; add `--json` for capability data. |
+| `--version`, `-V` | Show tool/protocol version; add `--json` for its envelope. |
 
 Relative Store paths resolve from the current working directory. Use the same root across related commands:
 
@@ -53,21 +56,36 @@ lore --store-root /path/to/store query "reviewing the scope of a small UI change
 
 Model configuration and Backend runtime remain user-level. See [Configuration](./configuration).
 
+Set `logging.level: debug` in `~/.lorelum/config.yaml` for persistent release/Hook debugging. `lore --debug` also carries its one-invocation detail override to the associated authenticated Backend request and lifecycle; it does not change the daemon's global level or any concurrent request. This is separate from `--log-level`, which only changes stderr presentation.
+
+## Local logs
+
+Get a trace from a `--json` response to inspect one invocation without reading Backend-private files directly:
+
+```sh
+lore logs --trace-id <traceId> --limit 100
+lore logs --source hook.codex --level debug
+lore logs prune
+```
+
+Logs stay below `~/.lorelum/logs/`. `lore logs` does not start a Backend or model. Missing, rotated, or damaged files are reported as evidence limits instead of being silently replaced with unrelated records.
+
 ## JSON response envelope
 
 The fields below exist only when `--json` is selected. Do not parse default text. JSON and text use the same handler result and exit code; only the envelope itself is omitted from text.
 
-Every response includes `protocolVersion`, `toolVersion`, `command`, and `ok`.
+Every `--json` CLI envelope includes `protocolVersion`, `toolVersion`, `command`, `diagnostics.traceId`, and `ok`. Hooks keep their separate host envelope and do not expose this trace metadata.
 
-| Field             | Meaning                                                      |
-| ----------------- | ------------------------------------------------------------ |
-| `protocolVersion` | Version of the JSON protocol.                                |
-| `toolVersion`     | Version of the installed CLI.                                |
-| `command`         | Identifier of the command that produced the result.          |
-| `ok`              | Whether the invocation produced a successful command result. |
-| `data`            | Command-specific result on success.                          |
-| `error.code`      | Stable error identifier on failure.                          |
-| `error.message`   | Human-readable explanation on failure.                       |
+| Field | Meaning |
+| --- | --- |
+| `protocolVersion` | Version of the JSON protocol. |
+| `toolVersion` | Version of the installed CLI. |
+| `command` | Identifier of the command that produced the result. |
+| `diagnostics.traceId` | Local correlation ID for this invocation. It is not an auth credential or public sharing ID. |
+| `ok` | Whether the invocation produced a successful command result. |
+| `data` | Command-specific result on success. |
+| `error.code` | Stable error identifier on failure. |
+| `error.message` | Human-readable explanation on failure. |
 
 Branch on error codes instead of parsing messages. Within a successful result, inspect command-specific state before treating asynchronous work as complete.
 
@@ -82,3 +100,15 @@ Branch on error codes instead of parsing messages. Within a successful result, i
 A query with `ok: true` and `data.state: "preparing"` exits `1`. This is not an empty search result. Index commands can exit `0` after accepting work; use the returned operation ID to check completion. In default text the same state and ID remain visible; only programmatic parsers need `--json`.
 
 The command references specify which states and exit codes each command supports.
+
+## Local feedback drafts
+
+When a `--json` CLI result identifies a reproducible problem or a useful improvement, use its `diagnostics.traceId` to create a local draft:
+
+```sh
+lore feedback draft --trace-id <traceId> --kind bug
+```
+
+The default command creates a unique `report.json` and `report.md` directory under `~/.lorelum/feedback/` unless `--output <directory>` is supplied. It uses same-trace error/lifecycle summary facts, does not start a Backend or model, and does not make network requests, open a URL, upload data, or create an Issue. To explicitly add already-written same-trace logs, use `--include-logs info` or `--include-logs debug`; detailed logs still need review before leaving the machine.
+
+`--input <file|->` is an advanced path for a manually authored observation or a test fixture when no trace is available. Review every query, Practice excerpt, native output, path, environment detail, and free-text field separately before manually pasting any part of a draft into a public Issue form.

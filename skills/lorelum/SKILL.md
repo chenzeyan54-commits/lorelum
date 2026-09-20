@@ -33,6 +33,20 @@ Then read the complete body of every candidate Practice you will use:
 lore get <practice-id>
 ```
 
+## Offer local feedback after an explicit user choice
+
+A normal `lore` CLI envelope includes `diagnostics.traceId`. It identifies one local invocation chain for diagnostics and feedback; it is not an authority credential, a user identifier, or a public sharing ID.
+
+If a clear Lorelum bug, retrieval/guidance gap, or user-requested missing capability appears, retain a candidate only in the current task context. A candidate must not trigger extra log reads, artifact writes, uploads, Issue creation, or product changes. When the main task can continue, finish it first and make at most one concise, non-blocking offer at the final summary or a user-visible milestone. Explain the relevant local facts so the user can decide.
+
+Only if the user explicitly agrees, create the local-only draft with the existing trace:
+
+```sh
+lore feedback draft --trace-id <traceId> --kind <bug|improvement>
+```
+
+The default draft contains same-trace error/lifecycle summary facts, not every query or debug record. Only when the user explicitly requests more already-recorded detail may the Agent add `--include-logs info` or `--include-logs debug`; explain that it is local-only, cannot recreate missing debug, and still needs review before any external sharing. If detail is missing, recommend a later reproduction with `lore --debug <command>` or `logging.level: debug`. Present the returned artifact paths, included evidence classes, `externalReview`, and `missingEvidence`. A draft is not a submission, upload, public Issue, triage result, or authorization to change a Pack, Core, Skill, docs, or evaluation. Do not use the advanced `--input` path for the ordinary Agent flow. If the user declines or does not respond, do not create a draft or repeat the offer during that task. SessionStart and recoverable Hook paths remain metadata-only and never create feedback artifacts.
+
 ## Use Pack resources when a retrieved Practice points to them
 
 A Pack can include optional `references/`, `assets/`, and `scripts/` directories. A Practice uses a normal Markdown link whose target starts with `resource:` to explain which material helps with the current decision, for example:

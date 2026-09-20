@@ -24,7 +24,7 @@ import {
 } from "@lorelum/engine";
 
 import type { JsonValue } from "../output/protocol.js";
-import type { CommandDefinition } from "../registry.js";
+import type { CommandDefinition, CommandInvocation } from "../registry.js";
 import {
   CliError,
   cliErrorCodes,
@@ -40,6 +40,7 @@ import {
 import { queryResultSchema } from "./result-schema.js";
 import type { SemanticRuntimeClient, SemanticRuntimeResult } from "./runtime-client.js";
 import { DEFAULT_QUERY_SETTINGS, type QuerySettings } from "./settings.js";
+import type { TraceId } from "@lorelum/log";
 
 interface QueryIndexingResult {
   readonly state: "indexing";
@@ -68,7 +69,7 @@ interface AnnotatedSemanticQueryResult extends SemanticQueryResult {
 
 export interface QueryCommandServices {
   readonly queryService: QueryService;
-  readonly createClient: () => Promise<SemanticRuntimeClient>;
+  readonly createClient: (traceId?: TraceId, debug?: boolean) => Promise<SemanticRuntimeClient>;
   readonly storageRoot: StorageRoot;
   /** The registry wires this to Engine; tests can keep an isolated Store-only route. */
   readonly resolveProjectContext?: ProjectContextResolver;
@@ -318,9 +319,16 @@ export function createQueryCommand(services: QueryCommandServices): CommandDefin
             : await services.resolveProjectContext(root, projectOptions);
         const result =
           mode === "keyword"
-            ? await queryKeyword(services, root, project, projectOptions.cacheRoot, request)
+            ? await queryKeyword(
+                services,
+                root,
+                project,
+                projectOptions.cacheRoot,
+                request,
+                invocation,
+              )
             : await (
-                await services.createClient()
+                await services.createClient(invocation.traceId, invocation.options.debug === true)
               ).query(root, {
                 ...request,
                 mode,
@@ -345,8 +353,16 @@ async function queryKeyword(
     | undefined,
   cacheRoot: string,
   request: { readonly text: string; readonly limit?: number },
+  invocation: Pick<CommandInvocation, "traceId" | "diagnostics">,
 ): Promise<QueryResult> {
-  if (project === undefined) return services.queryService.query(root, request);
+  if (project === undefined)
+    return services.queryService.query(
+      root,
+      request,
+      invocation.diagnostics === undefined
+        ? undefined
+        : { emitter: invocation.diagnostics, traceId: invocation.traceId },
+    );
   return queryContentAddressedKeyword(project, cacheRoot, request, {
     sourceSlotId: project.projectRootId,
   });

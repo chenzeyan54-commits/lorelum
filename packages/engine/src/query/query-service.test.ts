@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { MemoryLogSink, SinkLogEmitter } from "@lorelum/log";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -93,6 +94,35 @@ test("one query builds a persistent index and assembles summaries from one canon
       ],
     });
     expect(JSON.stringify(result)).not.toContain("Complete private-to-get guidance");
+  });
+});
+
+test("optional diagnostics retain the invocation trace without changing keyword results", async () => {
+  await withRoot(async (rootPath) => {
+    const sink = new MemoryLogSink();
+    const traceId = "00000000-0000-4000-8000-000000000003" as never;
+    const service = createQueryService({ store: snapshotStore([entry()]) });
+    await expect(
+      service.query(
+        { rootPath },
+        { text: "React" },
+        { emitter: new SinkLogEmitter(sink), traceId },
+      ),
+    ).resolves.toMatchObject({ mode: "keyword" });
+    expect(sink.records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: "engine.keyword-query.started",
+          traceId,
+          context: { query: "React" },
+        }),
+        expect.objectContaining({
+          message: "engine.keyword-query.completed",
+          traceId,
+          context: expect.objectContaining({ count: 1 }),
+        }),
+      ]),
+    );
   });
 });
 

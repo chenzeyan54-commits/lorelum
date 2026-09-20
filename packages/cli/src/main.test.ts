@@ -42,7 +42,7 @@ test("returns machine-readable root capability discovery when explicitly request
   expect(await run(["--json"], { stderr, stdout })).toBe(0);
   const response = JSON.parse(stdout.value);
   expect(response).toMatchObject({
-    protocolVersion: 1,
+    protocolVersion: 2,
     toolVersion,
     command: "describe",
     ok: true,
@@ -58,6 +58,8 @@ test("returns machine-readable root capability discovery when explicitly request
         { name: "context.status" },
         { name: "cache.status" },
         { name: "cache.prune" },
+        { name: "logs" },
+        { name: "feedback.draft" },
         { name: "query" },
         { name: "pack.list" },
         { name: "backend.start" },
@@ -156,21 +158,27 @@ test("uses readable Help and version by default while preserving explicit JSON",
   expect(validateProtocolSchema(JSON.parse(jsonHelp.value), protocolResponseSchema)).toEqual([]);
 
   expect(await run(["--version"], { stdout: version })).toBe(0);
-  expect(version.value).toBe(`Lorelum ${toolVersion} (protocol 1)\n`);
+  expect(version.value).toBe(`Lorelum ${toolVersion} (protocol 2)\n`);
 
-  expect(await run(["--version", "--json"], { stdout: jsonVersion })).toBe(0);
+  expect(
+    await run(["--version", "--json"], {
+      stdout: jsonVersion,
+      traceId: "00000000-0000-4000-8000-000000000001" as never,
+    }),
+  ).toBe(0);
   const versionResponse = JSON.parse(jsonVersion.value);
   expect(versionResponse).toEqual({
-    protocolVersion: 1,
+    protocolVersion: 2,
     toolVersion,
     command: "version",
+    diagnostics: { traceId: "00000000-0000-4000-8000-000000000001" },
     ok: true,
-    data: { protocolVersion: 1, toolVersion },
+    data: { protocolVersion: 2, toolVersion },
   });
   expect(validateProtocolSchema(versionResponse, protocolResponseSchema)).toEqual([]);
   const versionResultSchema = optionResultSchemaFor("lore", "version");
   expect(validateJsonSchema(versionResponse.data, versionResultSchema)).toEqual([]);
-  expect(validateJsonSchema({ protocolVersion: 1 }, versionResultSchema)).not.toEqual([]);
+  expect(validateJsonSchema({ protocolVersion: 2 }, versionResultSchema)).not.toEqual([]);
 });
 
 test("accepts the documented equals form of global options", async () => {
@@ -204,6 +212,7 @@ test("validates invalid calls before help and version responses", async () => {
       });
       expect(stdout.value).not.toContain("private-token");
       expect(stderr.value).toBe("");
+      expect(stderr.value).not.toContain("private-token");
       expect(validateProtocolSchema(JSON.parse(stdout.value), protocolResponseSchema)).toEqual([]);
     }),
   );

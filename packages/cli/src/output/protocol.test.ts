@@ -4,25 +4,29 @@ import {
   createFailureEnvelope,
   createSuccessEnvelope,
   protocolResponseSchema,
+  protocolVersion,
   toolVersion,
 } from "./protocol.js";
 import goldenEnvelopes from "./protocol-envelope.fixture.json";
 import { validateProtocolSchema } from "./protocol-schema.test-helper.js";
 
+const traceId = "00000000-0000-4000-8000-000000000001" as never;
+
 test("creates structured protocol success envelopes", () => {
-  const response = createSuccessEnvelope("describe", { name: "lore" });
+  const response = createSuccessEnvelope("describe", { name: "lore" }, { traceId });
 
   expect(response).toEqual({
-    protocolVersion: 1,
+    protocolVersion,
     toolVersion,
     command: "describe",
+    diagnostics: { traceId },
     ok: true,
     data: { name: "lore" },
   });
   expect(validateProtocolSchema(response, protocolResponseSchema)).toEqual([]);
 });
 
-test("rejects non-JSON-safe success data before writing", () => {
+test("rejects non-JSON-safe success data before rendering", () => {
   const circular: Record<string, unknown> = {};
   circular.self = circular;
   const invalidValues: unknown[] = [
@@ -35,7 +39,7 @@ test("rejects non-JSON-safe success data before writing", () => {
   ];
 
   for (const value of invalidValues) {
-    expect(() => createSuccessEnvelope("invalid", value as never)).toThrow();
+    expect(() => createSuccessEnvelope("invalid", value as never, { traceId })).toThrow();
   }
 });
 
@@ -44,10 +48,14 @@ test("creates structured protocol failures", () => {
     "unknown",
     "usage.invalid",
     "The command invocation is invalid.",
+    undefined,
+    { traceId },
   );
 
   expect(response).toMatchObject({
+    protocolVersion,
     command: "unknown",
+    diagnostics: { traceId },
     ok: false,
     error: { code: "usage.invalid" },
   });
@@ -65,6 +73,7 @@ test("creates optional machine recovery without widening unrelated failures", ()
       reason: "idle",
       retry: "original-command",
     },
+    { traceId },
   );
   expect(response).toMatchObject({
     error: {
@@ -91,7 +100,7 @@ test("validates independent golden envelopes with the exported envelope schema",
 test("rejects malformed envelopes with the exported JSON Schema", () => {
   expect(
     validateProtocolSchema(
-      { protocolVersion: 1, toolVersion, command: "describe", ok: true },
+      { protocolVersion, toolVersion, command: "describe", ok: true },
       protocolResponseSchema,
     ),
   ).not.toEqual([]);
@@ -101,6 +110,7 @@ test("rejects malformed envelopes with the exported JSON Schema", () => {
         protocolVersion: 1,
         toolVersion,
         command: "describe",
+        diagnostics: { traceId },
         ok: true,
         data: {},
         extra: true,

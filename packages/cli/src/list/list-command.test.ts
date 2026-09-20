@@ -115,6 +115,7 @@ test("describes the LocalStore-backed Pack catalog command contract", () => {
     options: [
       { name: "-h, --help", required: false },
       { name: "--json", required: false },
+      { name: "--debug", required: false },
       { name: "--log-level <level>", required: false },
       { name: "--store-root <path>", required: false },
       { name: "--details", required: false },

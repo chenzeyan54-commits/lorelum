@@ -20,10 +20,20 @@ import {
 } from "./registry.js";
 import { invalidInvocationError } from "./runtime/errors.js";
 import { Logger, logLevels, type LogLevel } from "./runtime/logger.js";
+import {
+  createTraceId,
+  type LogEmitter,
+  type Logger as LocalLogger,
+  type TraceId,
+} from "@lorelum/log";
 
 export interface CliRuntime {
   /** Runtime capabilities are constructed before Commander parses an invocation. */
   readonly logger: Logger;
+  /** Persistent generic local logger; stderr presentation stays on `logger`. */
+  readonly log?: LocalLogger;
+  readonly diagnostics?: LogEmitter;
+  readonly logDirectory?: string;
 }
 
 /** Internal callbacks that let `run` own selected-command and process-exit state. */
@@ -39,6 +49,7 @@ export function createProgram(
   lifecycle: ProgramLifecycle,
   registryDefinitions: readonly CommandDefinition[] = commandRegistry,
   outputFormat: OutputFormat = "text",
+  traceId: TraceId = createTraceId(),
 ): Command {
   const registry = snapshotCommandDefinitions(registryDefinitions);
   const describeFromRegistry: DescribeCommand = (command) => describeCommand(command, registry);
@@ -64,6 +75,10 @@ export function createProgram(
         describeFromRegistry,
         discoveryCommandName,
         outputFormat,
+        traceId,
+        runtime.diagnostics,
+        runtime.log,
+        runtime.logDirectory,
       ),
     );
 
@@ -102,6 +117,10 @@ export function createProgram(
         describeFromRegistry,
         definition.name,
         outputFormat,
+        traceId,
+        runtime.diagnostics,
+        runtime.log,
+        runtime.logDirectory,
       );
     });
   }
@@ -118,6 +137,10 @@ async function executeCommand(
   describeFromRegistry: DescribeCommand,
   responseCommand: string,
   outputFormat: OutputFormat,
+  traceId: TraceId,
+  diagnostics: LogEmitter | undefined,
+  log: LocalLogger | undefined,
+  logDirectory: string | undefined,
 ): Promise<void> {
   lifecycle.selectCommand(definition);
   const helpOption = enabledFrameworkOption(command, definition, "help");
@@ -134,6 +157,7 @@ async function executeCommand(
       command: response.command,
       data: response.data,
       ...(response.textRenderer === undefined ? {} : { textRenderer: response.textRenderer }),
+      diagnostics: { traceId },
     });
     return;
   }
@@ -143,6 +167,7 @@ async function executeCommand(
       command: discoveryCommandName,
       data: requireCommandDescription(describeFromRegistry, definition.name),
       textRenderer: renderHelpText,
+      diagnostics: { traceId },
     });
     return;
   }
@@ -157,6 +182,10 @@ async function executeCommand(
     options: command.optsWithGlobals(),
     positionals,
     describeCommand: describeFromRegistry,
+    traceId,
+    ...(diagnostics === undefined ? {} : { diagnostics }),
+    ...(log === undefined ? {} : { log }),
+    ...(logDirectory === undefined ? {} : { logDirectory }),
   });
   const exitCode = result.exitCode ?? 0;
   if (!definition.exitCodes.includes(exitCode)) {
@@ -167,6 +196,7 @@ async function executeCommand(
     command: responseCommand,
     data: result.data,
     ...(definition.textRenderer === undefined ? {} : { textRenderer: definition.textRenderer }),
+    diagnostics: { traceId },
   });
   if (exitCode === 1) lifecycle.setExitCode(1);
 }

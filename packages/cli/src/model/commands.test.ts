@@ -95,7 +95,8 @@ test("model commands use the injected client and publish model status", async ()
       invoke(command, { createClient: async () => fakeClient(calls) }),
     ),
   );
-  expect(calls).toEqual(["load", "status", "unload"]);
+  expect(calls).toHaveLength(3);
+  expect(calls).toEqual(expect.arrayContaining(["load", "status", "unload"]));
   for (const item of result) {
     expect(item.exitCode).toBe(0);
     expect(item.response.ok).toBe(true);

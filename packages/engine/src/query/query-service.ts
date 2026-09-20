@@ -113,34 +113,70 @@ async function prepareKeywordIndex(
 /** Dependencies are shared; roots, snapshots and index connections belong to each call. */
 export function createQueryService({ store }: QueryDependencies): QueryService {
   return Object.freeze({
-    async query(root, request) {
+    async query(root, request, diagnostics) {
+      const startedAt = Date.now();
       const input = parseQueryRequest(request);
-      for (let attempt = 0; attempt < MAX_QUERY_RETRIES; attempt++) {
-        let prepared: PreparedKeywordIndex | undefined;
-        try {
-          // eslint-disable-next-line no-await-in-loop -- each retry depends on the previous snapshot.
-          prepared = await prepareKeywordIndex(store, root);
-          const candidates = prepared.index.search(input.text, input.limit);
-          if (prepared.practices !== undefined) {
-            return assembleQueryResult(prepared.practices, candidates);
+      diagnostics?.emitter.emit({
+        time: new Date().toISOString(),
+        level: "info",
+        component: "engine",
+        event: "engine.keyword-query.started",
+        ...(diagnostics.traceId === undefined ? {} : { traceId: diagnostics.traceId }),
+        query: input.text,
+      });
+      try {
+        for (let attempt = 0; attempt < MAX_QUERY_RETRIES; attempt++) {
+          let prepared: PreparedKeywordIndex | undefined;
+          try {
+            // eslint-disable-next-line no-await-in-loop -- each retry depends on the previous snapshot.
+            prepared = await prepareKeywordIndex(store, root);
+            const candidates = prepared.index.search(input.text, input.limit);
+            let result: QueryResult;
+            if (prepared.practices !== undefined) {
+              result = assembleQueryResult(prepared.practices, candidates);
+            } else {
+              // eslint-disable-next-line no-await-in-loop -- the candidate read validates this retry's snapshot.
+              const practices = await store.readEffectivePracticesAtSnapshot(
+                root,
+                prepared.identity,
+                candidates.map((candidate) => candidate.practiceId),
+              );
+              result = assembleQueryResult(practices, candidates);
+            }
+            diagnostics?.emitter.emit({
+              time: new Date().toISOString(),
+              level: "info",
+              component: "engine",
+              event: "engine.keyword-query.completed",
+              ...(diagnostics.traceId === undefined ? {} : { traceId: diagnostics.traceId }),
+              durationMs: Date.now() - startedAt,
+              count: result.results.length,
+            });
+            return result;
+          } catch (error) {
+            if (error instanceof StoreSnapshotChangedError && attempt + 1 < MAX_QUERY_RETRIES) {
+              continue;
+            }
+            throw error;
+          } finally {
+            prepared?.index.close();
           }
-          // eslint-disable-next-line no-await-in-loop -- the candidate read validates this retry's snapshot.
-          const practices = await store.readEffectivePracticesAtSnapshot(
-            root,
-            prepared.identity,
-            candidates.map((candidate) => candidate.practiceId),
-          );
-          return assembleQueryResult(practices, candidates);
-        } catch (error) {
-          if (error instanceof StoreSnapshotChangedError && attempt + 1 < MAX_QUERY_RETRIES) {
-            continue;
-          }
-          throw error;
-        } finally {
-          prepared?.index.close();
         }
+        throw new KeywordIndexError("LocalStore changed repeatedly during query");
+      } catch (error) {
+        diagnostics?.emitter.emit({
+          time: new Date().toISOString(),
+          level: "error",
+          component: "engine",
+          event: "engine.keyword-query.failed",
+          ...(diagnostics.traceId === undefined ? {} : { traceId: diagnostics.traceId }),
+          durationMs: Date.now() - startedAt,
+          query: input.text,
+          code:
+            error instanceof KeywordIndexUnavailableError ? "query.unavailable" : "query.failed",
+        });
+        throw error;
       }
-      throw new KeywordIndexError("LocalStore changed repeatedly during query");
     },
   } satisfies QueryService);
 }

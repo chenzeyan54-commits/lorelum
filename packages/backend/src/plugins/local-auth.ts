@@ -1,6 +1,13 @@
 import { Elysia } from "elysia";
+import { isTraceId } from "@lorelum/log";
 import { backendErrorBody, type BackendErrorCode } from "../protocol/errors";
-import { BACKEND_HOST, BACKEND_ROUTES, MAX_BODY_BYTES } from "../protocol/constants";
+import {
+  BACKEND_HOST,
+  BACKEND_ROUTES,
+  DIAGNOSTIC_LEVEL_HEADER,
+  MAX_BODY_BYTES,
+  TRACE_ID_HEADER,
+} from "../protocol/constants";
 
 export function reject(status: number, code: BackendErrorCode): Response {
   return Response.json(backendErrorBody(code), { status });
@@ -35,6 +42,23 @@ export function requireAuthorization(
   if (!header.startsWith("Bearer ") || !authenticate(header.slice(7))) {
     return reject(401, "backend.unauthorized");
   }
+  const traceId = request.headers.get(TRACE_ID_HEADER);
+  if (traceId !== null && !isTraceId(traceId)) return reject(400, "backend.invalid-request");
+  const diagnosticLevel = request.headers.get(DIAGNOSTIC_LEVEL_HEADER);
+  if (diagnosticLevel !== null && diagnosticLevel !== "debug") {
+    return reject(400, "backend.invalid-request");
+  }
+}
+
+/** The trace is validated by the authentication boundary and is never an authority credential. */
+export function requestTraceId(request: Request) {
+  const traceId = request.headers.get(TRACE_ID_HEADER);
+  return traceId === null ? undefined : isTraceId(traceId) ? traceId : undefined;
+}
+
+/** The local authenticated client may widen only this request's persisted detail. */
+export function requestDiagnosticLevel(request: Request): "debug" | undefined {
+  return request.headers.get(DIAGNOSTIC_LEVEL_HEADER) === "debug" ? "debug" : undefined;
 }
 
 export function requireJson(request: Request): Response | undefined {

@@ -8,16 +8,18 @@ icon: Terminal
 
 ## 命令目录
 
-| 命令                                                 | 用途                               |
-| ---------------------------------------------------- | ---------------------------------- |
-| [query](./reference/query)                           | 围绕任务和时刻检索 Practice 摘要。 |
-| [get](./reference/get)                               | 读取已安装 Practice 的全文。       |
-| [pack](./reference/packs)                            | 安装、列出、更新和移除 Pack。      |
-| [index](./reference/indexing)                        | 检查、构建和重建 semantic index。  |
-| [model](./reference/model)                           | 检查、加载和卸载 embedding 模型。  |
-| [backend](./reference/backend)                       | 启动、检查和停止本地服务。         |
-| [validate、format、i18n sync](./reference/authoring) | 验证 Pack 内容并维护本地化。       |
-| `describe`                                           | 返回命令能力和 schema。            |
+| 命令 | 用途 |
+| --- | --- |
+| [query](./reference/query) | 围绕任务和时刻检索 Practice 摘要。 |
+| [get](./reference/get) | 读取已安装 Practice 的全文。 |
+| [pack](./reference/packs) | 安装、列出、更新和移除 Pack。 |
+| [index](./reference/indexing) | 检查、构建和重建 semantic index。 |
+| [model](./reference/model) | 检查、加载和卸载 embedding 模型。 |
+| [backend](./reference/backend) | 启动、检查和停止本地服务。 |
+| `logs` | 按 source、level 或 trace 查看受管理的本机日志；`logs prune` 只清理过期的 Lorelum 日志文件。 |
+| `feedback draft` | 生成可审阅的本地 bug 或 improvement 草稿；不会提交 Issue 或上传诊断。 |
+| [validate、format、i18n sync](./reference/authoring) | 验证 Pack 内容并维护本地化。 |
+| `describe` | 返回命令能力和 schema。 |
 
 ## 查询已安装版本的合同
 
@@ -35,13 +37,14 @@ lore --version --json
 
 ## 全局选项
 
-| 选项                  | 用途                                              |
-| --------------------- | ------------------------------------------------- |
-| `--store-root <path>` | 选择 Pack、query、get 和 index 命令使用的 Store。 |
-| `--log-level <level>` | 设置 stderr 诊断级别，默认 `error`。              |
-| `--json`              | 返回完整、单行的 JSON protocol envelope。         |
-| `--help`、`-h`        | 显示可读 Help；需要能力数据时追加 `--json`。      |
-| `--version`、`-V`     | 显示工具/协议版本；需要 envelope 时追加 `--json`。|
+| 选项                  | 用途                                               |
+| --------------------- | -------------------------------------------------- |
+| `--store-root <path>` | 选择 Pack、query、get 和 index 命令使用的 Store。  |
+| `--debug`             | 仅为本次调用记录 debug 级本机日志，不改写配置。    |
+| `--log-level <level>` | 设置 stderr 诊断级别，默认 `error`。               |
+| `--json`              | 返回完整、单行的 JSON protocol envelope。          |
+| `--help`、`-h`        | 显示可读 Help；需要能力数据时追加 `--json`。       |
+| `--version`、`-V`     | 显示工具/协议版本；需要 envelope 时追加 `--json`。 |
 
 相对 Store 路径基于当前工作目录解析。相关命令应使用同一个 root：
 
@@ -53,21 +56,36 @@ lore --store-root /path/to/store query "评审一个局部 UI 修改的需求范
 
 模型配置和 Backend 运行状态仍属于用户级环境。详细说明见[配置](./configuration)。
 
+若要让发行版或自动 Hook 持续记录详细信息，可在 `~/.lorelum/config.yaml` 设置 `logging.level: debug`。`lore --debug` 还会把这一次调用的 detail 只传给关联的 authenticated Backend request 和 lifecycle；它不会改写 daemon 全局等级，也不会影响并发调用。它和仅控制 stderr 的 `--log-level` 是两件事。
+
+## 本机日志
+
+可从 `--json` 响应取得 trace，再查看一次调用，不必直接读取 Backend 私有文件：
+
+```sh
+lore logs --trace-id <traceId> --limit 100
+lore logs --source hook.codex --level debug
+lore logs prune
+```
+
+日志保存在 `~/.lorelum/logs/`。`lore logs` 不会启动 Backend/model；缺失、轮转或损坏文件会作为证据限制返回，不会用其他调用内容填充。
+
 ## JSON 响应结构
 
 下面字段只在选择 `--json` 时存在。不要解析默认 text。JSON 与 text 使用同一次 handler result 和同一个退出码；text 只不重复 envelope 外壳。
 
-每个响应都包含 `protocolVersion`、`toolVersion`、`command` 和 `ok`。
+每个 `--json` CLI envelope 都包含 `protocolVersion`、`toolVersion`、`command`、`diagnostics.traceId` 和 `ok`。Hook 保持宿主自己的 envelope，不会暴露这项 trace metadata。
 
-| 字段              | 含义                             |
-| ----------------- | -------------------------------- |
-| `protocolVersion` | JSON 协议版本。                  |
-| `toolVersion`     | 已安装 CLI 的版本。              |
-| `command`         | 生成结果的命令标识。             |
-| `ok`              | 本次调用是否产生成功的命令结果。 |
-| `data`            | 成功时的命令结果。               |
-| `error.code`      | 失败时的稳定错误标识。           |
-| `error.message`   | 失败时供人阅读的原因说明。       |
+| 字段                  | 含义                                                       |
+| --------------------- | ---------------------------------------------------------- |
+| `protocolVersion`     | JSON 协议版本。                                            |
+| `toolVersion`         | 已安装 CLI 的版本。                                        |
+| `command`             | 生成结果的命令标识。                                       |
+| `diagnostics.traceId` | 本次调用的本机关联 ID；它不是鉴权凭证，也不是公开分享 ID。 |
+| `ok`                  | 本次调用是否产生成功的命令结果。                           |
+| `data`                | 成功时的命令结果。                                         |
+| `error.code`          | 失败时的稳定错误标识。                                     |
+| `error.message`       | 失败时供人阅读的原因说明。                                 |
 
 程序应按错误码分支，不解析错误消息。响应成功时，仍需检查命令的具体状态，才能判断异步工作是否完成。
 
@@ -82,3 +100,15 @@ lore --store-root /path/to/store query "评审一个局部 UI 修改的需求范
 query 返回 `ok: true` 且 `data.state: "preparing"` 时退出码为 `1`，不代表查询结果为空。index 命令接受后台工作后可以退出 `0`；需要根据返回的 operation ID 继续检查是否完成。默认 text 也会完整展示相同状态和 ID；只有程序化 parser 需要使用 `--json`。
 
 各命令参考说明其支持的状态和退出码。
+
+## 本地 feedback 草稿
+
+`--json` CLI 结果若指出了可复现的问题或有价值的改进，可以使用其 `diagnostics.traceId` 生成本地草稿：
+
+```sh
+lore feedback draft --trace-id <traceId> --kind bug
+```
+
+未传 `--output <directory>` 时，命令会在 `~/.lorelum/feedback/` 下创建唯一的 `report.json` 和 `report.md` 目录。默认只读取同 trace 的错误和 lifecycle 摘要；明确加 `--include-logs info` 或 `--include-logs debug` 才会把已经记录的同 trace 详细日志加入草稿。它不会启动 Backend 或模型，也不会发网络请求、打开 URL、上传数据或创建 Issue。
+
+`--input <file|->` 是高级入口，适用于没有 trace 的人工观察或测试 fixture。将草稿内容手动粘贴到公开 Issue 前，请分别审阅 query、Practice 片段、native output、路径、环境信息和自由文本。

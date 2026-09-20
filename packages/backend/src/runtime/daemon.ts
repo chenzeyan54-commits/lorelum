@@ -3,6 +3,9 @@ import { createEmbeddingService } from "../modules/embedding/service";
 import { createEmbeddingProcess } from "./embedding-process";
 import { consumeDaemonLaunch, resolveBackendSettings, resolveEmbeddingConfig } from "../config";
 import { createEmbeddingProfile, createLocalStore, createQueryService } from "@lorelum/engine";
+import { defaultLogDirectory, loadLoggingSettings } from "@lorelum/config";
+import { SinkLogEmitter, TraceDetailLogEmitter } from "@lorelum/log";
+import { join } from "node:path";
 import { BACKEND_HOST, MAX_BODY_BYTES } from "../protocol/constants";
 import { BackendError } from "../protocol/errors";
 import { createBackendApp } from "../app";
@@ -16,10 +19,10 @@ import { SemanticOperationJournal } from "../modules/query/project-operation-jou
 import { isSameProcess } from "./process-identity";
 import { removeActivityRecord, setRuntimeActivity, withActivityLock } from "./activity-state";
 import { readRecord, removeRecord, writeRecord } from "./runtime-state";
-import { logEvent } from "./log";
+import { createPrivateJsonlSink, type PrivateJsonlSink } from "./private-jsonl-sink";
 
 export async function runBackendDaemon(options: { readonly buildIdentity: string }): Promise<void> {
-  const { runtimeDirectory: directory, instanceId, port } = consumeDaemonLaunch();
+  const { runtimeDirectory: directory, instanceId, port, logDirectory } = consumeDaemonLaunch();
   // Bounded stdin launch grant ensures a dead starter cannot leave an unpublished daemon.
   const grant = await readGrant();
   const record = await readRecord(directory);
@@ -33,6 +36,17 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
   )
     throw new BackendError("backend.unauthorized");
   const settings = resolveBackendSettings(record.settings);
+  // This is a startup security boundary. An unsafe target remains a backend
+  // state failure; only I/O after a successful preflight degrades to a
+  // disabled diagnostic sink.
+  const loggingLevel = await loadLoggingSettings()
+    .then((logging) => logging.level)
+    .catch(() => "info" as const);
+  const diagnosticSink = await createPrivateJsonlSink({
+    directory: join(logDirectory ?? defaultLogDirectory(), "backend"),
+    fileName: "current.jsonl",
+  });
+  const diagnostics = new TraceDetailLogEmitter(loggingLevel, new SinkLogEmitter(diagnosticSink));
   const updateActivity = async (
     kind: "daemon-startup" | "model-preparation" | "index-operation",
     active: boolean,
@@ -44,10 +58,11 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
   const embeddingConfig = resolveEmbeddingConfig(record.embedding);
   const embedding = createEmbeddingService({
     settings,
+    diagnostics,
     onPreparationActivityChange: (active) => updateActivity("model-preparation", active),
     threads: embeddingConfig.threads,
     prepareModel: (signal, progress) => prepareModel(embeddingConfig, signal, progress),
-    createRuntime: (modelPath) =>
+    createRuntime: (modelPath, preparationId) =>
       createEmbeddingProcess(
         { modelPath, threads: embeddingConfig.threads },
         async (modelProcess) => {
@@ -61,6 +76,7 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
             modelProcess ? { ...withoutModel, modelProcess } : withoutModel,
           );
         },
+        { diagnostics, ...(preparationId === undefined ? {} : { preparationId }) },
       ),
   });
   let ready = false;
@@ -92,6 +108,7 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
     embedding,
     new SemanticOperationJournal(directory),
     (active) => updateActivity("index-operation", active),
+    diagnostics,
   );
   const app = createBackendApp({
     backend,
@@ -99,6 +116,7 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
     port,
     keywordQueryService: createQueryService({ store }),
     semanticRuntime,
+    diagnostics,
   });
   const signalHandler = () => {
     void backend.stop();
@@ -119,11 +137,17 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
       }
       await embedding.unload(deadline);
       await app.stop(false);
-      await logEvent(directory, "stopped");
       await removeRecord(directory, instanceId);
       await withActivityLock(directory, settings.requestTimeoutMs, () =>
         removeActivityRecord(directory, instanceId),
       );
+      diagnostics.emit({
+        time: new Date().toISOString(),
+        level: "info",
+        component: "backend",
+        event: "backend.daemon.stopped",
+      });
+      await flushDiagnostics(diagnosticSink, deadline);
     } finally {
       clearTimeout(force);
       if (app.server) await app.stop(true);
@@ -141,18 +165,37 @@ export async function runBackendDaemon(options: { readonly buildIdentity: string
     process.on("SIGTERM", signalHandler);
     process.on("SIGINT", signalHandler);
     await updateActivity("daemon-startup", false);
-    await logEvent(directory, "ready");
     ready = true;
+    diagnostics.emit({
+      time: new Date().toISOString(),
+      level: "info",
+      component: "backend",
+      event: "backend.daemon.ready",
+    });
   } catch (error) {
     await embedding.unload().catch(() => {});
     if (app.server) await app.stop(true);
     await withActivityLock(directory, settings.requestTimeoutMs, () =>
       removeActivityRecord(directory, instanceId),
     ).catch(() => undefined);
-    await logEvent(directory, "failed", "backend.failed");
+    diagnostics.emit({
+      time: new Date().toISOString(),
+      level: "error",
+      component: "backend",
+      event: "backend.daemon.failed",
+      code: "backend.failed",
+    });
+    await flushDiagnostics(diagnosticSink, Date.now() + settings.shutdownTimeoutMs);
     throw new BackendError("backend.failed", { cause: error });
   }
 }
+
+/** A log flush is valuable, but never allowed to consume the shutdown deadline. */
+async function flushDiagnostics(sink: PrivateJsonlSink, deadline: number): Promise<void> {
+  const remaining = Math.max(1, deadline - Date.now());
+  await Promise.race([sink.close(), Bun.sleep(remaining)]).catch(() => undefined);
+}
+
 async function readGrant(): Promise<string> {
   return new Promise((resolve, reject) => {
     let value = "";

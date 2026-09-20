@@ -5,7 +5,9 @@ import {
   type ErrorRecovery,
   type JsonValue,
   type OutputWriter,
+  type ProtocolDiagnostics,
 } from "./protocol.js";
+import { createTraceId } from "@lorelum/log";
 import { renderStructuredText, type StructuredTextRenderer } from "./structured-text.js";
 
 export type OutputFormat = "json" | "text";
@@ -19,6 +21,7 @@ export type RenderableResult =
       command: string;
       data: JsonValue;
       textRenderer?: TextRenderer;
+      diagnostics?: ProtocolDiagnostics;
     }>
   | Readonly<{
       kind: "failure";
@@ -26,6 +29,7 @@ export type RenderableResult =
       code: string;
       message: string;
       recovery?: ErrorRecovery;
+      diagnostics?: ProtocolDiagnostics;
     }>;
 
 /** The only output-format decision point for ordinary CLI responses. */
@@ -37,7 +41,16 @@ export function renderResult(
   if (result.kind === "success") {
     assertJsonValue(result.data);
     if (format === "json") {
-      writeLine(writer, JSON.stringify(createSuccessEnvelope(result.command, result.data)));
+      writeLine(
+        writer,
+        JSON.stringify(
+          createSuccessEnvelope(
+            result.command,
+            result.data,
+            result.diagnostics ?? { traceId: createTraceId() },
+          ),
+        ),
+      );
       return;
     }
     const text = (result.textRenderer ?? renderStructuredText)(result.data, renderStructuredText);
@@ -50,7 +63,13 @@ export function renderResult(
     writeLine(
       writer,
       JSON.stringify(
-        createFailureEnvelope(result.command, result.code, result.message, result.recovery),
+        createFailureEnvelope(
+          result.command,
+          result.code,
+          result.message,
+          result.recovery,
+          result.diagnostics ?? { traceId: createTraceId() },
+        ),
       ),
     );
     return;

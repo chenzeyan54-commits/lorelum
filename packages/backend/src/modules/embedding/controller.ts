@@ -1,6 +1,13 @@
 import { BACKEND_ROUTES } from "../../protocol/constants";
 import { Elysia, status } from "elysia";
-import { reject, requireJson } from "../../plugins/local-auth";
+import { randomUUID } from "node:crypto";
+import {
+  reject,
+  requestDiagnosticLevel,
+  requestTraceId,
+  requireJson,
+} from "../../plugins/local-auth";
+import { noopEmitter, withDiagnosticLevel, type LogEmitter } from "@lorelum/log";
 import { errorSchema } from "../../protocol/errors";
 import {
   embeddingRequestSchema,
@@ -21,7 +28,11 @@ const modelResponses = {
 };
 const modelMutation = { body: emptyModelRequestSchema, response: modelResponses };
 
-export function embeddingController(service: EmbeddingService, available: () => boolean) {
+export function embeddingController(
+  service: EmbeddingService,
+  available: () => boolean,
+  diagnostics: LogEmitter = noopEmitter,
+) {
   return new Elysia({ normalize: false })
     .onBeforeHandle(({ request }) => {
       if (!available()) return reject(503, "backend.busy");
@@ -42,9 +53,25 @@ export function embeddingController(service: EmbeddingService, available: () => 
     .post(BACKEND_ROUTES.modelUnload, () => invoke(() => service.unload()), modelMutation)
     .post(
       BACKEND_ROUTES.modelPrepare,
-      () =>
+      ({ request }) =>
         invoke(async () => {
           const result = service.beginModelPreparation();
+          const traceId = requestTraceId(request);
+          const requestDiagnostics = withDiagnosticLevel(
+            diagnostics,
+            requestDiagnosticLevel(request),
+          );
+          if (traceId !== undefined) {
+            requestDiagnostics.emit({
+              time: new Date().toISOString(),
+              level: "info",
+              component: "backend",
+              event: "trace.preparation.accepted",
+              traceId,
+              requestId: randomUUID(),
+              preparationId: result.preparationId,
+            });
+          }
           return status(result.status.state === "ready" ? 200 : 202, result);
         }),
       {

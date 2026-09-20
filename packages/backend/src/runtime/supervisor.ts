@@ -2,6 +2,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { createConnection } from "node:net";
+import { join } from "node:path";
 
 import {
   defaultRuntimeDirectory,
@@ -45,6 +46,8 @@ export interface BackendSupervisorOptions {
   readonly daemonArgv0?: string;
   /** Internal test injection, never exposed as CLI flags or Store config. */
   readonly runtimeDirectory?: string;
+  /** Internal lifecycle-test override; released CLIs retain the user-level log root. */
+  readonly logDirectory?: string;
   readonly baseUrl?: string;
   readonly timeoutMs?: number;
   /** Internal lifecycle-test injection; never exposed through CLI configuration. */
@@ -77,6 +80,9 @@ const FORCE_TERMINATION_WAIT_MS = 1_000;
 export function createBackendSupervisor(options: BackendSupervisorOptions): BackendSupervisor {
   const directory =
     options.runtimeDirectory ?? options.config?.runtimeDirectory ?? defaultRuntimeDirectory();
+  const logDirectory =
+    options.logDirectory ??
+    (options.runtimeDirectory === undefined ? undefined : join(directory, "logs"));
   const baseUrl = options.baseUrl ?? BACKEND_URL;
   const address = new URL(baseUrl);
   if (
@@ -331,6 +337,7 @@ export function createBackendSupervisor(options: BackendSupervisorOptions): Back
         runtimeDirectory: directory,
         instanceId,
         port: Number(address.port || 80),
+        ...(logDirectory === undefined ? {} : { logDirectory }),
       }),
     });
     const exited = childCompletion(child);

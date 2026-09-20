@@ -7,17 +7,19 @@ const launchKeys = [
   "LORELUM_BACKEND_DIRECTORY",
   "LORELUM_BACKEND_INSTANCE",
   "LORELUM_BACKEND_PORT",
+  "LORELUM_BACKEND_LOG_DIRECTORY",
 ] as const;
 const launchSchema = z.strictObject({
   runtimeDirectory: z.string().min(1).refine(isAbsolute),
   instanceId: z.string().regex(/^[a-f0-9-]{36}$/),
   port: z.number().int().min(1).max(65_535),
+  logDirectory: z.string().min(1).refine(isAbsolute).optional(),
 });
 export type DaemonLaunch = z.infer<typeof launchSchema>;
 
 /** Recognizes the private launch channel, not user settings. Actual values are validated below. */
 export function hasDaemonLaunchEnvironment(environment: Environment = process.env): boolean {
-  return launchKeys.every((key) => !!environment[key]);
+  return launchKeys.slice(0, 3).every((key) => !!environment[key]);
 }
 
 export function consumeDaemonLaunch(environment: NodeJS.ProcessEnv = process.env): DaemonLaunch {
@@ -26,6 +28,7 @@ export function consumeDaemonLaunch(environment: NodeJS.ProcessEnv = process.env
     runtimeDirectory: environment.LORELUM_BACKEND_DIRECTORY,
     instanceId: environment.LORELUM_BACKEND_INSTANCE,
     port: port !== undefined && /^[0-9]+$/.test(port) ? Number(port) : undefined,
+    logDirectory: environment.LORELUM_BACKEND_LOG_DIRECTORY,
   });
   if (!result.success) throw new BackendError("backend.unauthorized");
   for (const key of launchKeys) delete environment[key];
@@ -64,5 +67,8 @@ export function daemonEnvironment(
     LORELUM_BACKEND_DIRECTORY: launch.runtimeDirectory,
     LORELUM_BACKEND_INSTANCE: launch.instanceId,
     LORELUM_BACKEND_PORT: String(launch.port),
+    ...(launch.logDirectory === undefined
+      ? {}
+      : { LORELUM_BACKEND_LOG_DIRECTORY: launch.logDirectory }),
   };
 }

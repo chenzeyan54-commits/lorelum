@@ -1,0 +1,63 @@
+name: 🧭 Field feedback
+description: Report useful-but-incomplete guidance, a retrieval miss, integration timing issue, or evidence that does not yet justify a product change
+title: "[field-feedback] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for observed field feedback that is not yet clearly a bug or a feature request. A report can help triage, but it does not by itself authorize a Pack, Core, Skill, docs, or evaluation change.
+
+  - type: dropdown
+    id: feedback-type
+    attributes:
+      label: What did you observe?
+      options:
+        - Useful but incomplete Practice guidance
+        - Retrieval miss or timing issue
+        - Agent integration misunderstanding
+        - No actionable change yet
+    validations:
+      required: true
+
+  - type: textarea
+    id: situation
+    attributes:
+      label: Situation and observed outcome
+      description: Describe the decision or task moment, what Lorelum provided, and what was missing or confusing.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence-boundary
+    attributes:
+      label: Evidence and limits
+      description: State what was verified, what is missing, and whether a reviewed local feedback draft exists. Do not paste unreviewed full logs.
+      placeholder: "Verified: ...\nMissing: ...\nLocal draft: optional path or reviewed excerpt"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: suggested-disposition
+    attributes:
+      label: Suggested disposition
+      description: This is a suggestion for maintainers, not a triage decision.
+      options:
+        - Pack
+        - Core
+        - Skill / Plugin
+        - Documentation
+        - Evaluation
+        - Defer pending evidence
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: disclosure-review
+    attributes:
+      label: Public disclosure review
+      description: Any local draft may contain original local content. Choose deliberately what to disclose here.
+      options:
+        - label: I reviewed any query, Practice content, native output, paths, environment details, and free text that I chose to disclose.
+          required: true
+        - label: I removed credentials, cookies, tokens, private keys, signed URLs, and other secrets.
+          required: true

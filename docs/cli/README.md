@@ -10,17 +10,19 @@ Lorelum CLI 的普通命令默认在 stdout 输出完整、可读的 text：它�
 - [Model 生命周期](model.md)：准备、加载、状态、卸载 embedding 模型。
 - [Semantic index](index.md)：查看、构建或替换当前 query context 的 semantic artifact。
 - [Query](query.md)：默认使用本地 semantic query；`--mode keyword` 保留离线 keyword query。
+- `lore logs` / `lore logs prune`：按 source、level 或 `traceId` 查看受管理的本机日志，或显式清理过期日志；不会启动 Backend/model 或扫描任意目录。
+- `lore feedback draft`：从一个 `traceId` 或高级 input 生成仅保存在本机、需要外发前审阅的反馈草稿；默认只带摘要，`--include-logs info|debug` 才加入已记录的同 trace 详细日志。
 - `lore cache status` / `lore cache prune`：查看或显式清理用户级、可重建的 query cache；不会扫描或修改项目源文件。
 - [Get](get.md)：读取一个已安装 Practice。
 - [Pack catalog](list.md)：列出已安装 Pack 或其 Practice 目录。
 - [Pack 生命周期](packs.md)：安装、更新或移除某个 Pack。
 - [Host Hooks](hook.md)：向 Codex、Cursor、WorkBuddy 与 ZCode 注入受限的 Installed Pack Catalog。
 
-使用 `lore --version` 查询 CLI 版本；`--help`、`--json` 和 `--log-level` 是全局选项。需要 Store 的命令支持 `--store-root <path>`；backend/model 命令不读取或修改 LocalStore，传入该选项不会改变它们的模型来源。`query`、`index` 与 cache 命令支持 `--cache-root <path>`，它只选择本次调用的用户级派生数据位置；未指定时默认使用 `~/.lorelum/cache`。
+使用 `lore --version` 查询 CLI 版本；`--help`、`--json`、`--debug` 和 `--log-level` 是全局选项。`--debug` 仅提升本次调用的持久本机日志到 debug；当调用进入 Backend 时，它只传给同一条 authenticated request 及关联 lifecycle，不改变 daemon 全局配置或其他调用的收集等级。`--log-level` 只控制 stderr 呈现。持续 debug 可在 `~/.lorelum/config.yaml` 设置 `logging.level: debug`。需要 Store 的命令支持 `--store-root <path>`；backend/model 命令不读取或修改 LocalStore，传入该选项不会改变它们的模型来源。`query`、`index` 与 cache 命令支持 `--cache-root <path>`，它只选择本次调用的用户级派生数据位置；未指定时默认使用 `~/.lorelum/cache`。
 
 ## Protocol versions
 
-CLI envelope 当前为 version 1；backend 内部协议当前为 version 3。内部协议对所有请求使用一致的实例身份和 build 校验。
+普通 CLI envelope 当前为 version 2；backend 内部协议当前为 version 3。内部协议对所有请求使用一致的实例身份和 build 校验。
 
 ## Output formats
 
@@ -40,9 +42,12 @@ lore pack list --details --json
 
 ```json
 {
-  "protocolVersion": 1,
+  "protocolVersion": 2,
   "toolVersion": "…",
   "command": "model.status",
+  "diagnostics": {
+    "traceId": "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+  },
   "ok": true,
   "data": {
     "state": "unloaded",
@@ -55,3 +60,5 @@ lore pack list --details --json
 ```
 
 `model load` 的 stdout 在任务最终完成前保持沉默；stderr 使用 `model: resolving`、`model: downloading 50% (attempt 1)`、`model: verifying` 和 `model: starting` 这样的文案，只输出发生变化的阶段、百分比或 attempt。被取消、下载失败或 native 启动失败在默认格式以 text error 返回，在 `--json` 格式以最终 failure envelope 返回；两者都不把 202 接受状态当作命令成功。
+
+每个 `--json` CLI envelope 的 `diagnostics.traceId` 是该次调用的本机排障关联 ID。它可用于 `lore logs --trace-id <traceId>` 或后续生成本地 feedback 草稿；它不是鉴权 token，也不会出现在 Codex/ZCode/Cursor Hook envelope。`--debug` 不改变 stdout 单行 JSON、progress 输出、已接受后台 operation 或退出码；`--log-level` 仍只控制 stderr。

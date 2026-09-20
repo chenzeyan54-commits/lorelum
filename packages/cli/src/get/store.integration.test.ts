@@ -84,13 +84,18 @@ async function get(directory: string, rootName = "store", practiceId = id) {
       this.value += message;
     },
   };
-  const exitCode = await run(["get", practiceId, "--store-root", join(directory, rootName)], {
-    registry: snapshotCommandDefinitions([definition]),
-    stdout,
-    stderr,
-  });
+  const exitCode = await run(
+    ["--json", "get", practiceId, "--store-root", join(directory, rootName)],
+    {
+      registry: snapshotCommandDefinitions([definition]),
+      stdout,
+      stderr,
+    },
+  );
   expect(existsSync(unusedRoot)).toBe(false);
-  expect(stderr.value).toBe("");
+  if (exitCode === 0 || exitCode === 1) {
+    expect(stderr.value).toBe("");
+  } else expect(stderr.value).toBe("");
   expect(stdout.value.trim().split("\n")).toHaveLength(1);
   const response = JSON.parse(stdout.value);
   if (response.ok) expect(validateJsonSchema(response.data, definition.resultSchema)).toEqual([]);

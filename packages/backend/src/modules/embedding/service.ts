@@ -3,6 +3,7 @@ import { DEFAULT_EMBEDDING_SETTINGS } from "../../config/embedding";
 import { createTimeoutSignal } from "../../lifecycle/timeout";
 import { randomUUID } from "node:crypto";
 import { waitForSettlement } from "../../lifecycle/deadline";
+import { noopEmitter, type LogEmitter } from "@lorelum/log";
 import type { BackendSettings } from "../../config/model";
 import {
   embeddingRequestSchema,
@@ -22,7 +23,7 @@ import {
 const SHUTDOWN_DRAIN_RESERVE_MS = 200;
 
 export interface EmbeddingServiceOptions {
-  readonly createRuntime: (modelPath?: string) => EmbeddingRuntime;
+  readonly createRuntime: (modelPath?: string, preparationId?: string) => EmbeddingRuntime;
   readonly prepareModel?: (
     signal: AbortSignal,
     progress: (value: ModelProgress) => void,
@@ -31,8 +32,11 @@ export interface EmbeddingServiceOptions {
   readonly settings: BackendSettings;
   /** Publishes durable Backend activity before a preparation can begin. */
   readonly onPreparationActivityChange?: (active: boolean) => Promise<void>;
+  /** Best-effort local lifecycle facts; never changes model state or errors. */
+  readonly diagnostics?: LogEmitter;
 }
 export function createEmbeddingService(options: EmbeddingServiceOptions) {
+  const diagnostics = options.diagnostics ?? noopEmitter;
   const threads = options.threads ?? DEFAULT_EMBEDDING_SETTINGS.threads;
   const encodingId = ENCODING_ID;
   let progress: ModelProgress | undefined;
@@ -80,11 +84,20 @@ export function createEmbeddingService(options: EmbeddingServiceOptions) {
     if (state === "ready") return Promise.resolve(status());
     if (runtime || inflight) return Promise.reject(new EmbeddingError("embedding.busy"));
     preparationId = randomUUID();
+    const activePreparationId = preparationId;
+    const preparationStartedAt = Date.now();
     state = "loading";
     progress = { phase: "resolving" };
     failure = undefined;
     startup = new AbortController();
     const signal = startup.signal;
+    diagnostics.emit({
+      time: new Date().toISOString(),
+      level: "info",
+      component: "backend",
+      event: "backend.preparation.started",
+      preparationId: activePreparationId,
+    });
     loading = Promise.resolve().then(async () => {
       let handle: EmbeddingRuntime | undefined;
       let activityPublished = false;
@@ -99,13 +112,21 @@ export function createEmbeddingService(options: EmbeddingServiceOptions) {
         });
         signal.throwIfAborted();
         progress = { phase: "starting" };
-        handle = options.createRuntime(modelPath);
+        handle = options.createRuntime(modelPath, activePreparationId);
         runtime = handle;
         await handle.start(signal, Date.now() + options.settings.startupTimeoutMs);
         signal.throwIfAborted();
         if (state !== "loading") throw new EmbeddingError("embedding.busy");
         state = "ready";
         progress = undefined;
+        diagnostics.emit({
+          time: new Date().toISOString(),
+          level: "info",
+          component: "backend",
+          event: "backend.preparation.ready",
+          preparationId: activePreparationId,
+          durationMs: Date.now() - preparationStartedAt,
+        });
         const active = handle;
         void handle.exited.then(() => {
           if (runtime === active && state === "ready") {
@@ -116,12 +137,20 @@ export function createEmbeddingService(options: EmbeddingServiceOptions) {
         });
         return status();
       } catch (error) {
-        return await recover(
+        const visible =
           signal.aborted && state !== "unloading"
             ? new EmbeddingError("embedding.deadline-exceeded")
-            : embeddingFailure(error),
-          handle,
-        );
+            : embeddingFailure(error);
+        diagnostics.emit({
+          time: new Date().toISOString(),
+          level: "error",
+          component: "backend",
+          event: "backend.preparation.failed",
+          preparationId: activePreparationId,
+          durationMs: Date.now() - preparationStartedAt,
+          code: visible.code,
+        });
+        return await recover(visible, handle);
       } finally {
         loading = undefined;
         if (activityPublished) {
@@ -139,6 +168,7 @@ export function createEmbeddingService(options: EmbeddingServiceOptions) {
     deadline = Date.now() + options.settings.shutdownTimeoutMs,
   ): Promise<ModelStatus> {
     if (unloading) return unloading;
+    const activePreparationId = preparationId;
     state = "unloading";
     preparationId = undefined;
     progress = undefined;
@@ -157,6 +187,13 @@ export function createEmbeddingService(options: EmbeddingServiceOptions) {
         if (runtime) throw new EmbeddingError("embedding.deadline-exceeded");
         state = "unloaded";
         failure = undefined;
+        diagnostics.emit({
+          time: new Date().toISOString(),
+          level: "info",
+          component: "backend",
+          event: "backend.preparation.unloaded",
+          ...(activePreparationId === undefined ? {} : { preparationId: activePreparationId }),
+        });
         return status();
       } catch (error) {
         state = "failed";

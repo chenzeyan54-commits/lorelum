@@ -9,6 +9,7 @@
     "./protocol": "./src/protocol/index.ts",
     "./server": "./src/app.ts",
     "./daemon": "./src/runtime/daemon.ts",
+    "./diagnostics": "./src/diagnostics/index.ts",
     "./control": "./src/runtime/index.ts",
     "./config": "./src/config/index.ts"
   },
@@ -18,6 +19,7 @@
   "dependencies": {
     "@lorelum/config": "workspace:*",
     "@lorelum/engine": "workspace:*",
+    "@lorelum/log": "workspace:*",
     "@lorelum/shared": "workspace:*",
     "elysia": "1.4.30",
     "got": "16.0.0",

@@ -1,4 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import {
+  MemoryLogSink,
+  SinkLogEmitter,
+  TraceDetailLogEmitter,
+  type LogEmitter,
+} from "@lorelum/log";
 
 import type { QueryRequest, QueryService, StorageRoot } from "@lorelum/engine";
 
@@ -32,6 +38,7 @@ function runningApp(
   backendIdentity: InstanceIdentity = identity,
   embedding?: EmbeddingService,
   semanticRuntime: ContentAddressedSemanticRuntimePort = createContentAddressedSemanticRuntimeStub(),
+  diagnostics?: LogEmitter,
 ): {
   readonly app: ReturnType<typeof createBackendApp>;
   readonly url: string;
@@ -46,6 +53,7 @@ function runningApp(
     ...(embedding === undefined ? {} : { embedding }),
     keywordQueryService: keywordService,
     semanticRuntime,
+    ...(diagnostics === undefined ? {} : { diagnostics }),
   });
   apps.push(app);
   app.listen({ hostname: "127.0.0.1", port: 0, maxRequestBodySize: 65_536 });
@@ -158,6 +166,90 @@ describe("createBackendClient", () => {
     expect(calls).toEqual([
       { root: { rootPath: "/tmp/lorelum-client-test" }, request: { text: "search" } },
     ]);
+  });
+
+  test("propagates the caller trace without treating it as an authentication credential", async () => {
+    const sink = new MemoryLogSink();
+    const traceId = "00000000-0000-4000-8000-000000000026" as never;
+    const { url } = runningApp(
+      {
+        async query() {
+          return { mode: "keyword", results: [] };
+        },
+      },
+      identity,
+      undefined,
+      createContentAddressedSemanticRuntimeStub(),
+      new SinkLogEmitter(sink),
+    );
+    const client = createBackendClient({
+      identity,
+      secret,
+      buildIdentity: identity.buildIdentity,
+      baseUrl: url,
+      traceId,
+    });
+
+    await expect(
+      client.query(
+        { rootPath: "/tmp/lorelum-client-trace" },
+        { text: "trace me", mode: "keyword" },
+      ),
+    ).resolves.toEqual({ mode: "keyword", results: [] });
+    expect(sink.records).toContainEqual(
+      expect.objectContaining({
+        message: "backend.request.completed",
+        traceId,
+        context: expect.objectContaining({ route: "query", method: "POST", status: 200 }),
+      }),
+    );
+    expect(JSON.stringify(sink.records)).not.toContain(secret);
+  });
+
+  test("uses the authenticated request detail override without enabling debug for another trace", async () => {
+    const sink = new MemoryLogSink();
+    const traceId = "00000000-0000-4000-8000-000000000028" as never;
+    const diagnostics = new TraceDetailLogEmitter("info", new SinkLogEmitter(sink));
+    const { url } = runningApp(
+      {
+        async query(_root, _request, context) {
+          context?.emitter?.emit({
+            level: "debug",
+            component: "engine",
+            event: "query.debug-detail",
+            traceId: context?.traceId,
+            query: "selected debug query",
+          });
+          return { mode: "keyword", results: [] };
+        },
+      },
+      identity,
+      undefined,
+      createContentAddressedSemanticRuntimeStub(),
+      diagnostics,
+    );
+    const client = createBackendClient({
+      identity,
+      secret,
+      buildIdentity: identity.buildIdentity,
+      baseUrl: url,
+      traceId,
+      diagnosticLevel: "debug",
+    });
+
+    await expect(
+      client.query(
+        { rootPath: "/tmp/lorelum-client-debug" },
+        { text: "trace me", mode: "keyword" },
+      ),
+    ).resolves.toEqual({ mode: "keyword", results: [] });
+    expect(sink.records).toContainEqual(
+      expect.objectContaining({
+        message: "query.debug-detail",
+        traceId,
+        context: { query: "selected debug query" },
+      }),
+    );
   });
 
   test("does not send ordinary requests to a service with a different build", async () => {
@@ -413,6 +505,8 @@ describe("createBackendClient", () => {
 
   test("uses the authenticated semantic index operation contract", async () => {
     const operationId = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const traceId = "00000000-0000-4000-8000-000000000027" as never;
+    const sink = new MemoryLogSink();
     const { url } = runningApp(
       undefined,
       identity,
@@ -435,12 +529,14 @@ describe("createBackendClient", () => {
           };
         },
       }),
+      new SinkLogEmitter(sink),
     );
     const client = createBackendClient({
       identity,
       secret,
       buildIdentity: identity.buildIdentity,
       baseUrl: url,
+      traceId,
     });
 
     await expect(
@@ -456,6 +552,14 @@ describe("createBackendClient", () => {
       state: "ready",
       index: { vectorCount: 1 },
     });
+    expect(sink.records).toContainEqual(
+      expect.objectContaining({
+        message: "backend.request.completed",
+        traceId,
+        operationId,
+        context: expect.objectContaining({ route: "index", method: "POST", status: 202 }),
+      }),
+    );
   });
 
   test("reports an index operation lost after a daemon restart as expired", async () => {

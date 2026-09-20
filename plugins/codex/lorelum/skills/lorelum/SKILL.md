@@ -39,6 +39,20 @@ lore backend lease renew <lease-id>
 lore backend lease release <lease-id>
 ```
 
+## Offer local feedback without interrupting the main task
+
+A normal `lore` CLI envelope includes `diagnostics.traceId`. Treat it as a local correlation ID for that invocation only: it is not a credential, user identity, or public sharing ID.
+
+When a clear Lorelum bug, retrieval/guidance gap, or user-requested missing capability appears, keep a candidate only in the current task context. Do not inspect extra logs, create a report, upload anything, or create/update a GitHub Issue merely because a candidate exists. If the main task can continue, finish it and make at most one non-blocking offer in the final summary or a user-visible milestone. State the relevant local facts plainly enough for the user to decide.
+
+Only after the user explicitly agrees to prepare a local draft, run the trace-rooted command:
+
+```sh
+lore feedback draft --trace-id <traceId> --kind <bug|improvement>
+```
+
+The default draft contains same-trace error/lifecycle summary facts, not every query or debug record. Only if the user explicitly asks for more already-recorded local detail may the Agent add `--include-logs info` or `--include-logs debug`; explain that this is still local-only, cannot recover debug that was never recorded, and requires external review before sharing. If detail is missing, suggest a later reproduction with `lore --debug <command>` or `logging.level: debug`. Then show the user the artifact paths, included evidence classes, `externalReview`, and `missingEvidence`. A generated draft is not a submission, upload, Issue, triage result, or authorization to change a Pack, Core, Skill, docs, or evaluation. Do not use `--input` for the ordinary Agent flow. If the user declines or does not respond, do not create a draft or repeat the offer in the same task. SessionStart and recoverable Hook failures remain metadata-only and never create feedback artifacts.
+
 ## Use Pack resources when a retrieved Practice points to them
 
 Packs may include optional `references/`, `assets/`, and `scripts/` directories. A Practice can point to one with a normal Markdown link whose target begins with `resource:`, for example:

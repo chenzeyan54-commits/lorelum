@@ -70,15 +70,17 @@ async function invoke(
     createClient,
     storageRoot: { rootPath: "unused-default" },
   });
-  const exitCode = await run([...args], {
+  const exitCode = await run(["--json", ...args], {
     registry: snapshotCommandDefinitions([definition]),
     stdout,
     stderr,
   });
   expect(stdout.value.endsWith("\n")).toBe(true);
   expect(stdout.value.trim().split("\n")).toHaveLength(1);
-  expect(stderr.value).toBe("");
   const response = JSON.parse(stdout.value);
+  if (exitCode === 0 || exitCode === 1) {
+    expect(stderr.value).toBe("");
+  } else expect(stderr.value).toBe("");
   expect(validateProtocolSchema(response, protocolResponseSchema)).toEqual([]);
   return { exitCode, response, definition };
 }
@@ -160,6 +162,31 @@ test("uses semantic Backend query by default and preserves semantic metadata", a
   });
   expect(result.response.data).toEqual(semantic);
   expect(validateJsonSchema(result.response.data, result.definition.resultSchema)).toEqual([]);
+});
+
+test("passes a one-invocation debug override with the CLI trace to the semantic client", async () => {
+  const calls: Array<{ traceId: unknown; debug: unknown }> = [];
+  const result = await invoke(
+    ["--debug", "query", "trace the backend request"],
+    {
+      async query() {
+        throw new Error("keyword path should not run");
+      },
+    },
+    async (traceId, debug) => {
+      calls.push({ traceId, debug });
+      return {
+        query: async () => ({
+          mode: "semantic" as const,
+          profileId: "p".repeat(64),
+          coverage: "complete" as const,
+          results: [],
+        }),
+      };
+    },
+  );
+  expect(result.exitCode).toBe(0);
+  expect(calls).toEqual([{ traceId: result.response.diagnostics.traceId, debug: true }]);
 });
 
 test("returns preparing as a successful exit-1 result", async () => {

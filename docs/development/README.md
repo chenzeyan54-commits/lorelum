@@ -15,6 +15,7 @@ This is the index for day-to-day development topics that do not belong in the pr
 - [Engine persistence and Drizzle](./persistence.md)
 - [Host Plugin conventions](./plugin-conventions.md)
 - [Host Plugin checkout development](./plugins.md)
+- [本机诊断日志](./diagnostic-logging.md)
 - [Embedding native runtime](#embedding-native-runtime)
 - [Discover installed Packs with `lore pack list`](../cli/list.md)
 - [Read an installed Practice with `lore get`](../cli/get.md)

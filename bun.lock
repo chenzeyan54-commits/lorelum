@@ -57,6 +57,7 @@
       "dependencies": {
         "@lorelum/config": "workspace:*",
         "@lorelum/engine": "workspace:*",
+        "@lorelum/log": "workspace:*",
         "@lorelum/shared": "workspace:*",
         "elysia": "1.4.30",
         "got": "16.0.0",
@@ -74,6 +75,7 @@
         "@lorelum/config": "workspace:*",
         "@lorelum/engine": "workspace:*",
         "@lorelum/format": "workspace:*",
+        "@lorelum/log": "workspace:*",
         "@lorelum/mcp": "workspace:*",
         "@lorelum/shared": "workspace:*",
         "commander": "15.0.0",
@@ -95,6 +97,7 @@
       "dependencies": {
         "@lorelum/config": "workspace:*",
         "@lorelum/format": "workspace:*",
+        "@lorelum/log": "workspace:*",
         "@lorelum/shared": "workspace:*",
         "drizzle-orm": "0.45.2",
       },
@@ -112,6 +115,10 @@
       "devDependencies": {
         "@types/js-yaml": "4.0.9",
       },
+    },
+    "packages/log": {
+      "name": "@lorelum/log",
+      "version": "0.0.0",
     },
     "packages/mcp": {
       "name": "@lorelum/mcp",
@@ -365,6 +372,8 @@
     "@lorelum/engine": ["@lorelum/engine@workspace:packages/engine"],
 
     "@lorelum/format": ["@lorelum/format@workspace:packages/format"],
+
+    "@lorelum/log": ["@lorelum/log@workspace:packages/log"],
 
     "@lorelum/mcp": ["@lorelum/mcp@workspace:packages/mcp"],
 

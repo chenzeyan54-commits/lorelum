@@ -1,7 +1,14 @@
 import { BACKEND_ROUTES } from "../../protocol/constants";
 import { BackendError, backendErrorBody, errorSchema } from "../../protocol/errors";
 import { Elysia, status } from "elysia";
-import { requireJson, reject } from "../../plugins/local-auth";
+import { randomUUID } from "node:crypto";
+import {
+  requireJson,
+  reject,
+  requestDiagnosticLevel,
+  requestTraceId,
+} from "../../plugins/local-auth";
+import { noopEmitter, withDiagnosticLevel, type LogEmitter, type TraceId } from "@lorelum/log";
 import { EmbeddingError } from "../embedding/errors";
 import {
   StoreBusyError,
@@ -14,6 +21,7 @@ import {
   indexOperationSchema,
   indexStatusQuerySchema,
   indexStatusSchema,
+  type IndexOperation,
 } from "./model";
 import type {
   ContentAddressedSemanticRuntimePort,
@@ -24,6 +32,7 @@ import type {
 export function indexController(
   runtime: ContentAddressedSemanticRuntimePort,
   available: () => boolean,
+  diagnostics: LogEmitter = noopEmitter,
 ) {
   return new Elysia({ normalize: false })
     .onBeforeHandle(({ request }) => {
@@ -46,16 +55,7 @@ export function indexController(
     )
     .post(
       BACKEND_ROUTES.indexBuild,
-      async ({ body }) => {
-        try {
-          return status(
-            202,
-            await runtime.build({ rootPath: body.storageRoot }, targetForMutation(body)),
-          );
-        } catch (error) {
-          return indexFailure(error);
-        }
-      },
+      ({ body, request }) => handleIndexMutation(runtime, "build", diagnostics, body, request),
       {
         body: indexMutationSchema,
         response: { 202: indexOperationSchema, 400: errorSchema, 503: errorSchema },
@@ -63,16 +63,7 @@ export function indexController(
     )
     .post(
       BACKEND_ROUTES.indexRebuild,
-      async ({ body }) => {
-        try {
-          return status(
-            202,
-            await runtime.rebuild({ rootPath: body.storageRoot }, targetForMutation(body)),
-          );
-        } catch (error) {
-          return indexFailure(error);
-        }
-      },
+      ({ body, request }) => handleIndexMutation(runtime, "rebuild", diagnostics, body, request),
       {
         body: indexMutationSchema,
         response: { 202: indexOperationSchema, 400: errorSchema, 503: errorSchema },
@@ -91,6 +82,125 @@ export function indexController(
         response: { 200: indexOperationSchema, 400: errorSchema, 410: errorSchema },
       },
     );
+}
+
+type IndexMutationMethod = "build" | "rebuild";
+type IndexMutationBody = Parameters<typeof targetForMutation>[0] & {
+  readonly storageRoot: string;
+};
+
+async function handleIndexMutation(
+  runtime: ContentAddressedSemanticRuntimePort,
+  mutation: IndexMutationMethod,
+  diagnostics: LogEmitter,
+  body: IndexMutationBody,
+  request: Request,
+) {
+  const traceId = requestTraceId(request);
+  const requestDiagnostics = withDiagnosticLevel(diagnostics, requestDiagnosticLevel(request));
+  const requestId = randomUUID();
+  const startedAt = Date.now();
+  if (traceId !== undefined) {
+    requestDiagnostics.emit({
+      time: new Date().toISOString(),
+      level: "info",
+      component: "backend",
+      event: "backend.request.started",
+      traceId,
+      requestId,
+      route: "index",
+      method: "POST",
+    });
+    requestDiagnostics.emit({
+      time: new Date().toISOString(),
+      level: "info",
+      component: "backend",
+      event: "trace.request.accepted",
+      traceId,
+      requestId,
+    });
+  }
+  try {
+    const operation = await runtime[mutation](
+      { rootPath: body.storageRoot },
+      targetForMutation(body),
+    );
+    if (traceId !== undefined) {
+      recordIndexMutationAccepted(requestDiagnostics, traceId, requestId, operation, startedAt);
+    }
+    return status(202, operation);
+  } catch (error) {
+    if (traceId !== undefined) {
+      requestDiagnostics.emit({
+        time: new Date().toISOString(),
+        level: "error",
+        component: "backend",
+        event: "backend.request.failed",
+        traceId,
+        requestId,
+        route: "index",
+        method: "POST",
+        status: 503,
+        durationMs: Date.now() - startedAt,
+        code: publicErrorCode(error),
+      });
+    }
+    return indexFailure(error);
+  }
+}
+
+function recordIndexMutationAccepted(
+  diagnostics: LogEmitter,
+  traceId: TraceId,
+  requestId: string,
+  operation: IndexOperation,
+  startedAt: number,
+): void {
+  const preparation =
+    operation.state === "preparing" ? { preparationId: operation.preparationId } : {};
+  diagnostics.emit({
+    time: new Date().toISOString(),
+    level: "info",
+    component: "backend",
+    event: "trace.operation.accepted",
+    traceId,
+    requestId,
+    operationId: operation.operationId,
+    ...preparation,
+  });
+  if (operation.state === "preparing") {
+    diagnostics.emit({
+      time: new Date().toISOString(),
+      level: "info",
+      component: "backend",
+      event: "trace.preparation.accepted",
+      traceId,
+      requestId,
+      preparationId: operation.preparationId,
+    });
+  }
+  diagnostics.emit({
+    time: new Date().toISOString(),
+    level: "info",
+    component: "backend",
+    event: "backend.request.completed",
+    traceId,
+    requestId,
+    route: "index",
+    method: "POST",
+    status: 202,
+    operationId: operation.operationId,
+    ...preparation,
+    durationMs: Date.now() - startedAt,
+  });
+}
+
+function publicErrorCode(error: unknown): string {
+  if (error instanceof EmbeddingError) return error.code;
+  if (error instanceof BackendError) return error.code;
+  if (error instanceof StoreBusyError) return "store.busy";
+  if (error instanceof StoreRecoveryRequiredError) return "store.recovery-required";
+  return "backend.failed";
 }
 
 function targetForStatus(input: {

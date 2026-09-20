@@ -106,7 +106,7 @@ test(
       expect(await mismatched.stop()).toEqual({ state: "stopped", model: "unloaded" });
       expect(await isSameProcess(record)).toBe(false);
       expect(await readRecord(directory)).toBeUndefined();
-      const log = await readFile(join(directory, "backend.log"), "utf8");
+      const log = await readFile(join(directory, "logs", "backend", "current.jsonl"), "utf8");
       expect(log).not.toContain(record.secret);
     }),
   20_000,
@@ -349,11 +349,16 @@ test(
   async () =>
     fixture(async (directory, port, command) => {
       await mkdir(directory, { mode: 0o700 });
+      await mkdir(join(directory, "logs", "backend"), { recursive: true, mode: 0o700 });
       if (process.platform === "win32") {
-        // No mode bits to violate on Windows; an unusable log path fails after bind instead.
-        await mkdir(join(directory, "backend.log"));
+        // No mode bits to violate on Windows; a directory at the sink target is unusable.
+        await mkdir(join(directory, "logs", "backend", "current.jsonl"));
       } else {
-        await writeFile(join(directory, "backend.log"), "invalid-permissions", { mode: 0o644 });
+        await writeFile(
+          join(directory, "logs", "backend", "current.jsonl"),
+          "invalid-permissions",
+          { mode: 0o644 },
+        );
       }
       const controller = createBackendSupervisor({
         buildIdentity: "integration-build",

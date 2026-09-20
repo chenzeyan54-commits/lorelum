@@ -1,7 +1,8 @@
 import packageManifest from "../../package.json";
+import { createTraceId, type TraceId } from "@lorelum/log";
 
 /** Version of the process-envelope contract. */
-export const protocolVersion = 1;
+export const protocolVersion = 2;
 /** Version of the CLI implementation emitting the envelope. */
 export const toolVersion = packageManifest.version;
 
@@ -34,6 +35,11 @@ interface EnvelopeBase {
   protocolVersion: number;
   toolVersion: string;
   command: string;
+  diagnostics: ProtocolDiagnostics;
+}
+
+export interface ProtocolDiagnostics {
+  readonly traceId: TraceId;
 }
 
 export interface ProtocolSuccess<T extends JsonValue = JsonValue> extends EnvelopeBase {
@@ -63,11 +69,17 @@ export const protocolResponseSchema = {
     {
       type: "object",
       additionalProperties: false,
-      required: ["protocolVersion", "toolVersion", "command", "ok", "data"],
+      required: ["protocolVersion", "toolVersion", "command", "diagnostics", "ok", "data"],
       properties: {
         protocolVersion: { const: protocolVersion },
         toolVersion: { type: "string" },
         command: { type: "string" },
+        diagnostics: {
+          type: "object",
+          additionalProperties: false,
+          required: ["traceId"],
+          properties: { traceId: { type: "string" } },
+        },
         ok: { const: true },
         data: {},
       },
@@ -75,11 +87,17 @@ export const protocolResponseSchema = {
     {
       type: "object",
       additionalProperties: false,
-      required: ["protocolVersion", "toolVersion", "command", "ok", "error"],
+      required: ["protocolVersion", "toolVersion", "command", "diagnostics", "ok", "error"],
       properties: {
         protocolVersion: { const: protocolVersion },
         toolVersion: { type: "string" },
         command: { type: "string" },
+        diagnostics: {
+          type: "object",
+          additionalProperties: false,
+          required: ["traceId"],
+          properties: { traceId: { type: "string" } },
+        },
         ok: { const: false },
         error: {
           type: "object",
@@ -109,12 +127,14 @@ export const protocolResponseSchema = {
 export function createSuccessEnvelope<T extends JsonValue>(
   command: string,
   data: T,
+  diagnostics: ProtocolDiagnostics = { traceId: createTraceId() },
 ): ProtocolSuccess<T> {
   assertJsonValue(data);
   return {
     protocolVersion,
     toolVersion,
     command,
+    diagnostics,
     ok: true,
     data,
   };
@@ -125,11 +145,13 @@ export function createFailureEnvelope(
   code: string,
   message: string,
   recovery?: ErrorRecovery,
+  diagnostics: ProtocolDiagnostics = { traceId: createTraceId() },
 ): ProtocolFailure {
   return {
     protocolVersion,
     toolVersion,
     command,
+    diagnostics,
     ok: false,
     error: { code, message, ...(recovery === undefined ? {} : { recovery }) },
   };

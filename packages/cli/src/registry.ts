@@ -6,6 +6,7 @@ import {
 } from "./output/protocol.js";
 import { renderHelpText, renderVersionText } from "./output/presentation.js";
 import type { TextRenderer } from "./output/render.js";
+import type { LogEmitter, TraceId } from "@lorelum/log";
 import {
   createListService,
   createLocalStore,
@@ -32,6 +33,8 @@ import { createProjectContextResolver } from "./project-context/service.js";
 import { createProjectContextCommands } from "./project-context/commands.js";
 import { loadQuerySettings } from "./query/settings.js";
 import { createCacheCommands } from "./cache/commands.js";
+import { createFeedbackCommand } from "./feedback/index.js";
+import { createLogCommands } from "./log/command.js";
 
 export interface CommandOption {
   readonly longFlag: string;
@@ -45,6 +48,7 @@ export interface CommandOption {
   readonly behavior?:
     | "help"
     | "json"
+    | "debug"
     | "log-level"
     | "store-root"
     | "project-root"
@@ -93,6 +97,13 @@ export interface CommandInvocation {
   readonly options: Readonly<Record<string, unknown>>;
   readonly positionals: readonly string[];
   readonly describeCommand: DescribeCommand;
+  readonly traceId: TraceId;
+  /** Optional command-scoped diagnostic emitter; handlers never own sink I/O. */
+  readonly diagnostics?: LogEmitter;
+  /** Optional persistent logger for command-owned debug context. */
+  readonly log?: import("@lorelum/log").Logger;
+  /** Managed local log root; production defaults to the user-level Lorelum root. */
+  readonly logDirectory?: string;
 }
 
 export type DescribeCommand = (command?: string) => JsonValue | undefined;
@@ -150,6 +161,14 @@ const globalOptions: readonly CommandOption[] = [
       resultSchema: versionResultSchema,
       textRenderer: renderVersionText,
     },
+  },
+  {
+    longFlag: "--debug",
+    description:
+      "Record debug-level local logs for this invocation without changing configuration.",
+    optionRequired: false,
+    behavior: "debug",
+    scope: "global",
   },
   {
     longFlag: "--log-level",
@@ -236,6 +255,7 @@ const optionDescriptionSchema: JsonSchema = {
       enum: [
         "help",
         "json",
+        "debug",
         "log-level",
         "store-root",
         "project-root",
@@ -346,6 +366,8 @@ export const commandRegistry = snapshotCommandDefinitions([
     resolveProjectContext: sharedProjectContextResolver,
   }),
   ...createCacheCommands(),
+  ...createLogCommands(),
+  createFeedbackCommand(),
   createQueryCommand({
     queryService: sharedQueryService,
     createClient: createProcessSemanticRuntimeClient,

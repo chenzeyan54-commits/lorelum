@@ -19,6 +19,7 @@
     "@lorelum/config": "workspace:*",
     "@lorelum/engine": "workspace:*",
     "@lorelum/format": "workspace:*",
+    "@lorelum/log": "workspace:*",
     "@lorelum/mcp": "workspace:*",
     "@lorelum/shared": "workspace:*",
     "commander": "15.0.0"

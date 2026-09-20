@@ -98,7 +98,7 @@ test("calls the injected backend supervisor for each control command", async () 
     expect(result.definition).toBeDefined();
     expect(validateJsonSchema(result.response.data, result.definition!.resultSchema)).toEqual([]);
   }
-  expect(calls).toEqual(["start", "status", "stop"]);
+  expect(calls.sort()).toEqual(["start", "status", "stop"]);
 });
 
 test("backend stop --if-idle returns a deferred handoff without calling explicit stop", async () => {
