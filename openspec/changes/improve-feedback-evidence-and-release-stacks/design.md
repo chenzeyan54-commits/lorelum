@@ -4,7 +4,7 @@
 
 当前 `packages/log/src/context.ts` 已仅过滤明确 credential，并保留 query、路径、原生输出与 Error stack；这符合本变更的本机边界。`packages/cli/src/feedback/report.ts` 则在 Markdown 中将 correlation IDs 重新编号，且把 detailed logs 视为特殊选择内容，需要调整为“本机完整证据”和“外发授权”两件不同的事。
 
-`package.json` 的 `build:cli` 直接调用 `bun build --compile`。当前 Bun CLI 将 `--compile` 视为 production 路径，因此不能依赖隐式默认值来保证不 minify 或保留 source map。release compiler 的常规路径通过 `Bun.build({ compile })`，Windows 兼容路径先 bundle 再以 CLI compile；两条路径都需要相同 source-map 和 minify 合同。现有 `scripts/release/compile-cli.test.ts` 已实际运行编译 binary，是 source-location 回归验证的合适位置。
+`package.json` 的 `build:cli` 直接调用 `bun build --compile`。当前 Bun CLI 将 `--compile` 视为 production 路径，因此不能依赖隐式默认值来保证不 minify 或保留 source map。release compiler 的常规路径通过 `Bun.build({ compile })` 编译；Windows 兼容路径直接以 CLI compile 原始 TypeScript entrypoint。两条路径都以同一个仅供编译替换的 TypeScript 常量静态嵌入 staged native manifest，不依赖 plugin、banner、`process.env` 或 ESM module 初始化顺序，且不得再产生破坏 source map 的中间 bundle。现有 `scripts/release/compile-cli.test.ts` 已实际运行编译 binary，是 source-location 回归验证的合适位置。
 
 ## Goals / Non-Goals
 
@@ -48,9 +48,9 @@ report JSON 与 Markdown 都保留同一份本机 correlation IDs 和详细记�
 
 ### 4. 所有交付编译路径显式使用 inline map 与 `minify: false`
 
-把普通 `build:cli` 从直接 CLI compile 改为调用与 release compiler 共享的 Bun Build API 封装。该封装在 build configuration 中显式设定 `sourcemap: "inline"` 和 `minify: false`，同时继续嵌入 migrations 并保持 release manifest override、target、dotenv/bunfig 关闭和 Windows fallback 行为。
+把普通 `build:cli` 从直接 CLI compile 改为调用与 release compiler 共享的编译封装。常规 Build API 路径在 build configuration 中显式设定 `sourcemap: "inline"` 和 `minify: false`，并以 `define` 将 staged native manifest 静态替换到仅供 release compiler 使用的 TypeScript 常量。Windows fallback 直接以 Bun CLI compile 原始 TypeScript entrypoint，显式传递 `--sourcemap=inline`、`--no-minify`、同一个 `--define`、migrations 与 dotenv/bunfig 关闭参数；这避免依赖 plugin、banner、`process.env` 与 ESM module 初始化顺序。
 
-Windows fallback 的 bundle 与二次 compile 都必须传递同一 source-map/minify 意图；若 Bun 当前 CLI 不支持对 `--compile` 的显式非 minify 覆盖，实施必须以等价 Build API 路径或受支持 flag 解决，不能静默继续依赖 compile 的 production 默认值。
+Windows fallback 不得先产生再编译中间 bundle，因为该 bundle 会破坏运行时 stack 回到原始 TypeScript source 的映射。若 Bun 当前 CLI 不支持对 `--compile` 的显式非 minify 覆盖，实施必须以等价 Build API 路径或受支持 flag 解决，不能静默继续依赖 compile 的 production 默认值。
 
 替代方案是只发布 external `.map` 文件。拒绝：单文件 release archive 复制/安装后容易遗漏 sidecar，且运行时 stack 无法保证读取它。inline map 让 binary 可独立还原源码位置，代价是可执行文件变大、源码信息更容易被提取；这是本变更明确接受的可调试性取舍。
 

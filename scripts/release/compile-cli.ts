@@ -9,7 +9,7 @@ const repositoryRoot = resolve(import.meta.dir, "../..");
 const defaultEntrypoint = join(repositoryRoot, "packages/cli/src/main.ts");
 const migrationAssetsDirectory = "packages/engine/src/persistence/migrations";
 const windowsIcon = join(repositoryRoot, "scripts/release/lorelum.ico");
-const releaseManifestGlobalKey = "__LORELUM_RELEASE_NATIVE_MANIFEST__";
+const compiledManifestDefinitionKey = "LORELUM_RELEASE_NATIVE_MANIFEST";
 
 export function windowsCompileMetadataArguments(): readonly string[] {
   if (!existsSync(windowsIcon)) throw new Error(`Windows release icon is missing: ${windowsIcon}`);
@@ -26,8 +26,6 @@ export interface CompileCliOptions {
   readonly entrypoint?: string;
   /** Test-only alternate target; normal builds target the current platform. */
   readonly target?: Bun.Build.CompileTarget;
-  /** Internal compile-time setup used by release staging. */
-  readonly banner?: string;
   /** Test-only override for validating the Windows-compatible Bun CLI compiler path. */
   readonly useBunCommand?: true;
 }
@@ -55,24 +53,49 @@ export type CompiledReleaseCli = CompiledCli;
 
 /** Compile one standalone CLI with readable source-mapped runtime stacks. */
 export async function compileCli(options: CompileCliOptions): Promise<CompiledCli> {
+  const job = await createCompileJob(options);
+  if (options.useBunCommand === true || process.platform === "win32") {
+    return compileWithBunCommand(job);
+  }
+  return compileWithBuildApi(job);
+}
+
+/** Compile one CLI whose embedded manifest is byte-for-byte the staged native manifest. */
+export async function compileReleaseCli(
+  options: CompileReleaseCliOptions,
+): Promise<CompiledReleaseCli> {
+  const job = await createCompileJob({
+    outfile: options.outfile,
+    ...(options.entrypoint === undefined ? {} : { entrypoint: options.entrypoint }),
+    target: options.target ?? options.artifact.compileTarget,
+  });
+  const define = releaseManifestDefine(options.artifact, options.nativeManifest);
+  if (options.useBunCommand === true || process.platform === "win32") {
+    return compileWithBunCommand(job, { define });
+  }
+  return compileWithBuildApi(job, define);
+}
+
+async function createCompileJob(options: CompileCliOptions): Promise<CompileCliJob> {
   await mkdir(dirname(options.outfile), { recursive: true });
-  const job: CompileCliJob = {
+  return {
     outfile: options.outfile,
     entrypoint: options.entrypoint ?? defaultEntrypoint,
     compileTarget:
       options.target ?? (`bun-${process.platform}-${process.arch}` as Bun.Build.CompileTarget),
-    ...(options.banner === undefined ? {} : { banner: options.banner }),
   };
-  if (options.useBunCommand === true || process.platform === "win32") {
-    return compileWithBunCommand(job);
-  }
+}
 
+async function compileWithBuildApi(
+  job: CompileCliJob,
+  define?: CompileDefinitions,
+): Promise<CompiledCli> {
   const result = await Bun.build({
     entrypoints: [job.entrypoint],
     target: "bun",
     sourcemap: "inline",
     minify: false,
-    ...(job.banner === undefined ? {} : { banner: job.banner }),
+    ...(define === undefined ? {} : { define }),
     compile: {
       target: job.compileTarget,
       outfile: job.outfile,
@@ -89,26 +112,16 @@ export async function compileCli(options: CompileCliOptions): Promise<CompiledCl
   return finishCompiledOutput(job, result.metafile);
 }
 
-/** Compile one CLI whose embedded manifest is byte-for-byte the staged native manifest. */
-export async function compileReleaseCli(
-  options: CompileReleaseCliOptions,
-): Promise<CompiledReleaseCli> {
-  return compileCli({
-    outfile: options.outfile,
-    ...(options.entrypoint === undefined ? {} : { entrypoint: options.entrypoint }),
-    target: options.target ?? options.artifact.compileTarget,
-    banner: releaseManifestBanner(options.artifact, options.nativeManifest),
-    ...(options.useBunCommand === undefined ? {} : { useBunCommand: options.useBunCommand }),
-  });
-}
-
 /**
  * Bun 1.4.2's Bun.build compile API misbuilds Windows executables: the binary exits
  * immediately without running the entry module. The CLI compiler does run correctly
- * there, and the release manifest arrives through an injected banner so this path can
- * compile the original TypeScript entrypoint rather than an unmapped intermediate bundle.
+ * there, so both compiler paths use the same static manifest definition and compile the
+ * original TypeScript entrypoint instead of an intermediate bundle.
  */
-async function compileWithBunCommand(job: CompileCliJob): Promise<CompiledCli> {
+async function compileWithBunCommand(
+  job: CompileCliJob,
+  options: CompileWithBunCommandOptions = {},
+): Promise<CompiledCli> {
   const child = Bun.spawnSync(
     [
       process.execPath,
@@ -120,7 +133,7 @@ async function compileWithBunCommand(job: CompileCliJob): Promise<CompiledCli> {
       "--no-compile-autoload-dotenv",
       "--no-compile-autoload-bunfig",
       ...(job.compileTarget.startsWith("bun-windows-") ? windowsCompileMetadataArguments() : []),
-      ...(job.banner === undefined ? [] : [`--banner=${job.banner}`]),
+      ...compileDefinitionArguments(options.define),
       "--asset",
       migrationAssetsDirectory,
       job.entrypoint,
@@ -138,7 +151,7 @@ async function compileWithBunCommand(job: CompileCliJob): Promise<CompiledCli> {
     entrypoints: [job.entrypoint],
     target: "bun",
     metafile: true,
-    ...(job.banner === undefined ? {} : { banner: job.banner }),
+    ...(options.define === undefined ? {} : { define: options.define }),
   });
   if (!bundle.success) {
     const details = bundle.logs.map((log) => log.message).join("\n");
@@ -147,11 +160,32 @@ async function compileWithBunCommand(job: CompileCliJob): Promise<CompiledCli> {
   return finishCompiledOutput(job, bundle.metafile);
 }
 
+type CompileDefinitions = Readonly<Record<string, string>>;
+
 interface CompileCliJob {
   readonly outfile: string;
   readonly entrypoint: string;
   readonly compileTarget: Bun.Build.CompileTarget;
-  readonly banner?: string;
+}
+
+interface CompileWithBunCommandOptions {
+  readonly define?: CompileDefinitions;
+}
+
+function releaseManifestDefine(
+  artifact: EmbeddingNativeArtifact,
+  manifest: NativeArtifactManifest,
+): CompileDefinitions {
+  return Object.freeze({
+    [compiledManifestDefinitionKey]: JSON.stringify(
+      JSON.stringify({ artifactId: artifact.id, manifest }),
+    ),
+  });
+}
+
+function compileDefinitionArguments(define: CompileDefinitions | undefined): readonly string[] {
+  if (define === undefined) return [];
+  return Object.entries(define).flatMap(([key, value]) => ["--define", `${key}=${value}`]);
 }
 
 async function finishCompiledOutput(
@@ -166,13 +200,4 @@ async function finishCompiledOutput(
     output,
     bundledInputs: Object.freeze(Object.keys(metafile.inputs).sort()),
   });
-}
-
-function releaseManifestBanner(
-  artifact: EmbeddingNativeArtifact,
-  manifest: NativeArtifactManifest,
-): string {
-  return `Object.defineProperty(globalThis,${JSON.stringify(releaseManifestGlobalKey)},{value:${JSON.stringify(
-    { artifactId: artifact.id, manifest },
-  )},enumerable:false,configurable:false,writable:false});`;
 }

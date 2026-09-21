@@ -4,7 +4,7 @@ import darwinArm64Manifest from "./darwin-arm64.json";
 import linuxX64Manifest from "./linux-x64.json";
 import win32X64Manifest from "./win32-x64.json";
 
-const releaseManifestGlobalKey = "__LORELUM_RELEASE_NATIVE_MANIFEST__";
+declare const LORELUM_RELEASE_NATIVE_MANIFEST: string | undefined;
 
 interface ReleaseManifestInjection {
   readonly artifactId: string;
@@ -23,7 +23,17 @@ function manifestForRelease(
   artifactId: string,
   fallback: ReturnType<typeof parseNativeArtifactManifest>,
 ): ReturnType<typeof parseNativeArtifactManifest> {
-  const candidate = (globalThis as Record<string, unknown>)[releaseManifestGlobalKey];
+  const serialized =
+    typeof LORELUM_RELEASE_NATIVE_MANIFEST === "string"
+      ? LORELUM_RELEASE_NATIVE_MANIFEST
+      : undefined;
+  if (serialized === undefined) return fallback;
+  let candidate: unknown;
+  try {
+    candidate = JSON.parse(serialized);
+  } catch {
+    return fallback;
+  }
   if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate))
     return fallback;
   const injection = candidate as ReleaseManifestInjection;
@@ -86,7 +96,7 @@ export function installedEmbeddingArtifactDirectory(
   return join(releaseRoot, "native", artifact.id);
 }
 
-/** The compiler injects a verified candidate manifest while these source JSON files serve development. */
+/** The compiler replaces this source manifest or inlines a verified manifest for the Windows CLI path. */
 export function trustedEmbeddingManifestPath(artifact: EmbeddingNativeArtifact): string {
   return join(import.meta.dir, `${artifact.id}.json`);
 }

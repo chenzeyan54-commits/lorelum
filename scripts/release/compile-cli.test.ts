@@ -10,15 +10,16 @@ import { compileReleaseCli, windowsCompileMetadataArguments } from "./compile-cl
 
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 const repositoryRoot = resolve(import.meta.dir, "../..");
-const artifact = resolveEmbeddingNativeArtifact("darwin", "arm64");
-if (artifact === undefined) throw new Error("darwin-arm64 artifact is required");
+const artifact = resolveEmbeddingNativeArtifact(process.platform, process.arch);
+if (artifact === undefined)
+  throw new Error(`current platform artifact is required: ${process.platform}-${process.arch}`);
 
 const manifest: NativeArtifactManifest = {
   schemaVersion: 1,
   buildIdentity: digest("release-build"),
   recipeIdentity: digest("recipe"),
-  platform: "darwin",
-  arch: "arm64",
+  platform: artifact.platform,
+  arch: artifact.arch,
   executable: "lore-model",
   source: { tag: "b10901", commit: "a".repeat(40), archiveSha256: digest("archive") },
   patchSha256: digest("patch"),
@@ -93,7 +94,7 @@ compileTest(
   },
 );
 
-compileTest("release compiler replaces the embedding catalog manifest", async () => {
+compileTest("Windows-compatible CLI compiler replaces the embedding catalog manifest", async () => {
   const directory = await mkdtemp(join(tmpdir(), "lore-release-catalog-"));
   const releaseManifest = { ...manifest, buildIdentity: digest("catalog-release-build") };
   try {
@@ -115,6 +116,7 @@ compileTest("release compiler replaces the embedding catalog manifest", async ()
       entrypoint,
       artifact,
       target: `bun-${process.platform}-${process.arch}` as Bun.Build.CompileTarget,
+      useBunCommand: true,
     });
     const child = Bun.spawn([compiled.output], { stdout: "pipe", stderr: "pipe" });
     const [stdout, stderr, exitCode] = await Promise.all([
