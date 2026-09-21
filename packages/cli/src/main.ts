@@ -13,7 +13,11 @@ import {
   runCursorHook,
   type CursorHookServices,
 } from "./hook/cursor.js";
-import { parseWorkbuddyHookInvocation, runWorkbuddyHook, type WorkbuddyHookServices } from "./hook/workbuddy.js";
+import {
+  parseWorkbuddyHookInvocation,
+  runWorkbuddyHook,
+  type WorkbuddyHookServices,
+} from "./hook/workbuddy.js";
 import { parseZcodeHookInvocation, runZcodeHook, type ZcodeHookServices } from "./hook/zcode.js";
 import { resolveOutputFormat } from "./output/format-selection.js";
 import { renderHelpText } from "./output/presentation.js";

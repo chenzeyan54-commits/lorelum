@@ -29,10 +29,9 @@ test("WorkBuddy marketplace exposes the lorelum Plugin from the lorelum-plugins 
     readFile(join(import.meta.dir, "../.codebuddy-plugin/plugin.json"), "utf8").then(
       (content) => JSON.parse(content) as PluginManifest,
     ),
-    readFile(
-      join(import.meta.dir, "../../../../.codebuddy-plugin/marketplace.json"),
-      "utf8",
-    ).then((content) => JSON.parse(content) as MarketplaceConfig),
+    readFile(join(import.meta.dir, "../../../../.codebuddy-plugin/marketplace.json"), "utf8").then(
+      (content) => JSON.parse(content) as MarketplaceConfig,
+    ),
   ]);
 
   expect(manifest.name).toBe("lorelum");

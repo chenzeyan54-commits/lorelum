@@ -273,63 +273,71 @@ test.skipIf(!windowsOnly)(
   stopFixtureTimeout,
 );
 
-test.skipIf(!windowsOnly)("windows same-release reinstall does not stop the Backend", async () => {
-  const root = await mkdtemp(join(tmpdir(), "lore-install-win-same-version-"));
-  const fixture = await createStopFixture(root);
-  const server = await createReleaseServer(root, { stopFixture: fixture });
-  try {
-    const stopLog = join(root, "backend-stop.log");
-    const environment = { LORELUM_INSTALL_TEST_STOP_LOG: stopLog };
-    expect(
-      (await runInstaller(root, server.url.origin, ["-Version", version], environment)).exitCode,
-    ).toBe(0);
-    expect(
-      (await runInstaller(root, server.url.origin, ["-Version", version], environment)).exitCode,
-    ).toBe(0);
-    await expect(Bun.file(stopLog).exists()).resolves.toBe(false);
-  } finally {
-    server.stop(true);
-    await rm(root, { recursive: true, force: true });
-  }
-}, stopFixtureTimeout);
+test.skipIf(!windowsOnly)(
+  "windows same-release reinstall does not stop the Backend",
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), "lore-install-win-same-version-"));
+    const fixture = await createStopFixture(root);
+    const server = await createReleaseServer(root, { stopFixture: fixture });
+    try {
+      const stopLog = join(root, "backend-stop.log");
+      const environment = { LORELUM_INSTALL_TEST_STOP_LOG: stopLog };
+      expect(
+        (await runInstaller(root, server.url.origin, ["-Version", version], environment)).exitCode,
+      ).toBe(0);
+      expect(
+        (await runInstaller(root, server.url.origin, ["-Version", version], environment)).exitCode,
+      ).toBe(0);
+      await expect(Bun.file(stopLog).exists()).resolves.toBe(false);
+    } finally {
+      server.stop(true);
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+  stopFixtureTimeout,
+);
 
-test.skipIf(!windowsOnly)("windows installer never executes a malformed managed shim", async () => {
-  const root = await mkdtemp(join(tmpdir(), "lore-install-win-malformed-shim-"));
-  const fixture = await createStopFixture(root);
-  const server = await createReleaseServer(root, {
-    versions: [version, upgradeVersion],
-    stopFixture: fixture,
-  });
-  try {
-    const command = join(root, "bin", "lore.cmd");
-    const stopLog = join(root, "backend-stop.log");
-    const marker = join(root, "malicious-shim-ran.txt");
-    const environment = { LORELUM_INSTALL_TEST_STOP_LOG: stopLog };
-    expect(
-      (await runInstaller(root, server.url.origin, ["-Version", version], environment)).exitCode,
-    ).toBe(0);
-    await writeFile(
-      command,
-      `@echo off\r\n"${join(root, "share", "versions", version, "lore.exe")}" %*\r\necho ran > "${marker}"\r\n`,
-    );
+test.skipIf(!windowsOnly)(
+  "windows installer never executes a malformed managed shim",
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), "lore-install-win-malformed-shim-"));
+    const fixture = await createStopFixture(root);
+    const server = await createReleaseServer(root, {
+      versions: [version, upgradeVersion],
+      stopFixture: fixture,
+    });
+    try {
+      const command = join(root, "bin", "lore.cmd");
+      const stopLog = join(root, "backend-stop.log");
+      const marker = join(root, "malicious-shim-ran.txt");
+      const environment = { LORELUM_INSTALL_TEST_STOP_LOG: stopLog };
+      expect(
+        (await runInstaller(root, server.url.origin, ["-Version", version], environment)).exitCode,
+      ).toBe(0);
+      await writeFile(
+        command,
+        `@echo off\r\n"${join(root, "share", "versions", version, "lore.exe")}" %*\r\necho ran > "${marker}"\r\n`,
+      );
 
-    const result = await runInstaller(
-      root,
-      server.url.origin,
-      ["-Version", upgradeVersion],
-      environment,
-    );
-    expect(result.exitCode).toBe(0);
-    expect(await readFile(stopLog, "utf8")).toBe("candidate\n");
-    await expect(Bun.file(marker).exists()).resolves.toBe(false);
-    expect(await readFile(command, "utf8")).toContain(
-      `"${join(root, "share", "versions", upgradeVersion, "lore.exe")}"`,
-    );
-  } finally {
-    server.stop(true);
-    await rm(root, { recursive: true, force: true });
-  }
-}, stopFixtureTimeout);
+      const result = await runInstaller(
+        root,
+        server.url.origin,
+        ["-Version", upgradeVersion],
+        environment,
+      );
+      expect(result.exitCode).toBe(0);
+      expect(await readFile(stopLog, "utf8")).toBe("candidate\n");
+      await expect(Bun.file(marker).exists()).resolves.toBe(false);
+      expect(await readFile(command, "utf8")).toContain(
+        `"${join(root, "share", "versions", upgradeVersion, "lore.exe")}"`,
+      );
+    } finally {
+      server.stop(true);
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+  stopFixtureTimeout,
+);
 
 test.skipIf(!windowsOnly)(
   "windows installer throws without terminating an interactive caller",

@@ -117,10 +117,14 @@ describe("lore hook workbuddy", () => {
   });
 
   test("accepts the global Store override before or after the raw Hook command", () => {
-    expect(parseWorkbuddyHookInvocation(["hook", "workbuddy", "--store-root", "isolated-store"])).toEqual({
+    expect(
+      parseWorkbuddyHookInvocation(["hook", "workbuddy", "--store-root", "isolated-store"]),
+    ).toEqual({
       storeRoot: "isolated-store",
     });
-    expect(parseWorkbuddyHookInvocation(["--store-root=isolated-store", "hook", "workbuddy"])).toEqual({
+    expect(
+      parseWorkbuddyHookInvocation(["--store-root=isolated-store", "hook", "workbuddy"]),
+    ).toEqual({
       storeRoot: "isolated-store",
     });
     expect(parseWorkbuddyHookInvocation(["hook", "workbuddy", "extra"])).toBeUndefined();

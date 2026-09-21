@@ -8,7 +8,11 @@ import { pathToFileURL } from "node:url";
 
 import { CliError, cliErrorCodes } from "../runtime/errors.js";
 import { runFixtureGit } from "./git-test-support.js";
-import { gitEnvironment, materializeRegistryRelease, type MaterializeGitRunner } from "./materialize-source.js";
+import {
+  gitEnvironment,
+  materializeRegistryRelease,
+  type MaterializeGitRunner,
+} from "./materialize-source.js";
 
 const release: RegistryRelease = {
   version: "0.2.0",

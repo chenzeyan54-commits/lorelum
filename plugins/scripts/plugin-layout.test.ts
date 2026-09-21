@@ -134,10 +134,7 @@ test("host adapters use a stable product ID and host-specific source roots", asy
   });
   assertMarketplaceVersion(zcodeMarketplace.plugins[0]?.version, zcodeManifest.version);
   assertMarketplaceVersion(cursorMarketplace.plugins[0]?.version, cursorManifest.version);
-  assertMarketplaceVersion(
-    workbuddyMarketplace.plugins[0]?.version,
-    workbuddyManifest.version,
-  );
+  assertMarketplaceVersion(workbuddyMarketplace.plugins[0]?.version, workbuddyManifest.version);
   await expect(access(join(root, ".claude-plugin/marketplace.json"))).rejects.toThrow();
 });
 
