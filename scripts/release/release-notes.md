@@ -1,62 +1,77 @@
 ## Lorelum __RELEASE_TAG__
 
-> Upgrading from alpha.2? Install this release before retrying semantic retrieval on Windows. If an integration parses command output, make its JSON requirement explicit with --json.
+> Alpha.4 adds first-party Cursor and WorkBuddy integrations, trace-bounded local diagnostics and feedback drafts, clearer local process identities, and new official Knowledge Pack releases. If you maintain scripts that invoke the bundled native executable by path, replace `llama-server` with `lore-model`.
 
-Lorelum alpha.3 is a focused reliability and integration release after alpha.2. It fixes the Windows x64 native runtime failure that could leave semantic indexing waiting forever, makes terminal semantic failures actionable, and adds ZCode and private GitHub Pack-registry support.
+Lorelum alpha.4 expands the supported Agent surface while making local recovery and release artifacts easier to recognize. It adds first-party Cursor and WorkBuddy Plugins, trace-bounded diagnostics and local feedback drafts, Lorelum-specific process names for the Backend and embedded model runtime, and independent official Pack updates.
 
 ## Highlights
 
-### Windows x64 semantic retrieval starts reliably
+### First-party Cursor and WorkBuddy integrations
 
-The bundled Windows native embedding runtime no longer exits silently before it can serve requests. This resolves the failure mode where a semantic query or index operation could remain in an apparent indexing state even though the native process had already stopped.
+Cursor and WorkBuddy now join Codex and ZCode as supported first-party Plugin hosts. Each integration ships a host-native Plugin, a `/lore` command, a SessionStart Hook that provides the installed Pack Catalog, and a host-adapted Lorelum Skill.
 
-The parent-liveness safeguard remains active for the daemon-owned runtime. It is now opt-in for other launches, so ordinary CLI and runtime checks can start and remain available as intended.
+The integrations keep Lorelum CLI-first: host artifacts call the released `lore` command and use native Hook contracts rather than running a local MCP server. Follow the Cursor or WorkBuddy setup guide to install or update the Plugin, enable the host's Hooks, and start a new task before relying on the catalog injection.
 
-### Confirmed semantic failures are no longer reported as progress
+### Clearer local Backend and model process identities
 
-When model preparation or semantic indexing reaches a terminal failure, Lorelum now returns the typed failure and recovery information instead of continuing to report that the index is still building. This lets users and host integrations distinguish background work that may complete from work that needs a recovery action.
+The local daemon now requests the display name `lore-backend` on hosts that honor it. The distributed native embedding executable is now named `lore-model` on macOS, Linux, and Windows, replacing the release-path name `llama-server`.
 
-### Project discovery ignores the user Store as a project layer
+This makes Lorelum-owned processes easier to distinguish in process viewers and when diagnosing an upgrade. Windows release binaries also carry Lorelum product metadata and an application icon. The normal installers validate and install the renamed runtime automatically.
 
-ProjectContext discovery no longer mistakes the selected global Store for a repository-local .lorelum layer. Running Lorelum below a user Store no longer injects Store configuration or artifact Packs into the project corpus or produces unrelated config.invalid and pack.invalid warnings.
+### Trace-bounded local diagnostics and feedback drafts
 
-### Complete readable CLI output, with JSON preserved for automation
+Ordinary CLI failures now include `diagnostics.traceId`. When a failure blocks work or you explicitly need to diagnose it, inspect only the original invocation's managed local records:
 
-Ordinary CLI commands now render complete, readable text by default. The stable machine envelope remains available with --json.
+    lore logs --trace-id <traceId> --limit 100
 
-This is a deliberate compatibility boundary: scripts, hooks, and integrations that parse stdout as JSON must pass --json explicitly.
+This command does not start a Backend or model, rerun the command, or scan unrelated traces. If records are missing, rotated, damaged, or were never captured at the requested level, Lorelum reports that evidence limit instead of substituting another invocation. Raw host Hook stdout remains host-native and does not receive ordinary CLI trace metadata.
 
-### First-party ZCode integration
+Use `lore --debug` for one controlled reproduction without changing persistent logging configuration or another concurrent request. `lore feedback draft --trace-id <traceId> --kind bug` writes local `report.json` and `report.md` files under `~/.lorelum/feedback/`; it does not upload diagnostics, open a browser, or create an Issue. Review any local evidence before choosing to share it publicly.
 
-Lorelum now includes a first-party ZCode Plugin, a /lore command, and a SessionStart Hook integration alongside the Codex Plugin. The host adapters share the same CLI-first boundary: they discover the installed Pack Catalog and retrieve full Practices only when needed.
+### Official Pack catalog updates
 
-Follow the ZCode installation guide to install or update the Plugin, enable Hooks, and start a new task before relying on the updated integration.
+The official Pack repository now includes `agentic-coding@0.5.1`: 34 step-style decision procedures with explicit stopping points, severity tiers, revised retrieval triggers, and two planning-calibration Practices. `0.5.1` also retunes the catalog description to name those planning-calibration moments. `pack-creator@0.2.0` adds guidance for project-local Packs alongside authoring, evaluation, and Registry release work.
 
-### Private GitHub Pack registries over SSH
-
-Pack installation now accepts supported GitHub SSH registry locators, including git@github.com:owner/repo.git and ssh://git@github.com/owner/repo.git. Lorelum reuses the user's existing SSH configuration and agent; it does not store repository credentials.
-
-Descriptor reads are fresh and bounded. Authentication, host-key, and access failures return an actionable registry error instead of requesting credentials through Lorelum.
+Knowledge Packs are versioned independently from the CLI. Install or update them only when you want their new guidance in a Store.
 
 ## Upgrade notes
 
-### Update scripts and host integrations that consume JSON
+### Update direct native-runtime paths
 
-If you previously treated ordinary command stdout as JSON, add --json to that invocation before upgrading:
+Normal installations require no manual action. If a local script, wrapper, or process check directly invokes `native/<target>/llama-server` or `llama-server.exe` inside a Lorelum release directory, update that path to `lore-model` or `lore-model.exe`. The upstream project remains llama.cpp; only Lorelum's distributed executable name has changed.
 
-    lore --json query "find the project's test policy"
+### Install or update host Plugins
 
-Use the complete text output for an interactive terminal. Use --json whenever another program needs the protocol envelope.
+Install the Cursor or WorkBuddy Plugin from its documented marketplace flow, then start a new task so its SessionStart Hook can run. Older CLI versions degrade safely when a new host Hook is unavailable, but they do not provide the new catalog injection.
 
-### Reinstall on Windows x64
+### Diagnose one original failure before retrying it
 
-Windows users affected by semantic indexing that never completed should install __RELEASE_TAG__ through the PowerShell installer. The native runtime ships inside the versioned release directory, so retain the complete installed directory rather than copying only lore.exe.
+Copy the `diagnostics.traceId` from an ordinary CLI failure, then inspect only that trace before running a reproduction:
+
+    lore logs --trace-id <traceId> --limit 100
+
+If the retained trace does not explain the failure and you control a safe minimal reproduction, run that reproduction with `--debug`. It creates a new trace; do not present its records as if they came from the original failure. The updated Troubleshooting guide describes the complete trace, debug, and feedback flow.
+
+### Create feedback drafts locally first
+
+Use the original trace to prepare a reviewable local draft:
+
+    lore feedback draft --trace-id <traceId> --kind bug
+
+This is not a support submission. It does not create or update a GitHub Issue, and a local draft does not authorize a Core, Pack, Skill, Plugin, documentation, or evaluation change. If you later submit evidence publicly, choose the material deliberately and remove credentials, secrets, or anything else you do not want to disclose.
+
+### Update official Packs deliberately
+
+To select the new Pack releases in an existing Store:
+
+    lore pack update agentic-coding@0.5.1
+    lore pack update pack-creator@0.2.0
+
+Pack installation commits canonical Pack content even when derived semantic-index work remains pending or fails. Inspect `data.indexSync`, then run `lore index build` only when you need semantic retrieval ready in that Store.
 
 ### Pack, Store, and index compatibility
 
-Pack formats, LocalStore data, indexes, and retrieval behavior remain alpha-stage contracts. This release does not promise an automatic migration. Keep a backup or use an isolated --store-root before evaluating it in a shared environment.
-
-Official Knowledge Packs are versioned independently from the CLI. Update a Pack only when the Pack's own release notes recommend it.
+Pack formats, LocalStore data, indexes, and retrieval behavior remain alpha-stage contracts. This release does not promise an automatic migration. Keep a backup or use an isolated `--store-root` before evaluating it in a shared environment.
 
 ## Install __RELEASE_TAG__
 
@@ -68,7 +83,7 @@ Official Knowledge Packs are versioned independently from the CLI. Update a Pack
 
     & ([scriptblock]::Create((irm https://raw.githubusercontent.com/lorelum/lorelum/main/install.ps1))) -Version __RELEASE_VERSION__
 
-The installers download the matching archive and SHA256SUMS, verify the archive checksum, and install the complete release directory. On Windows, run the PowerShell command from an already-open session so any installer error remains visible.
+The installers download the matching archive and `SHA256SUMS`, verify the archive checksum, and install the complete release directory. On Windows, run the PowerShell command from an already-open session so any installer error remains visible.
 
 ## Downloads
 
@@ -90,7 +105,7 @@ CLI behavior, Pack formats, local Store data, indexes, and retrieval results may
 
 ## Full changelog
 
-[Compare v0.1.0-alpha.2 to __RELEASE_TAG__](https://github.com/lorelum/lorelum/compare/v0.1.0-alpha.2...__RELEASE_TAG__)
+[Compare v0.1.0-alpha.3 to __RELEASE_TAG__](https://github.com/lorelum/lorelum/compare/v0.1.0-alpha.3...__RELEASE_TAG__)
 
 ## Verification
 

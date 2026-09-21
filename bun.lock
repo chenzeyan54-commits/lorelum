@@ -66,7 +66,7 @@
     },
     "packages/cli": {
       "name": "@lorelum/cli",
-      "version": "0.1.0-alpha.3",
+      "version": "0.1.0-alpha.4",
       "bin": {
         "lore": "./src/main.ts",
       },
