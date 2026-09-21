@@ -74,6 +74,8 @@ keyword 按词语匹配。解决 semantic 检索的问题后，再运行原来�
 lore feedback draft --trace-id <traceId> --kind bug
 ```
 
-它只会在 `~/.lorelum/feedback/` 下创建 `report.json` 和 `report.md`，不会上传数据、打开 URL 或创建 Issue。只有你明确选择 `--include-logs info` 或 `--include-logs debug` 时，才会加入已经记录的同 trace detail；将任何内容公开前逐项审阅。
+它只会在 `~/.lorelum/feedback/` 下创建 `report.json` 和 `report.md`，不会上传数据、打开 URL 或创建 Issue。默认就会保留已留存的同 trace `error`、`warn`、`info` 调用链：普通 query/结果 context、correlation ID、路径和已记录的 Error stack 都是有价值的本机证据。`--include-logs info` 与默认选择相同；只有需要追加此前已经记录的 debug 时才使用 `--include-logs debug`。若原调用没有 debug record，草稿会标明 `debug-records-not-found`，不会假装能补回 detail。
+
+创建本机草稿不需要因为普通本机证据而额外确认。之后如果你决定创建 Issue 或上传材料，那是另一个明确动作；检查 credential、secret 或你不希望公开的信息即可，普通 query、结果、路径和 stack 不需要一概脱敏。
 
 如果决定提交 Issue，请附上 `lore --version`、平台、执行的命令、返回的错误码，以及确实能帮助维护者复现的、已经审阅过的证据。安全问题请按 [SECURITY.md](https://github.com/lorelum/lorelum/blob/main/SECURITY.md) 报告。

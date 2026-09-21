@@ -31,8 +31,8 @@ body:
     id: evidence-boundary
     attributes:
       label: Evidence and limits
-      description: State what was verified, what is missing, and whether a reviewed local feedback draft exists. Do not paste unreviewed full logs.
-      placeholder: "Verified: ...\nMissing: ...\nLocal draft: optional path or reviewed excerpt"
+      description: State what was verified, what is missing, and whether a local feedback draft exists. Paste the full draft or useful excerpt when it helps triage.
+      placeholder: "Verified: ...\nMissing: ...\nLocal draft: optional path or attached excerpt"
     validations:
       required: true
 
@@ -55,9 +55,7 @@ body:
     id: disclosure-review
     attributes:
       label: Public disclosure review
-      description: Any local draft may contain original local content. Choose deliberately what to disclose here.
+      description: Public Issues are visible. Ordinary local evidence can be useful; remove credentials, secrets, and anything else you do not want public.
       options:
-        - label: I reviewed any query, Practice content, native output, paths, environment details, and free text that I chose to disclose.
-          required: true
         - label: I removed credentials, cookies, tokens, private keys, signed URLs, and other secrets.
           required: true

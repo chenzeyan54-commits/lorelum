@@ -109,6 +109,6 @@ text 或 `--json` CLI 结果若指出了可复现的问题或有价值的改进�
 lore feedback draft --trace-id <traceId> --kind bug
 ```
 
-未传 `--output <directory>` 时，命令会在 `~/.lorelum/feedback/` 下创建唯一的 `report.json` 和 `report.md` 目录。默认只读取同 trace 的错误和 lifecycle 摘要；明确加 `--include-logs info` 或 `--include-logs debug` 才会把已经记录的同 trace 详细日志加入草稿。它不会启动 Backend 或模型，也不会发网络请求、打开 URL、上传数据或创建 Issue。
+未传 `--output <directory>` 时，命令会在 `~/.lorelum/feedback/` 下创建唯一的 `report.json` 和 `report.md` 目录。默认会保留已留存的同 trace `error`、`warn`、`info` 调用链，以及普通 context、correlation ID 和已记录的 Error stack。它不会启动 Backend 或模型，也不会发网络请求、打开 URL、上传数据或创建 Issue。`--include-logs info` 与默认相同；`--include-logs debug` 只追加已经记录的 debug，若没有则报告 `debug-records-not-found`。
 
-`--input <file|->` 是高级入口，适用于没有 trace 的人工观察或测试 fixture。将草稿内容手动粘贴到公开 Issue 前，请分别审阅 query、Practice 片段、native output、路径、环境信息和自由文本。
+`--input <file|->` 是高级入口，适用于没有 trace 的人工观察或测试 fixture。草稿只是本机证据，不是提交；之后若决定把内容粘贴到公开 Issue，需要单独明确地执行该动作。删除 credential、secret 和其他不希望公开的信息即可，普通 query、结果、路径和 stack 不需要一概脱敏。

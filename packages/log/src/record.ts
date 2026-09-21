@@ -77,6 +77,30 @@ export function serializeError(error: unknown): SerializedError | undefined {
   return { name: "Error", message: String(error) };
 }
 
+function isSerializedError(error: unknown): error is SerializedError {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    !Array.isArray(error) &&
+    !(error instanceof Error) &&
+    typeof (error as SerializedError).name === "string" &&
+    typeof (error as SerializedError).message === "string" &&
+    ((error as SerializedError).stack === undefined ||
+      typeof (error as SerializedError).stack === "string")
+  );
+}
+
+function isLogRecord(input: LogEventInput | LogRecord): input is LogRecord {
+  return (
+    "time" in input &&
+    "source" in input &&
+    "message" in input &&
+    !("component" in input) &&
+    !("event" in input) &&
+    (!("error" in input) || input.error === undefined || isSerializedError(input.error))
+  );
+}
+
 function contextFromInput(input: LogEventInput): LogContext | undefined {
   const context: Record<string, unknown> = { ...(input.context ?? {}) };
   for (const [key, value] of Object.entries(input)) {
@@ -114,13 +138,7 @@ export function createLogRecord(
     readonly maxBytes?: number;
   } = {},
 ): LogRecord {
-  if (
-    "time" in input &&
-    "source" in input &&
-    "message" in input &&
-    !("component" in input) &&
-    !("event" in input)
-  ) {
+  if (isLogRecord(input)) {
     return transportBound(input as LogRecord, options.maxBytes ?? DEFAULT_LOG_RECORD_BYTES);
   }
   const eventInput = input as LogEventInput;
@@ -146,13 +164,6 @@ export function createLogRecord(
 }
 
 export function serializeLogRecord(record: LogRecord | LogEventInput): string {
-  const normalized =
-    "time" in record &&
-    "source" in record &&
-    "message" in record &&
-    !("component" in record) &&
-    !("event" in record)
-      ? (record as LogRecord)
-      : createLogRecord(record);
+  const normalized = isLogRecord(record) ? record : createLogRecord(record);
   return `${JSON.stringify(normalized)}\n`;
 }

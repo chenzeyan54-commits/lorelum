@@ -59,7 +59,7 @@ body:
     id: logs
     attributes:
       label: Reviewed feedback draft, logs, or error output
-      description: Optionally attach the relevant part of a local `lore feedback draft` report, logs, or stack trace. Do not paste unreviewed full logs.
+      description: Optionally attach a local `lore feedback draft`, full trace excerpt, or stack trace when it helps reproduction. A local draft stays on your machine until you paste it here.
       render: shell
     validations:
       required: false
@@ -77,10 +77,8 @@ body:
     id: disclosure-review
     attributes:
       label: Public disclosure review
-      description: Before submitting, decide which local details are safe to make public. A local feedback draft is not automatically redacted or submitted.
+      description: Public Issues are visible. Ordinary query, result, path, and stack evidence can be useful; remove credentials, secrets, and anything else you do not want public.
       options:
-        - label: I reviewed any query, Practice content, native output, environment details, paths, and free text that I chose to disclose.
-          required: true
         - label: I removed credentials, cookies, tokens, private keys, signed URLs, and other secrets.
           required: true
 

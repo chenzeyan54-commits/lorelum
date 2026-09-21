@@ -74,6 +74,8 @@ First create a local, reviewable draft from the selected trace if it helps expla
 lore feedback draft --trace-id <traceId> --kind bug
 ```
 
-This only creates `report.json` and `report.md` below `~/.lorelum/feedback/`. It does not upload data, open a URL, or create an Issue. Add existing same-trace detail only when you intentionally choose `--include-logs info` or `--include-logs debug`, then review every field before sharing any part publicly.
+This only creates `report.json` and `report.md` below `~/.lorelum/feedback/`. It does not upload data, open a URL, or create an Issue. By default, the draft keeps the retained same-trace `error`, `warn`, and `info` call chain: normal query/result context, correlation IDs, paths, and recorded Error stacks are useful local evidence. `--include-logs info` is the same default selection; use `--include-logs debug` only to add debug records that were already written. If no prior debug record exists, the draft reports `debug-records-not-found` rather than inventing detail.
+
+Creating a draft does not need a disclosure prompt for ordinary local evidence. If you later choose to create an Issue or upload material, that is a separate explicit action. Check for credentials, secrets, or information you do not want public; ordinary query, result, path, and stack evidence does not need blanket redaction.
 
 If you decide to submit an Issue, include `lore --version`, your platform, the command, the returned error code, and only the reviewed evidence that helps maintainers reproduce it. Report security issues through [SECURITY.md](https://github.com/lorelum/lorelum/blob/main/SECURITY.md).

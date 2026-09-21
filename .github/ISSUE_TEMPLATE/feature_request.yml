@@ -66,7 +66,7 @@ body:
     id: field-evidence
     attributes:
       label: Optional field feedback or local draft evidence
-      description: If you created a local `lore feedback draft`, paste only the reviewed parts that help explain the problem, constraints, or missed guidance. This does not submit diagnostics automatically.
+      description: If you created a local `lore feedback draft`, paste the whole report or the parts that help explain the problem, constraints, or missed guidance. This does not submit diagnostics automatically.
     validations:
       required: false
 
@@ -74,9 +74,9 @@ body:
     id: disclosure-review
     attributes:
       label: Public disclosure review
-      description: Decide separately whether your query, Practice content, native output, paths, environment details, and free text are appropriate to publish.
+      description: Public Issues are visible. Remove credentials, secrets, and anything else you do not want public before adding local evidence.
       options:
-        - label: I reviewed the local details I chose to disclose and removed credentials or other secrets.
+        - label: I removed credentials or other secrets from the local evidence I chose to disclose.
           required: true
 
   - type: checkboxes

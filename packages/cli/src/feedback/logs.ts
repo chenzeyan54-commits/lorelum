@@ -16,24 +16,36 @@ export interface TraceLogSelection {
   readonly missingEvidence: readonly string[];
 }
 
+export interface ReadTraceLogsOptions {
+  /** Test-only managed log root override; production uses `~/.lorelum/logs`. */
+  readonly logDirectory?: string;
+}
+
 /** Reads only already-written records for one trace; it never starts a runtime or scans elsewhere. */
 export async function readTraceLogs(
   traceId: TraceId,
   level: FeedbackLogLevel,
+  options: ReadTraceLogsOptions = {},
 ): Promise<TraceLogSelection> {
   const collection = await collectTraceLogs({
-    rootDirectory: defaultLogDirectory(),
+    rootDirectory: options.logDirectory ?? defaultLogDirectory(),
     traceId,
     limit: 1_000,
   });
-  const records = collection.directRecords.filter((record) => allowsLogLevel(level, record.level));
+  const records = [...collection.directRecords, ...collection.sharedRecords]
+    .filter((record) => allowsLogLevel(level, record.level))
+    .sort((left, right) => left.time.localeCompare(right.time));
+  const missingEvidence = [
+    ...collection.missing,
+    ...(records.length === 0 ? ["detailed-logs-not-found"] : []),
+    ...(level === "debug" && !records.some((record) => record.level === "debug")
+      ? ["debug-records-not-found"]
+      : []),
+  ];
   return {
     traceId,
     level,
     records,
-    missingEvidence:
-      records.length === 0
-        ? [...collection.missing, "detailed-logs-not-found"]
-        : collection.missing,
+    missingEvidence: [...new Set(missingEvidence)],
   };
 }

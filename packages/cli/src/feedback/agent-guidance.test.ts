@@ -54,9 +54,18 @@ test("Skill dispatches bounded diagnostics to the shared recovery reference", as
       expect(recovery).toContain(
         "lore feedback draft --trace-id <traceId> --kind <bug|improvement>",
       );
-      expect(recovery).toContain("explicitly agrees");
+      expect(recovery).toContain("long-running user task");
+      expect(recovery).toContain("completion or another safe stopping point");
+      expect(recovery).toContain("explicitly agrees to prepare a local draft");
       expect(recovery).toContain("do not create a draft");
       expect(recovery).toContain("never create feedback artifacts");
+      expect(recovery).toContain(
+        "complete retained same-trace `error`, `warn`, and `info` call chain",
+      );
+      expect(recovery).toContain("--include-logs info` is equivalent to the default");
+      expect(recovery).toContain("debug-records-not-found");
+      expect(recovery).toContain("separate explicit authorization");
+      expect(recovery).toContain("credential-like or clearly sensitive content");
       expect(recovery).toContain("lore index build --json");
       expect(recovery).toContain("lore index operation <operation-id> --json");
     }),

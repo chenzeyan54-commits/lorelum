@@ -8,6 +8,7 @@ import { snapshotCommandDefinitions } from "../registry";
 import { run } from "../main";
 import { publishFeedbackArtifact } from "./artifacts";
 import { createFeedbackCommand } from "./command";
+import type { FeedbackReport } from "./types";
 
 class MemoryWriter {
   value = "";
@@ -41,6 +42,31 @@ test("trace-rooted draft writes local artifacts while stdout contains only the e
         ],
         missingEvidence: [],
       }),
+      readTraceLogs: async (requestedTraceId, level) => {
+        expect(requestedTraceId).toBe(traceId);
+        expect(level).toBe("info");
+        return {
+          traceId,
+          level,
+          records: [
+            createLogRecord({
+              level: "info",
+              source: "cli.query",
+              message: "query.requested",
+              traceId,
+              query: "raw query stays local",
+            }),
+            createLogRecord({
+              level: "error",
+              source: "cli.query",
+              message: "query.failed",
+              traceId,
+              error: new Error("trace stack stays local"),
+            }),
+          ],
+          missingEvidence: [],
+        };
+      },
     });
     expect(
       await run(["--json", "feedback", "draft", "--trace-id", traceId, "--kind", "bug"], {
@@ -59,14 +85,31 @@ test("trace-rooted draft writes local artifacts while stdout contains only the e
       data: { state: "draft" },
     });
     expect(response.data.externalReview.required).toBe(false);
-    expect(await readFile(response.data.reportPath, "utf8")).not.toContain("raw query stays local");
-    expect(await readFile(response.data.markdownPath, "utf8")).toContain("Local draft only");
+    const report = await readFile(response.data.reportPath, "utf8");
+    const markdown = await readFile(response.data.markdownPath, "utf8");
+    expect(report).toContain("raw query stays local");
+    expect(report).toContain("trace stack stays local");
+    expect(markdown).toContain("raw query stays local");
+    expect(markdown).toContain("Local draft only");
+    const saved = JSON.parse(report) as FeedbackReport;
+    const detailed = saved.evidence.find((item) => item.type === "detailed-logs");
+    expect(detailed).toEqual(
+      expect.objectContaining({
+        records: expect.arrayContaining([
+          expect.objectContaining({
+            error: expect.objectContaining({
+              stack: expect.stringContaining("trace stack stays local"),
+            }),
+          }),
+        ]),
+      }),
+    );
   } finally {
     await rm(parent, { recursive: true, force: true });
   }
 });
 
-test("detailed trace logs are included only after an explicit request", async () => {
+test("debug trace logs are added after an explicit request", async () => {
   const parent = await realpath(await mkdtemp(join(tmpdir(), "lorelum-feedback-detail-")));
   const traceId = "00000000-0000-4000-8000-000000000024" as never;
   try {
@@ -113,8 +156,59 @@ test("detailed trace logs are included only after an explicit request", async ()
     const response = JSON.parse(stdout.value) as {
       data: { reportPath: string; externalReview: { required: boolean } };
     };
-    expect(response.data.externalReview.required).toBe(true);
+    expect(response.data.externalReview.required).toBe(false);
     expect(await readFile(response.data.reportPath, "utf8")).toContain("selected detailed query");
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("explicit info keeps the default trace evidence selection", async () => {
+  const parent = await realpath(await mkdtemp(join(tmpdir(), "lorelum-feedback-info-")));
+  const traceId = "00000000-0000-4000-8000-000000000026" as never;
+  const requestedLevels: string[] = [];
+  try {
+    const command = createFeedbackCommand({
+      defaultOutputDirectory: () => parent,
+      readInput: async () => "",
+      publish: publishFeedbackArtifact,
+      readTraceDiagnostics: async () => ({ traceId, facts: [], missingEvidence: [] }),
+      readTraceLogs: async (_traceId, level) => {
+        requestedLevels.push(level);
+        return {
+          traceId,
+          level,
+          records: [
+            createLogRecord({
+              level: "info",
+              source: "cli.query",
+              message: "query.requested",
+              traceId,
+              query: "same default evidence",
+            }),
+          ],
+          missingEvidence: [],
+        };
+      },
+    });
+    const createDraft = async (draftArguments: readonly string[]) => {
+      const stdout = new MemoryWriter();
+      expect(
+        await run(["--json", "feedback", "draft", ...draftArguments], {
+          registry: snapshotCommandDefinitions([command]),
+          stdout,
+        }),
+      ).toBe(0);
+      const response = JSON.parse(stdout.value) as { data: { reportPath: string } };
+      return readFile(response.data.reportPath, "utf8");
+    };
+    const [defaultReport, explicitInfoReport] = await Promise.all([
+      createDraft(["--trace-id", traceId, "--kind", "bug"]),
+      createDraft(["--trace-id", traceId, "--kind", "bug", "--include-logs", "info"]),
+    ]);
+    expect(defaultReport).toContain("same default evidence");
+    expect(explicitInfoReport).toContain("same default evidence");
+    expect(requestedLevels).toEqual(["info", "info"]);
   } finally {
     await rm(parent, { recursive: true, force: true });
   }

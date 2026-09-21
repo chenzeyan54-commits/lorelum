@@ -4,10 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import {
-  resolveEmbeddingNativeArtifact,
-  trustedEmbeddingManifestPath,
-} from "../../packages/backend/src/runtime/native/embedding/catalog";
+import { resolveEmbeddingNativeArtifact } from "../../packages/backend/src/runtime/native/embedding/catalog";
 import type { NativeArtifactManifest } from "../../packages/backend/src/runtime/native/embedding/manifest";
 import { compileReleaseCli, windowsCompileMetadataArguments } from "./compile-cli";
 
@@ -56,15 +53,16 @@ compileTest(
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "lore-release-compile-"));
     try {
-      const manifestArtifact = join(directory, "expected-manifest.json");
       const entrypoint = join(directory, "entry.ts");
       const executable = join(directory, "fixture");
-      await writeFile(manifestArtifact, JSON.stringify({ buildIdentity: "source-build" }));
       await writeFile(
         entrypoint,
         [
-          'import manifest from "./expected-manifest.json";',
-          'console.log(`${manifest.buildIdentity}:${process.env.LORELUM_RELEASE_TEST ?? "unset"}`);',
+          `import { resolveEmbeddingNativeArtifact } from ${JSON.stringify(
+            join(repositoryRoot, "packages/backend/src/runtime/native/embedding/catalog.ts"),
+          )};`,
+          "const artifact = resolveEmbeddingNativeArtifact(process.platform, process.arch);",
+          'console.log(`${artifact?.manifest.buildIdentity}:${process.env.LORELUM_RELEASE_TEST ?? "unset"}`);',
         ].join("\n"),
       );
       await writeFile(join(directory, ".env"), "LORELUM_RELEASE_TEST=from-dotenv\n");
@@ -73,7 +71,6 @@ compileTest(
         nativeManifest: manifest,
         outfile: executable,
         entrypoint,
-        manifestArtifact,
         artifact,
         target: `bun-${process.platform}-${process.arch}` as Bun.Build.CompileTarget,
       });
@@ -96,7 +93,7 @@ compileTest(
   },
 );
 
-compileTest("release compiler replaces the embedding catalog's trusted manifest", async () => {
+compileTest("release compiler replaces the embedding catalog manifest", async () => {
   const directory = await mkdtemp(join(tmpdir(), "lore-release-catalog-"));
   const releaseManifest = { ...manifest, buildIdentity: digest("catalog-release-build") };
   try {
@@ -105,8 +102,10 @@ compileTest("release compiler replaces the embedding catalog's trusted manifest"
     await writeFile(
       entrypoint,
       [
-        `import manifest from ${JSON.stringify(trustedEmbeddingManifestPath(artifact))};`,
-        "console.log(manifest.buildIdentity);",
+        `import { resolveEmbeddingNativeArtifact } from ${JSON.stringify(
+          join(repositoryRoot, "packages/backend/src/runtime/native/embedding/catalog.ts"),
+        )};`,
+        "console.log(resolveEmbeddingNativeArtifact(process.platform, process.arch)?.manifest.buildIdentity);",
       ].join("\n"),
     );
 
@@ -136,10 +135,8 @@ compileTest(
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "lore-release-migrations-"));
     try {
-      const manifestArtifact = join(directory, "expected-manifest.json");
       const entrypoint = join(directory, "entry.ts");
       const executable = join(directory, "fixture");
-      await writeFile(manifestArtifact, JSON.stringify({ buildIdentity: "source-build" }));
       await writeFile(
         entrypoint,
         [
@@ -156,7 +153,6 @@ compileTest(
         nativeManifest: manifest,
         outfile: executable,
         entrypoint,
-        manifestArtifact,
         artifact,
         target: `bun-${process.platform}-${process.arch}` as Bun.Build.CompileTarget,
       });
@@ -169,6 +165,115 @@ compileTest(
       expect(exitCode).toBe(0);
       expect(stderr).toBe("");
       expect(stdout.trim()).toBe("keyword_documents");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+compileTest("release compiler maps a binary stack back to TypeScript source", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "lore-release-sourcemap-"));
+  try {
+    const entrypoint = join(directory, "source-mapped-fixture.ts");
+    const executable = join(directory, "fixture");
+    await writeFile(
+      entrypoint,
+      [
+        "function sourceMappedFailure(): never {",
+        '  throw new Error("source-mapped-fixture");',
+        "}",
+        "sourceMappedFailure();",
+      ].join("\n"),
+    );
+    const compiled = await compileReleaseCli({
+      nativeManifest: manifest,
+      outfile: executable,
+      entrypoint,
+      artifact,
+      target: `bun-${process.platform}-${process.arch}` as Bun.Build.CompileTarget,
+    });
+    const child = Bun.spawn([compiled.output], { stdout: "pipe", stderr: "pipe" });
+    const [stderr, exitCode] = await Promise.all([new Response(child.stderr).text(), child.exited]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toMatch(/source-mapped-fixture\.ts:2:\d+/);
+    expect(stderr).not.toContain("$bunfs");
+    expect(stderr).not.toContain(".release-bundle.js");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+compileTest("release compiler preserves a source-mapped serialized Error stack", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "lore-release-serialized-stack-"));
+  try {
+    const entrypoint = join(directory, "serialized-stack-fixture.ts");
+    const executable = join(directory, "fixture");
+    await writeFile(
+      entrypoint,
+      [
+        `import { createLogRecord } from ${JSON.stringify(
+          join(repositoryRoot, "packages/log/src/record.ts"),
+        )};`,
+        "const record = createLogRecord({",
+        '  level: "error",',
+        '  source: "fixture",',
+        '  message: "fixture.failed",',
+        '  error: new Error("serialized-stack-fixture"),',
+        "});",
+        "console.error(record.error?.stack);",
+      ].join("\n"),
+    );
+    const compiled = await compileReleaseCli({
+      nativeManifest: manifest,
+      outfile: executable,
+      entrypoint,
+      artifact,
+      target: `bun-${process.platform}-${process.arch}` as Bun.Build.CompileTarget,
+    });
+    const child = Bun.spawn([compiled.output], { stdout: "pipe", stderr: "pipe" });
+    const [stderr, exitCode] = await Promise.all([new Response(child.stderr).text(), child.exited]);
+    expect(exitCode).toBe(0);
+    expect(stderr).toContain("serialized-stack-fixture");
+    expect(stderr).toMatch(/serialized-stack-fixture\.ts:6:\d+/);
+    expect(stderr).not.toContain("$bunfs");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+compileTest(
+  "Windows-compatible CLI compiler maps a binary stack back to TypeScript source",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "lore-release-cli-sourcemap-"));
+    try {
+      const entrypoint = join(directory, "source-mapped-cli-fixture.ts");
+      const executable = join(directory, "fixture");
+      await writeFile(
+        entrypoint,
+        [
+          "function sourceMappedCliFailure(): never {",
+          '  throw new Error("source-mapped-cli-fixture");',
+          "}",
+          "sourceMappedCliFailure();",
+        ].join("\n"),
+      );
+      const compiled = await compileReleaseCli({
+        nativeManifest: manifest,
+        outfile: executable,
+        entrypoint,
+        artifact,
+        target: `bun-${process.platform}-${process.arch}` as Bun.Build.CompileTarget,
+        useBunCommand: true,
+      });
+      const child = Bun.spawn([compiled.output], { stdout: "pipe", stderr: "pipe" });
+      const [stderr, exitCode] = await Promise.all([
+        new Response(child.stderr).text(),
+        child.exited,
+      ]);
+      expect(exitCode).toBe(1);
+      expect(stderr).toMatch(/source-mapped-cli-fixture\.ts:2:\d+/);
+      expect(stderr).not.toContain("$bunfs");
+      expect(stderr).not.toContain(".release-bundle.js");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

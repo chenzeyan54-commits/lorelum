@@ -212,7 +212,12 @@ function externalReview(evidence: readonly FeedbackEvidence[]): FeedbackExternal
   const credentialSignals = [
     ...new Set(
       evidence.flatMap((item) => {
-        const text = "text" in item ? item.text : "";
+        const text =
+          "text" in item
+            ? item.text
+            : item.type === "detailed-logs"
+              ? JSON.stringify(item.records)
+              : "";
         return credentialPatterns
           .filter(([pattern]) => pattern.test(text))
           .map(([, signal]) => signal);
@@ -220,7 +225,7 @@ function externalReview(evidence: readonly FeedbackEvidence[]): FeedbackExternal
     ),
   ];
   return {
-    required: selectedRawFields.length > 0,
+    required: credentialSignals.length > 0,
     selectedRawFields,
     credentialSignals,
   };
@@ -310,56 +315,7 @@ export function reportFromTrace(
   return report;
 }
 
-type ExternalIdentityField = "requestId" | "operationId" | "preparationId" | "nativeRunId";
-
-function externalIdentityMap(report: FeedbackReport): ReadonlyMap<string, string> {
-  const map = new Map<string, string>();
-  let request = 0;
-  let operation = 0;
-  let preparation = 0;
-  let nativeRun = 0;
-  const token = (field: ExternalIdentityField, value: string) => {
-    const existing = map.get(value);
-    if (existing !== undefined) return existing;
-    const next =
-      field === "requestId"
-        ? `request-${++request}`
-        : field === "operationId"
-          ? `operation-${++operation}`
-          : field === "preparationId"
-            ? `preparation-${++preparation}`
-            : `native-run-${++nativeRun}`;
-    map.set(value, next);
-    return next;
-  };
-  for (const evidence of report.evidence) {
-    if (evidence.type !== "diagnostic-facts") continue;
-    for (const fact of evidence.facts) {
-      for (const field of ["requestId", "operationId", "preparationId", "nativeRunId"] as const) {
-        const value = fact[field];
-        if (value !== undefined) token(field, value);
-      }
-    }
-  }
-  return map;
-}
-
-function externalFact(
-  fact: FeedbackDiagnosticFact,
-  identifiers: ReadonlyMap<string, string>,
-): FeedbackDiagnosticFact {
-  const identifier = (value: string) => identifiers.get(value) ?? value;
-  return {
-    ...fact,
-    ...(fact.requestId === undefined ? {} : { requestId: identifier(fact.requestId) }),
-    ...(fact.operationId === undefined ? {} : { operationId: identifier(fact.operationId) }),
-    ...(fact.preparationId === undefined ? {} : { preparationId: identifier(fact.preparationId) }),
-    ...(fact.nativeRunId === undefined ? {} : { nativeRunId: identifier(fact.nativeRunId) }),
-  };
-}
-
 export function renderReportMarkdown(report: FeedbackReport): string {
-  const identifiers = externalIdentityMap(report);
   const lines = [
     `# Lorelum ${report.kind} feedback draft`,
     "",
@@ -390,23 +346,13 @@ export function renderReportMarkdown(report: FeedbackReport): string {
     `- Platform: ${report.context.platform}`,
     `- Architecture: ${report.context.arch}`,
   );
-  if (report.trace !== undefined) lines.push("- Trace: `trace-1`");
+  if (report.trace !== undefined) lines.push(`- Trace: \`${report.trace.id}\``);
   lines.push("", "## Evidence", "");
   if (report.evidence.length === 0)
     lines.push("No readable local evidence was available for this draft.");
   for (const item of report.evidence) {
     if (item.type === "diagnostic-facts") {
-      lines.push(
-        "### Diagnostic facts",
-        "",
-        "```json",
-        JSON.stringify(
-          item.facts.map((fact) => externalFact(fact, identifiers)),
-          null,
-          2,
-        ),
-        "```",
-      );
+      lines.push("### Diagnostic facts", "", "```json", JSON.stringify(item.facts, null, 2), "```");
     } else if (item.type === "detailed-logs") {
       lines.push(
         `### Detailed ${item.level} logs`,
@@ -422,12 +368,11 @@ export function renderReportMarkdown(report: FeedbackReport): string {
   lines.push("", "## Evidence limits", "");
   if (report.missingEvidence.length === 0) lines.push("No known local evidence limit.");
   else lines.push(...report.missingEvidence.map((value) => `- ${value}`));
-  lines.push("", "## External review required", "");
-  if (!report.externalReview.required)
-    lines.push("This draft contains no selected raw-content field.");
-  else {
+  lines.push("", "## If you choose to share outside this machine", "");
+  lines.push("This draft is local only. Any upload or Issue action needs your explicit approval.");
+  if (report.externalReview.selectedRawFields.length > 0) {
     lines.push(
-      "Before sharing outside this machine, decide separately whether each original field below should leave the machine:",
+      "This local draft includes these detailed evidence classes:",
       ...report.externalReview.selectedRawFields.map((field) => `- ${field}`),
     );
   }
@@ -437,6 +382,8 @@ export function renderReportMarkdown(report: FeedbackReport): string {
       "Potential credential-like text requires review:",
       ...report.externalReview.credentialSignals.map((signal) => `- ${signal}`),
     );
+  } else {
+    lines.push("No credential-like text was detected in the selected local evidence.");
   }
   if (report.suggestedDisposition !== undefined) {
     lines.push(

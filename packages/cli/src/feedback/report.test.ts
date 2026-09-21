@@ -40,6 +40,26 @@ test("keeps explicitly selected local raw evidence while flagging credential-lik
   expect(markdown).toContain("Bearer local-only-token");
 });
 
+test("keeps ordinary local debugging material without treating it as a credential review", () => {
+  const report = reportFromInput(
+    parseFeedbackDraftInput({
+      schemaVersion: 2,
+      kind: "bug",
+      summary: "Query failed",
+      observed: "The query failed locally.",
+      selected: { query: "exact user query", paths: ["/absolute/model.gguf"] },
+    }),
+  );
+  const markdown = renderReportMarkdown(report);
+  expect(report.externalReview).toEqual({
+    required: false,
+    selectedRawFields: ["query", "path"],
+    credentialSignals: [],
+  });
+  expect(markdown).toContain("exact user query");
+  expect(markdown).toContain("No credential-like text was detected");
+});
+
 test("rejects unbounded or open advanced input before it can become an artifact", () => {
   expect(() =>
     parseFeedbackDraftInput({
@@ -84,7 +104,7 @@ test("keeps trace facts but does not fabricate missing local evidence", () => {
   expect(renderReportMarkdown(report)).toContain('"exitCode": 0');
 });
 
-test("keeps real identities in the local report while making the Markdown share view anonymous", () => {
+test("keeps real trace identities in the local Markdown view", () => {
   const traceId = "00000000-0000-4000-8000-000000000025" as never;
   const nativeRunId = "native-private-identity";
   const report = reportFromTrace(traceId, "bug", {
@@ -107,11 +127,9 @@ test("keeps real identities in the local report while making the Markdown share 
   });
   const markdown = renderReportMarkdown(report);
   expect(JSON.stringify(report)).toContain(nativeRunId);
-  expect(markdown).toContain("trace-1");
-  expect(markdown).toContain("request-1");
-  expect(markdown).toContain("operation-1");
-  expect(markdown).toContain("preparation-1");
-  expect(markdown).toContain("native-run-1");
-  expect(markdown).not.toContain(traceId);
-  expect(markdown).not.toContain(nativeRunId);
+  expect(markdown).toContain(traceId);
+  expect(markdown).toContain("request-private-identity");
+  expect(markdown).toContain("operation-private-identity");
+  expect(markdown).toContain("preparation-private-identity");
+  expect(markdown).toContain(nativeRunId);
 });

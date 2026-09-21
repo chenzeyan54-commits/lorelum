@@ -59,11 +59,14 @@ logging:
 
 ## Feedback 的日志选择
 
-`lore feedback draft --trace-id ...` 默认只使用同 trace 的 error/warn、关系和 lifecycle 摘要，不把普通 query、Practice 或 debug context 自动带进报告。用户明确需要更多现场信息时，才使用：
+`lore feedback draft --trace-id ...` 默认保留同 trace 的完整 `error`、`warn`、`info` 调用链，以及由 correlation IDs 安全关联的匿名 lifecycle records。它保留普通 query、Practice、结果、路径、原生输出、自由 context、原始 correlation IDs 与已序列化的 Error stack；只有明确 credential 会在日志写入时自动排除。diagnostic facts 仍保留为摘要，不取代完整记录。
 
 ```sh
-lore feedback draft --trace-id <traceId> --kind bug --include-logs info
 lore feedback draft --trace-id <traceId> --kind bug --include-logs debug
 ```
 
-详细模式只读取**已经记录**的同 trace 日志，无法补回过去没有开启的 debug；它仍是本地 artifact，且会标记外发前审阅。若没有足够证据，应建议用 `--debug` 或 `logging.level: debug` 重新复现，而不是猜测日志内容。
+`--include-logs info` 与默认选择等价；debug 模式只读取**已经记录**的同 trace 日志，无法补回过去没有开启的 debug，且会在没有任何 debug record 时返回 `debug-records-not-found`。本机 artifact 不因普通 query、结果或路径而要求确认；但上传、创建/更新 Issue 等外发动作必须取得用户明确授权。只有 evidence 实际含 credential 或可识别敏感材料时，才建议审阅、删减或改走私发/工单。若没有足够证据，应建议用 `--debug` 或 `logging.level: debug` 重新复现，而不是猜测日志内容。
+
+## 发行版 stack
+
+`build:cli`、release staging 和 release archive 都显式使用 inline source map，并禁用 minify。这样发行版遇到未处理异常、或 logger 序列化 Error stack 时，位置仍应还原到原始 TypeScript 文件、行和列，而不是 `$bunfs` 或中间 bundle。`scripts/release/compile-cli.test.ts` 会实际运行两种 binary 编译路径（包括 Windows-compatible Bun CLI compiler），以受控异常验证这一合同；以后即使有人提议开启 minify，也必须先保持该验证通过。

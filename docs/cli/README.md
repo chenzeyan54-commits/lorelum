@@ -11,7 +11,7 @@ Lorelum CLI 的普通命令默认在 stdout 输出完整、可读的 text：它�
 - [Semantic index](index.md)：查看、构建或替换当前 query context 的 semantic artifact。
 - [Query](query.md)：默认使用本地 semantic query；`--mode keyword` 保留离线 keyword query。
 - `lore logs` / `lore logs prune`：按 source、level 或 `traceId` 查看受管理的本机日志，或显式清理过期日志；不会启动 Backend/model 或扫描任意目录。
-- `lore feedback draft`：从一个 `traceId` 或高级 input 生成仅保存在本机、需要外发前审阅的反馈草稿；默认只带摘要，`--include-logs info|debug` 才加入已记录的同 trace 详细日志。
+- `lore feedback draft`：从一个 `traceId` 或高级 input 生成仅保存在本机的反馈草稿；默认包含已留存的同 trace `error`、`warn`、`info` 调用链，`--include-logs debug` 才追加此前记录的 debug。任何外发仍须用户单独确认；只有 credential 或其他实际敏感材料需要额外审阅。
 - `lore cache status` / `lore cache prune`：查看或显式清理用户级、可重建的 query cache；不会扫描或修改项目源文件。
 - [Get](get.md)：读取一个已安装 Practice。
 - [Pack catalog](list.md)：列出已安装 Pack 或其 Practice 目录。

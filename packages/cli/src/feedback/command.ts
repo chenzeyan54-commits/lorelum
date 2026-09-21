@@ -97,7 +97,7 @@ export function createFeedbackCommand(
       {
         longFlag: "--include-logs",
         description:
-          "Explicitly include existing same-trace info or debug logs in this local draft.",
+          "Keep the default info logs explicit, or add already-recorded same-trace debug logs.",
         value: { name: "level", required: true },
         optionRequired: false,
         values: ["info", "debug"],
@@ -142,10 +142,10 @@ export function createFeedbackCommand(
             throw invalidInvocationError();
           }
           const projection = await services.readTraceDiagnostics(traceValue);
-          const detailed =
-            includeLogs === undefined
-              ? undefined
-              : await (services.readTraceLogs ?? readTraceLogs)(traceValue, includeLogs);
+          const detailed = await (services.readTraceLogs ?? readTraceLogs)(
+            traceValue,
+            includeLogs === "debug" ? "debug" : "info",
+          );
           report = reportFromTrace(traceValue, kindValue, projection, detailed);
         } else {
           if (typeof inputValue !== "string" || includeLogs !== undefined)
