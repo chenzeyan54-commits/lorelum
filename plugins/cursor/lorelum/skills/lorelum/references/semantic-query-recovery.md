@@ -1,6 +1,28 @@
-# Semantic query recovery in Cursor
+# Diagnostic and semantic query recovery in Cursor
 
-Read this reference only after a semantic `lore query` has reported `state: "preparing"` or an error. Do not use it as a preflight checklist before the first query. Default text is sufficient to detect that recovery is needed; use `--json` only while diagnosing the recovery condition or exact protocol fields. A visible injected Pack Catalog remains available while recovery is in progress; do not rerun `lore pack list --details` unless the catalog itself is missing or truncated.
+Read this reference only after either an original Lorelum failure has a `diagnostics.traceId`, or a semantic `lore query` has reported `state: "preparing"` or an error. Do not use it as a preflight checklist before the first query. Default text is sufficient to detect that recovery is needed; use `--json` only when exact protocol fields are required. A visible injected Pack Catalog remains available while recovery is in progress; do not rerun `lore pack list --details` unless the catalog itself is missing or truncated.
+
+## Original trace evidence
+
+First inspect only the original trace:
+
+```sh
+lore logs --trace-id <traceId>
+```
+
+Report verifiable records and `missingEvidence`. Do not scan another trace, an arbitrary directory, environment/configuration, complete HTTP content, or native raw output. Do not preflight Backend, model, index, or status before this trace read, and do not rerun merely to obtain more detail. If the original failure has no trace, state that limit rather than manufacturing one. For a non-query command, follow its visible error recovery after this bounded observation.
+
+## Controlled reproduction and local feedback
+
+If the current trace remains insufficient, explain the evidence limit. Run `lore --debug <command>` only when the user explicitly asks for reproduction/diagnosis or the task already authorizes a safe minimal reproduction; its trace is a new invocation, not evidence from the original failure.
+
+Only after the user explicitly agrees to prepare feedback, create the local-only draft:
+
+```sh
+lore feedback draft --trace-id <traceId> --kind <bug|improvement>
+```
+
+The default draft contains same-trace error/lifecycle summary facts. Add `--include-logs info` or `--include-logs debug` only when the user explicitly chooses that already-recorded detail. Show the artifact paths, included evidence classes, `externalReview`, and `missingEvidence`. A draft is not a submission, upload, public Issue, triage result, or authorization to change product behavior. If the user declines or does not respond, do not create a draft or repeat the offer in the task. SessionStart and recoverable Hook paths remain metadata-only and never create feedback artifacts.
 
 ## Model preparation or embedding errors
 

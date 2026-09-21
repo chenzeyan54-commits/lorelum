@@ -49,9 +49,9 @@ Skill 将使用以下状态机：
 
 这样既不把“请帮我排查”误解释为“请把现场提交到 GitHub”，也不因为默认草稿很窄而让 Agent 无法在用户选择后带上现有 detail。
 
-### 4. 用共享规则片段同步五份 Skill，并保留宿主差异
+### 4. 用共享分派规则和 recovery reference 同步五份 Skill，并保留宿主差异
 
-generic Skill、Codex、ZCode、Cursor 和 WorkBuddy 都加入等价的 diagnostic/feedback 规则。Catalog 可见性、命令入口、宿主名称和 raw Hook event 仍保留各自既有段落；只抽齐诊断时机、trace 边界、重现授权和 feedback consent。测试改为验证每份 Skill 都包含必需语义，而不是要求全文字节完全相同。
+generic Skill、Codex、ZCode、Cursor 和 WorkBuddy 都保留等价的诊断触发条件、trace 边界与非打断式反馈时机，但 Skill 只负责分派：决定是否读取原始 trace、执行 `lore logs --trace-id`，以及禁止跨 trace 扫描和 runtime 预检。详细的 `missingEvidence` 解读、受控 debug 重现、feedback consent 与同 trace detail 选择必须放在 `references/semantic-query-recovery.md`；该 reference 同时保留既有的 semantic model/Backend/Store 恢复和渐进式 index build/rebuild → operation 跟踪路径。Catalog 可见性、命令入口、宿主名称和 raw Hook event 仍保留各自既有段落。测试分别验证每份 Skill 的最小分派规则和对应 reference 的详细恢复规则，而不是要求任一 Skill 重复完整 SOP 或要求全文字节完全相同。
 
 ### 5. 用户教程放在站点 Troubleshooting，并从现有入口链接
 
