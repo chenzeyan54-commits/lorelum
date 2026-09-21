@@ -27,6 +27,7 @@ This is the index for day-to-day development topics that do not belong in the pr
 - [Compiled LocalStore mutation benchmark](./local-store-mutation-benchmark.md)
 - [Keyword query quality and performance baseline](./keyword-query-benchmark.md)
 - [Site deployment workflow](./site-deploy.md)
+- [Prerelease workflow](./release.md)
 
 ## Current engineering contracts
 
