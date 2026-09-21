@@ -78,6 +78,7 @@ test("renders a default text error with every public error field", () => {
       reason: "idle",
       retry: "original-command",
     },
+    diagnostics: { traceId: "00000000-0000-4000-8000-000000000002" as never },
   });
 
   expect(writer.value).toBe(`error:
@@ -88,7 +89,29 @@ test("renders a default text error with every public error field", () => {
     automation: auto
     reason: idle
     retry: original-command
+diagnostics:
+  traceId: 00000000-0000-4000-8000-000000000002
 `);
+});
+
+test("renders JSON failures as one envelope with the supplied trace", () => {
+  const writer = new MemoryWriter();
+
+  renderResult(writer, "json", {
+    kind: "failure",
+    command: "query",
+    code: "backend.unavailable",
+    message: "The local backend is unavailable.",
+    diagnostics: { traceId: "00000000-0000-4000-8000-000000000003" as never },
+  });
+
+  expect(JSON.parse(writer.value)).toMatchObject({
+    command: "query",
+    ok: false,
+    diagnostics: { traceId: "00000000-0000-4000-8000-000000000003" },
+    error: { code: "backend.unavailable" },
+  });
+  expect(writer.value.split("\n")).toEqual([expect.any(String), ""]);
 });
 
 test("rejects non-JSON-safe data before writing either format", () => {

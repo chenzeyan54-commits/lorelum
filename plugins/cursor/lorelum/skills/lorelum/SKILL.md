@@ -39,6 +39,30 @@ lore backend lease renew <lease-id>
 lore backend lease release <lease-id>
 ```
 
+## Diagnose current-trace failures and offer local feedback without interrupting the main task
+
+A normal `lore` text failure displays `diagnostics.traceId`; the `--json` envelope carries the same local correlation ID. It identifies one invocation chain for diagnostics and feedback, not a credential, user identity, or public sharing ID.
+
+When a Lorelum failure blocks the current task, or the user explicitly asks for diagnosis, inspect only the trace from that original failure:
+
+```sh
+lore logs --trace-id <traceId>
+```
+
+Report the records that can be verified and any `missingEvidence`. Do not scan another trace, an arbitrary directory, environment/configuration, complete HTTP content, or native raw output. Do not preflight Backend, model, index, or status before this trace read, and do not rerun a command merely to obtain more detail. If the original failure has no trace, state that limit rather than manufacturing one. After this bounded observation, follow the relevant recovery path.
+
+If a clear Lorelum bug, retrieval/guidance gap, or user-requested missing capability does not block the main task and the user did not ask for diagnosis, keep only a candidate in the current task context. Do not inspect extra logs, create a report, upload anything, or create/update a GitHub Issue merely because a candidate exists. Finish the main task first and make at most one non-blocking offer in the final summary or a user-visible milestone.
+
+If the current trace lacks enough evidence, explain the limit. Only when the user explicitly asks for reproduction/diagnosis, or the task already authorizes a safe minimal reproduction, run `lore --debug <command>`; identify its returned trace as a new invocation, not evidence from the original failure.
+
+Only after the user explicitly agrees to prepare a local draft, run the trace-rooted command:
+
+```sh
+lore feedback draft --trace-id <traceId> --kind <bug|improvement>
+```
+
+The default draft contains same-trace error/lifecycle summary facts, not every query or debug record. Only if the user explicitly chooses more already-recorded local detail may the Agent add `--include-logs info` or `--include-logs debug`; explain that this is still local-only, cannot recover debug that was never recorded, and requires external review before sharing. Then show the user the artifact paths, included evidence classes, `externalReview`, and `missingEvidence`. A generated draft is not a submission, upload, Issue, triage result, or authorization to change a Pack, Core, Skill, docs, or evaluation. Do not use `--input` for the ordinary Agent flow. If the user declines or does not respond, do not create a draft or repeat the offer in the same task. SessionStart and recoverable Hook failures remain metadata-only and never create feedback artifacts.
+
 ## Use Pack resources when a retrieved Practice points to them
 
 Packs may include optional `references/`, `assets/`, and `scripts/` directories. A Practice can point to one with a normal Markdown link whose target begins with `resource:`, for example:

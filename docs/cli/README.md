@@ -1,6 +1,6 @@
 # CLI 文档
 
-Lorelum CLI 的普通命令默认在 stdout 输出完整、可读的 text：它可视化同一次公开 `data`，不隐藏 identity、状态、source、ID、进度或 metadata。传入 `--json` 时，stdout 才输出单行 JSON envelope；成功包含 `command`、`ok: true` 和 `data`，失败包含 `command`、`ok: false` 和 `error: { code, message, recovery? }`。默认 text 失败写 stderr；诊断和模型下载进度也写 stderr。`lore hook codex`、`lore hook cursor`、`lore hook workbuddy` 与 `lore hook zcode` 是集成 ABI 例外：它们输出各自的宿主 Hook envelope，而不参与普通 format 协商。
+Lorelum CLI 的普通命令默认在 stdout 输出完整、可读的 text：它可视化同一次公开 `data`，不隐藏 identity、状态、source、ID、进度或 metadata。传入 `--json` 时，stdout 才输出单行 JSON envelope；成功包含 `command`、`ok: true` 和 `data`，失败包含 `command`、`ok: false` 和 `error: { code, message, recovery? }`。默认 text 失败写 stderr，并在同一结构化响应中显示 `diagnostics.traceId`；诊断和模型下载进度也写 stderr。`lore hook codex`、`lore hook cursor`、`lore hook workbuddy` 与 `lore hook zcode` 是集成 ABI 例外：它们输出各自的宿主 Hook envelope，而不参与普通 format 协商。
 
 普通命令正常成功退出码为 `0`，可见命令错误为 `2`。机器调用方必须传 `--json` 并按稳定的 `error.code` 处理结果，不解析 message 或 text。`lore describe --json` 返回当前 protocol 命令和每个 `resultSchema`，可用于动态发现未来新增的普通命令；宿主 Hook ABI 使用各自的专门文档定义的输出。
 
@@ -61,4 +61,4 @@ lore pack list --details --json
 
 `model load` 的 stdout 在任务最终完成前保持沉默；stderr 使用 `model: resolving`、`model: downloading 50% (attempt 1)`、`model: verifying` 和 `model: starting` 这样的文案，只输出发生变化的阶段、百分比或 attempt。被取消、下载失败或 native 启动失败在默认格式以 text error 返回，在 `--json` 格式以最终 failure envelope 返回；两者都不把 202 接受状态当作命令成功。
 
-每个 `--json` CLI envelope 的 `diagnostics.traceId` 是该次调用的本机排障关联 ID。它可用于 `lore logs --trace-id <traceId>` 或后续生成本地 feedback 草稿；它不是鉴权 token，也不会出现在 Codex/ZCode/Cursor Hook envelope。`--debug` 不改变 stdout 单行 JSON、progress 输出、已接受后台 operation 或退出码；`--log-level` 仍只控制 stderr。
+每个 `--json` CLI envelope 的 `diagnostics.traceId` 是该次调用的本机排障关联 ID；普通 text failure 也会在 stderr 中显示同一个 ID。它可用于 `lore logs --trace-id <traceId>` 或后续生成本地 feedback 草稿；它不是鉴权 token，也不会出现在 Codex/ZCode/Cursor/WorkBuddy Hook envelope。`--debug` 不改变 stdout 单行 JSON、progress 输出、已接受后台 operation 或退出码；`--log-level` 仍只控制 stderr。面向用户的排查顺序见[站点故障排查说明](../../apps/site/content/docs/troubleshooting.mdx)。

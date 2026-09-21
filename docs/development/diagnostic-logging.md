@@ -38,7 +38,7 @@ lore logs --source hook.codex --level debug
 lore logs prune
 ```
 
-读取不会启动 Backend/model、下载、query 或修改 Store。遇到损坏、轮转或缺失文件时，它会返回部分记录以及 `missingEvidence`，不会把其他 trace 的内容当成匹配结果。`lore logs prune` 只清理 Lorelum 管理且已超过保留范围的日志文件。
+读取不会启动 Backend/model、下载、query 或修改 Store。遇到损坏、轮转或缺失文件时，它会返回部分记录以及 `missingEvidence`，不会把其他 trace 的内容当成匹配结果。`lore logs prune` 只清理 Lorelum 管理且已超过保留范围的日志文件。用户从普通 text failure 的 `diagnostics.traceId` 开始排查时，应按[站点故障排查说明](../../apps/site/content/docs/troubleshooting.mdx)操作；本文不重复用户侧步骤。
 
 ## Debug 模式与 Hook
 

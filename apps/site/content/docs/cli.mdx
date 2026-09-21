@@ -4,7 +4,7 @@ description: Command discovery, default text output, JSON machine responses, and
 icon: Terminal
 ---
 
-The `lore` CLI defaults to complete, readable text on stdout, including Help and version. It is a visual representation of the command's public `data`, not a summary: source locators, IDs, state, progress, diagnostics, and metadata remain visible. Agents read this default text directly. Use `--json` only to diagnose an unexpected result, inspect protocol details, or let a script or CI job programmatically parse the complete one-line JSON envelope. Diagnostics and progress go to stderr; default command failures also go to stderr.
+The `lore` CLI defaults to complete, readable text on stdout, including Help and version. It is a visual representation of the command's public `data`, not a summary: source locators, IDs, state, progress, diagnostics, and metadata remain visible. Agents read this default text directly. Use `--json` only to diagnose an unexpected result, inspect protocol details, or let a script or CI job programmatically parse the complete one-line JSON envelope. Diagnostics and progress go to stderr; default command failures also go to stderr and include a local `diagnostics.traceId` for that original invocation.
 
 ## Commands
 
@@ -60,7 +60,7 @@ Set `logging.level: debug` in `~/.lorelum/config.yaml` for persistent release/Ho
 
 ## Local logs
 
-Get a trace from a `--json` response to inspect one invocation without reading Backend-private files directly:
+Every normal text failure prints `diagnostics.traceId`; a `--json` response carries the same field in its envelope. Copy that ID to inspect the original invocation without reading Backend-private files directly:
 
 ```sh
 lore logs --trace-id <traceId> --limit 100
@@ -68,7 +68,7 @@ lore logs --source hook.codex --level debug
 lore logs prune
 ```
 
-Logs stay below `~/.lorelum/logs/`. `lore logs` does not start a Backend or model. Missing, rotated, or damaged files are reported as evidence limits instead of being silently replaced with unrelated records.
+Logs stay below `~/.lorelum/logs/`. `lore logs` does not start a Backend or model. Missing, rotated, or damaged files are reported as evidence limits instead of being silently replaced with unrelated records. Follow [Troubleshooting](./troubleshooting) for the complete trace, debug reproduction, and feedback path.
 
 ## JSON response envelope
 
@@ -103,7 +103,7 @@ The command references specify which states and exit codes each command supports
 
 ## Local feedback drafts
 
-When a `--json` CLI result identifies a reproducible problem or a useful improvement, use its `diagnostics.traceId` to create a local draft:
+When a text or `--json` CLI result identifies a reproducible problem or a useful improvement, use its `diagnostics.traceId` to create a local draft:
 
 ```sh
 lore feedback draft --trace-id <traceId> --kind bug

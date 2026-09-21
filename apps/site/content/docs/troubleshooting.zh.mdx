@@ -8,6 +8,26 @@ icon: Wrench
 
 在启动 Agent 的环境中运行 `lore --version`。如果终端中正常、Agent 中失败，检查 Agent 的 `PATH` 是否包含 `~/.local/bin`，然后重启应用。详见[安装](./installation)。
 
+## 命令失败时先查看原始 trace
+
+普通 CLI failure 会在 stderr 显示 code、message、recovery 和 `diagnostics.traceId`。这个 trace 属于原始调用，重试前先复制它：
+
+```sh
+lore logs --trace-id <traceId> --limit 100
+```
+
+该命令只读取已经与这次调用关联的 Lorelum 管理日志；不会启动 Backend 或模型、下载内容、重新执行 query，也不会查看其他调用。`missingEvidence` 表示保留下来的证据存在限制：文件缺失、已轮转、已损坏，或此前没有记录 debug，都不能证明另一个原因。
+
+如果现有记录仍无法解释问题，并且你能控制安全的最小复现，再使用 `--debug`：
+
+```sh
+lore --debug query "相同的最小任务描述"
+```
+
+这次复现会产生新的 trace，不能把它的日志当作原始 failure 的现场。只有需要 protocol 字段或脚本需要 JSON envelope 时才使用 `--json`；不要为了取得原始 trace 而重跑命令。
+
+Host Hook 的 stdout 保持宿主 raw protocol，不会附带普通 CLI diagnostics。不要从它的 stdout 解析 trace。若 Hook 问题反复出现，可设置 `logging.level: debug`，或通过宿主支持的路径复现，再有意识地检查产生的本机证据。
+
 ## 查询返回 `preparing`
 
 这是退出码为 `1` 的成功响应：模型准备已接受，但在 CLI 的观察时间内尚未就绪。检查状态并等待加载完成：
@@ -48,4 +68,12 @@ keyword 按词语匹配。解决 semantic 检索的问题后，再运行原来�
 
 ## 报告问题
 
-提交 [GitHub issue](https://github.com/lorelum/lorelum/issues) 时，附上 `lore --version`、平台、执行的命令和返回的错误码。示例中请去掉私有 Pack 内容和凭据。安全问题请按 [SECURITY.md](https://github.com/lorelum/lorelum/blob/main/SECURITY.md) 报告。
+如果它有助于说明问题，先从选定 trace 生成一份本地、可审阅的草稿：
+
+```sh
+lore feedback draft --trace-id <traceId> --kind bug
+```
+
+它只会在 `~/.lorelum/feedback/` 下创建 `report.json` 和 `report.md`，不会上传数据、打开 URL 或创建 Issue。只有你明确选择 `--include-logs info` 或 `--include-logs debug` 时，才会加入已经记录的同 trace detail；将任何内容公开前逐项审阅。
+
+如果决定提交 Issue，请附上 `lore --version`、平台、执行的命令、返回的错误码，以及确实能帮助维护者复现的、已经审阅过的证据。安全问题请按 [SECURITY.md](https://github.com/lorelum/lorelum/blob/main/SECURITY.md) 报告。

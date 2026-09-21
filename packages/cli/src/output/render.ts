@@ -82,6 +82,7 @@ export function renderResult(
         message: result.message,
         ...(result.recovery === undefined ? {} : { recovery: result.recovery }),
       },
+      diagnostics: result.diagnostics ?? { traceId: createTraceId() },
     }),
   );
 }

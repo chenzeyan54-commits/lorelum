@@ -222,10 +222,18 @@ test("writes default failures to stderr as complete text", async () => {
   const stdout = new MemoryWriter();
   const stderr = new MemoryWriter();
 
-  expect(await run(["unknown"], { stderr, stdout })).toBe(2);
+  expect(
+    await run(["unknown"], {
+      stderr,
+      stdout,
+      traceId: "00000000-0000-4000-8000-000000000004" as never,
+    }),
+  ).toBe(2);
   expect(stdout.value).toBe("");
   expect(stderr.value).toBe(`error:
   code: usage.invalid
   message: The command invocation is invalid.
+diagnostics:
+  traceId: 00000000-0000-4000-8000-000000000004
 `);
 });

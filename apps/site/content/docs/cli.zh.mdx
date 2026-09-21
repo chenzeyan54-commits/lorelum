@@ -4,7 +4,7 @@ description: 命令发现、默认 text 输出、JSON 机器响应和退出码�
 icon: Terminal
 ---
 
-`lore` CLI 默认向 stdout 输出完整、可读的 text，包括 help 和 version。它是命令公开 `data` 的可视化，而不是摘要：source locator、ID、状态、进度、diagnostic 和 metadata 都会保留。Agent 直接阅读默认 text；只有结果异常、需要排查或核对 protocol 细节，以及脚本或 CI 需要程序化解析完整单行 JSON envelope 时，才显式传入 `--json`。诊断和进度输出到 stderr；默认命令失败也输出到 stderr。
+`lore` CLI 默认向 stdout 输出完整、可读的 text，包括 help 和 version。它是命令公开 `data` 的可视化，而不是摘要：source locator、ID、状态、进度、diagnostic 和 metadata 都会保留。Agent 直接阅读默认 text；只有结果异常、需要排查或核对 protocol 细节，以及脚本或 CI 需要程序化解析完整单行 JSON envelope 时，才显式传入 `--json`。诊断和进度输出到 stderr；默认命令失败也输出到 stderr，并附带该原始调用的本机 `diagnostics.traceId`。
 
 ## 命令目录
 
@@ -60,7 +60,7 @@ lore --store-root /path/to/store query "评审一个局部 UI 修改的需求范
 
 ## 本机日志
 
-可从 `--json` 响应取得 trace，再查看一次调用，不必直接读取 Backend 私有文件：
+普通 text failure 会显示 `diagnostics.traceId`，`--json` 响应也会在 envelope 中携带同一字段。复制该 ID 后即可查看原始调用，不必直接读取 Backend 私有文件：
 
 ```sh
 lore logs --trace-id <traceId> --limit 100
@@ -68,7 +68,7 @@ lore logs --source hook.codex --level debug
 lore logs prune
 ```
 
-日志保存在 `~/.lorelum/logs/`。`lore logs` 不会启动 Backend/model；缺失、轮转或损坏文件会作为证据限制返回，不会用其他调用内容填充。
+日志保存在 `~/.lorelum/logs/`。`lore logs` 不会启动 Backend/model；缺失、轮转或损坏文件会作为证据限制返回，不会用其他调用内容填充。完整的 trace、debug 重现和 feedback 路径见[故障排查](./troubleshooting)。
 
 ## JSON 响应结构
 
@@ -103,7 +103,7 @@ query 返回 `ok: true` 且 `data.state: "preparing"` 时退出码为 `1`，不�
 
 ## 本地 feedback 草稿
 
-`--json` CLI 结果若指出了可复现的问题或有价值的改进，可以使用其 `diagnostics.traceId` 生成本地草稿：
+text 或 `--json` CLI 结果若指出了可复现的问题或有价值的改进，可以使用其 `diagnostics.traceId` 生成本地草稿：
 
 ```sh
 lore feedback draft --trace-id <traceId> --kind bug

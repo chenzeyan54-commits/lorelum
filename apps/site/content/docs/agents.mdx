@@ -4,10 +4,7 @@ description: Detailed instructions for an Agent that can execute Lorelum command
 icon: Bot
 ---
 
-This is a technical reference for an agent that can execute local commands, or
-for an advanced user who needs to supply those instructions directly to an
-agent. For normal installation and first use, start with [Agent integration](./agent-setup).
-The [Markdown version](./agents.md) can be supplied directly to the agent.
+This is a technical reference for an agent that can execute local commands, or for an advanced user who needs to supply those instructions directly to an agent. For normal installation and first use, start with [Agent integration](./agent-setup). The [Markdown version](./agents.md) can be supplied directly to the agent.
 
 ## Set up the environment
 
@@ -40,7 +37,7 @@ Install the requested Pack if it is missing. To start with the official engineer
 lore pack install agentic-coding
 ```
 
-Follow [Agent integration](./agent-setup) for the current host. Codex and ZCode use their respective [official Plugins](./agent-setup); verify setup with a query about the current repository and a full Practice read.
+Follow [Agent integration](./agent-setup) for the current host. Codex, WorkBuddy, ZCode, and Cursor use their respective [official Plugins](./agent-setup); verify setup with a query about the current repository and a full Practice read.
 
 If using a custom `--store-root`, use it consistently for install, query, get, and index operations. It chooses Pack and index data, not a different model or Backend.
 
@@ -72,11 +69,11 @@ Retrieve again if new facts change the decision. Describe how the relevant guida
 
 A Practice can link Pack-native material with a `resource:` target, such as `resource:references/api-compatibility.md`. Resolve it from the matching source's `packRoot` in the `get` result. Read a reference when it provides the extra detail needed for the decision; copy an asset into the task workspace before editing it; and run a script only when the current task authorizes it and the Practice explains its inputs and purpose.
 
-The link is the default task route, not a file-access allowlist. A SessionStart Catalog injected by the Codex or ZCode Plugin gives every installed Pack its readable current `packRoot`, so you may use that root when the Pack context is already clear. For a retrieved Practice, keep multiple sources separate and use the matching `get` source root rather than silently choosing a Catalog entry. A root is a mutable current view: after a Pack mutation, retrieve `get` or `pack list` again before treating it as the current source; never derive roots from Store internals. Never assume a Pack script runs during install, validation, query, listing, get, indexing, or recovery.
+The link is the default task route, not a file-access allowlist. A visible SessionStart Catalog injected by a supported host Plugin gives every installed Pack its readable current `packRoot`, so you may use that root when the Pack context is already clear. For a retrieved Practice, keep multiple sources separate and use the matching `get` source root rather than silently choosing a Catalog entry. A root is a mutable current view: after a Pack mutation, retrieve `get` or `pack list` again before treating it as the current source; never derive roots from Store internals. Never assume a Pack script runs during install, validation, query, listing, get, indexing, or recovery.
 
 ## Read default output and diagnose issues
 
-For normal Agent calls, use default text and read it directly. It contains the same public business data as JSON, including IDs, source, state, progress, diagnostics, and metadata; it is not a summary. Do not parse its layout as a protocol. When a result is unexpected and you need to diagnose it, or when you need to inspect precise protocol fields, rerun the same command with `--json`: stdout then contains one JSON envelope and stderr contains diagnostics and progress. Scripts and CI that programmatically parse output must use `--json`.
+For normal Agent calls, use default text and read it directly. It contains the same public business data as JSON, including IDs, source, state, progress, diagnostics, and metadata; it is not a summary. Do not parse its layout as a protocol. A text failure includes `diagnostics.traceId` on stderr. If the failure blocks the authorized task or the user explicitly asks for diagnosis, read only that original trace with `lore logs --trace-id <traceId>` before any runtime preflight or reproduction, and report both verified records and `missingEvidence`. Do not rerun merely to obtain the trace, scan another trace, or automatically create a feedback draft. Use `--json` only for protocol fields; scripts and CI that programmatically parse output must use it.
 
 | Result | Next action |
 | --- | --- |
@@ -84,7 +81,7 @@ For normal Agent calls, use default text and read it directly. It contains the s
 | Query shows `state: preparing`, exit `1` | Check model state, wait with `lore model load`, then retry the same query. |
 | Ready query shows an empty result list | Check installed Packs and refine the task description if useful. |
 | Index operation is accepted | Follow its visible operation ID until it is ready or failed. |
-| Command failure, exit `2` | Read its code/recovery and follow [Troubleshooting](./troubleshooting); use `--json` only if protocol-level diagnosis is needed. |
+| Command failure, exit `2` | Read its code/recovery and original `diagnostics.traceId`; if diagnosis is needed, inspect only that trace and follow [Troubleshooting](./troubleshooting). Use `--json` only for protocol-level fields. |
 
 Semantic query is the default. A failed semantic query does not mean that relevant guidance is absent. Use keyword mode only for an intentional offline lookup or to isolate a semantic-runtime problem, and identify that mode explicitly.
 

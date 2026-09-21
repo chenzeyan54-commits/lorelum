@@ -33,19 +33,29 @@ Then read the complete body of every candidate Practice you will use:
 lore get <practice-id>
 ```
 
-## Offer local feedback after an explicit user choice
+## Diagnose current-trace failures and offer local feedback without interrupting the main task
 
-A normal `lore` CLI envelope includes `diagnostics.traceId`. It identifies one local invocation chain for diagnostics and feedback; it is not an authority credential, a user identifier, or a public sharing ID.
+A normal `lore` text failure displays `diagnostics.traceId`; the `--json` envelope carries the same local correlation ID. It identifies one invocation chain for diagnostics and feedback, not an authority credential, user identifier, or public sharing ID.
 
-If a clear Lorelum bug, retrieval/guidance gap, or user-requested missing capability appears, retain a candidate only in the current task context. A candidate must not trigger extra log reads, artifact writes, uploads, Issue creation, or product changes. When the main task can continue, finish it first and make at most one concise, non-blocking offer at the final summary or a user-visible milestone. Explain the relevant local facts so the user can decide.
+When a Lorelum failure blocks the current task, or the user explicitly asks for diagnosis, inspect only the trace from that original failure:
 
-Only if the user explicitly agrees, create the local-only draft with the existing trace:
+```sh
+lore logs --trace-id <traceId>
+```
+
+Report the records that can be verified and any `missingEvidence`. Do not scan another trace, an arbitrary directory, environment/configuration, complete HTTP content, or native raw output. Do not preflight Backend, model, index, or status before this trace read, and do not rerun a command merely to obtain more detail. If the original failure has no trace, state that limit rather than manufacturing one. After this bounded observation, follow the relevant recovery path.
+
+If a clear Lorelum bug, retrieval/guidance gap, or user-requested missing capability does not block the main task and the user did not ask for diagnosis, retain only a candidate in the current task context. It must not trigger extra log reads, artifact writes, uploads, Issue creation, or product changes. Finish the main task first and make at most one concise, non-blocking offer at the final summary or a user-visible milestone.
+
+If the current trace lacks enough evidence, explain the limit. Only when the user explicitly asks for reproduction/diagnosis, or the task already authorizes a safe minimal reproduction, run `lore --debug <command>`; identify its returned trace as a new invocation, not evidence from the original failure.
+
+Only if the user explicitly agrees to prepare feedback, create the local-only draft with the selected trace:
 
 ```sh
 lore feedback draft --trace-id <traceId> --kind <bug|improvement>
 ```
 
-The default draft contains same-trace error/lifecycle summary facts, not every query or debug record. Only when the user explicitly requests more already-recorded detail may the Agent add `--include-logs info` or `--include-logs debug`; explain that it is local-only, cannot recreate missing debug, and still needs review before any external sharing. If detail is missing, recommend a later reproduction with `lore --debug <command>` or `logging.level: debug`. Present the returned artifact paths, included evidence classes, `externalReview`, and `missingEvidence`. A draft is not a submission, upload, public Issue, triage result, or authorization to change a Pack, Core, Skill, docs, or evaluation. Do not use the advanced `--input` path for the ordinary Agent flow. If the user declines or does not respond, do not create a draft or repeat the offer during that task. SessionStart and recoverable Hook paths remain metadata-only and never create feedback artifacts.
+The default draft contains same-trace error/lifecycle summary facts, not every query or debug record. Only when the user explicitly chooses more already-recorded detail may the Agent add `--include-logs info` or `--include-logs debug`; explain that it is local-only, cannot recreate missing debug, and still needs review before any external sharing. Present the returned artifact paths, included evidence classes, `externalReview`, and `missingEvidence`. A draft is not a submission, upload, public Issue, triage result, or authorization to change a Pack, Core, Skill, docs, or evaluation. Do not use the advanced `--input` path for the ordinary Agent flow. If the user declines or does not respond, do not create a draft or repeat the offer during that task. SessionStart and recoverable Hook paths remain metadata-only and never create feedback artifacts.
 
 ## Use Pack resources when a retrieved Practice points to them
 
