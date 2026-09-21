@@ -62,7 +62,7 @@ async function removeTemporarily(directory: string): Promise<void> {
   }
 }
 
-test("status and stop of absent backend do not create runtime files", async () =>
+test.concurrent("status and stop of absent backend do not create runtime files", async () =>
   fixture(async (directory, port, command) => {
     const controller = createBackendSupervisor({
       buildIdentity: "integration-build",
@@ -75,7 +75,7 @@ test("status and stop of absent backend do not create runtime files", async () =
     expect(await stat(directory).catch(() => undefined)).toBeUndefined();
   }));
 
-test(
+test.concurrent(
   "concurrent starters share one daemon; a different build can stop it",
   async () =>
     fixture(async (directory, port, command) => {
@@ -112,7 +112,7 @@ test(
   20_000,
 );
 
-test(
+test.concurrent(
   "current CLI explicitly stops a verified protocol-mismatched daemon without its old CLI",
   async () =>
     fixture(async (directory, port, command) => {
@@ -148,7 +148,7 @@ test(
   20_000,
 );
 
-test(
+test.concurrent(
   "protocol-mismatch recovery refuses a tampered native-child record without stopping either process",
   async () =>
     fixture(async (directory, port, command) => {
@@ -197,7 +197,7 @@ test(
   20_000,
 );
 
-test(
+test.concurrent(
   "automatic handoff stops only an idle Backend and defers active or unknown activity",
   async () =>
     fixture(async (directory, port, command) => {
@@ -250,7 +250,7 @@ test(
   20_000,
 );
 
-test(
+test.concurrent(
   "automatic handoff stops a verified idle Backend and cleans its activity record",
   async () =>
     fixture(async (directory, port, command) => {
@@ -268,7 +268,7 @@ test(
   20_000,
 );
 
-test(
+test.concurrent(
   "crashed owned daemon leaves recoverable state and releases OS startup lock",
   async () =>
     fixture(async (directory, port, command) => {
@@ -291,7 +291,7 @@ test(
   20_000,
 );
 
-test("an unrelated listener is neither adopted nor terminated", async () =>
+test.concurrent("an unrelated listener is neither adopted nor terminated", async () =>
   fixture(async (directory, port, command) => {
     const listener = Bun.serve({ hostname: "127.0.0.1", port, fetch: () => new Response("other") });
     try {
@@ -310,7 +310,7 @@ test("an unrelated listener is neither adopted nor terminated", async () =>
     }
   }));
 
-test("failed executable launch does not leave an ownership record", async () =>
+test.concurrent("failed executable launch does not leave an ownership record", async () =>
   fixture(async (directory, port) => {
     const controller = createBackendSupervisor({
       buildIdentity: "integration-build",
@@ -322,6 +322,7 @@ test("failed executable launch does not leave an ownership record", async () =>
     expect(await readRecord(directory)).toBeUndefined();
   }));
 
+// This test mutates process.env, so it must not overlap lifecycle fixtures.
 test(
   "daemon does not inherit unrelated CLI secrets",
   async () =>
@@ -344,7 +345,7 @@ test(
   20_000,
 );
 
-test(
+test.concurrent(
   "failure after bind cannot be reported as a ready service",
   async () =>
     fixture(async (directory, port, command) => {
@@ -373,7 +374,7 @@ test(
   20_000,
 );
 
-test(
+test.concurrent(
   "daemon retains its settings snapshot until restart",
   async () =>
     fixture(async (directory, port, command) => {
@@ -403,7 +404,7 @@ test(
   20_000,
 );
 
-test(
+test.concurrent(
   "daemon launch record retains the resolved embedding snapshot",
   async () =>
     fixture(async (directory, port, command) => {

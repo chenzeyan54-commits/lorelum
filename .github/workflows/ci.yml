@@ -40,7 +40,10 @@ jobs:
         run: bun run lint
 
       - name: Test
-        run: bun test
+        # Isolated file workers overlap independent daemon and filesystem fixtures
+        # without reducing the suite's test coverage. Limit explicitly concurrent
+        # lifecycle cases so they do not oversubscribe a CI runner.
+        run: bun test --parallel=4 --max-concurrency=3
 
       - name: Build site
         run: bun run build:site
