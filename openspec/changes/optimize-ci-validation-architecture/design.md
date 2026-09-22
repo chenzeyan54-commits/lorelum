@@ -297,7 +297,10 @@ site build 验证。
 只返回 7.0.2，根和 site 的 `tsc --version` 也均为 7.0.2。仓库及已安装依赖的可执行源码搜索没有
 直接 import 旧 JavaScript TypeScript API；根 `overrides` 也将以后新增的间接 `typescript` resolution
 固定为 7.0.2。迁移后已重新验证完整 typecheck、site typecheck、site build 和 release staging。完整
-GitHub `verify` 必须在该 lockfile/head 上重新完成，才可把这项本地证据写为最终交付结论。
+GitHub `verify` 已在 full-resolution commit `206f6c0ad321582df57e029c509781060bdf7e08` 的 run
+`35696668488` 成功完成；该 run 使用相同 lockfile，并通过 install、typecheck、design contract、lint、
+test、site build 与 format check。后续仅更新本证据文本，不改变该验证所覆盖的 runtime 或 dependency
+artifact。
 
 report-only selector 在 PR #222 正确输出 `run (site-relevant-or-unknown)`，因为该 PR 改动了根
 manifest、lockfile、workflow 与 scripts。它尚未有 core-package-only 的真实 PR corpus，因此保持
