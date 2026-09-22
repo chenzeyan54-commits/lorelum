@@ -39,6 +39,12 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      # Report the conservative site-build decision before using it to skip anything.
+      # The workflow and the actual build remain unconditional during this evidence phase.
+      - name: Classify site build scope (report only)
+        id: site-build-scope
+        run: bun scripts/ci/site-build-selector.ts
+
       - name: Test
         # Isolated file workers overlap independent daemon and filesystem fixtures
         # without reducing the suite's test coverage. Limit explicitly concurrent

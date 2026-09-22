@@ -16,7 +16,7 @@
     "fmt:check": "oxfmt --check . '!**/*.md' '!**/*.mdx'",
     "db:generate": "bun scripts/db/generate.ts",
     "design:lint": "designmd lint DESIGN.md",
-    "typecheck": "bun run --filter '*' --parallel typecheck && tsc --noEmit -p scripts/release/tsconfig.json",
+    "typecheck": "bun scripts/ci/typecheck.ts",
     "build:native": "bun scripts/native/build-embedding.ts",
     "build:cli": "bun scripts/release/build-cli.ts",
     "build:release-staging": "bun scripts/release/build.ts",
@@ -28,10 +28,11 @@
   "devDependencies": {
     "@google/design.md": "0.4.0",
     "@types/bun": "1.4.2",
+    "@typescript/native": "npm:typescript@7.0.2",
     "drizzle-kit": "0.31.10",
     "oxfmt": "0.59.0",
     "oxlint": "1.74.0",
-    "typescript": "5.7.2"
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "overrides": {
     "js-yaml": "4.3.1"

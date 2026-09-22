@@ -2,7 +2,7 @@ import { initializeProjectConfig, ProjectConfigError } from "@lorelum/config";
 import { InvalidProjectRootError, type StorageRoot } from "@lorelum/engine";
 
 import type { JsonSchema, JsonValue } from "../output/protocol";
-import type { CommandDefinition } from "../registry";
+import type { CommandDefinition, CommandInvocation } from "../registry";
 import { frameworkErrorCodes, invalidInvocationError } from "../runtime/errors";
 import { resolveInvocationStorageRoot } from "../store/storage-root";
 import { resolveProjectInvocationOptions, type ProjectContextResolver } from "./service";
@@ -120,7 +120,7 @@ export function createProjectContextCommands(
       resultSchema: statusResultSchema,
       errorCodes: frameworkErrorCodes,
       exitCodes: [0, 2],
-      async handler(invocation) {
+      async handler(invocation: CommandInvocation) {
         try {
           const root = resolveInvocationStorageRoot(
             invocation.options.storeRoot,
