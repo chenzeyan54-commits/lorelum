@@ -265,6 +265,37 @@ jobs 都完整执行。先用可控失败场景验证失败传播和 required-ch
 当前 PR #220 只包含已验证的 Test/Typecheck 并发改善；本设计及以上后续阶段不追加到该 PR，除非
 maintainer 另行授权实施范围并完成相应验证。
 
+## 实施证据（2026-09-22）
+
+TypeScript 7 candidate 的实际提交为 `882bed0209de7926e871277a62dea595d2964a84`，在 PR #222 的
+GitHub `ubuntu-24.04` `verify` run `35693919107` 连续完成 3 次。对比基线是 PR #220 的
+`516e438140ab2928845f5661c854e757e662af98`、run `35688880784`；两者均使用 Bun 1.4.2、
+同一 CI workflow 和 4 vCPU hosted runner。候选与基线的 Typecheck 入口不同，正是本次测量的
+唯一预期 compiler 路径变化；候选额外有 12 条 selector/runner 测试，故 Test 总时长只用于退化
+观察，不作为 compiler 收益来源。
+
+| 样本 | Typecheck 原始 log 耗时 | Test | Build site | verify job |
+| --- | ---: | ---: | ---: | ---: |
+| 基线 `35688880784` | 约 21 秒 | 28.23 秒 | 约 15 秒 | 81 秒 |
+| candidate attempt 1 | 3.47 秒 | 28.98 秒 | 14.68 秒 | 63 秒 |
+| candidate attempt 2 | 4.86 秒 | 30.15 秒 | 19.51 秒 | 69 秒 |
+| candidate attempt 3 | 3.75 秒 | 28.42 秒 | 14.18 秒 | 58 秒 |
+
+candidate Typecheck 中位数为 3.75 秒，较约 21 秒基线减少约 82%，超过 30% adoption gate；
+完整 job 中位数为 63 秒。Test 与 site build 未出现可重复退化，三次 `verify` 都成功。GitHub log
+提供毫秒级 command 起止时间，足以区分这个数量级的收益，故本阶段不增加 timing wrapper。
+
+在本地，TS 5.7、TS 6 compatibility 和 TS 7 native 对所有 11 个 CI config 均成功；两次
+source-file-set 对照没有缩小仓库 source include 集，临时负向 fixture 在 TS 6 与 TS 7 下均以
+非零退出。迁移所需的两个明确配置修正是 TypeScript 6/7 不再自动加载 `@types` 后添加
+`types: ["bun"]`，以及移除 TypeScript 7 已删除的 UI `baseUrl`；`paths` 解析仍由覆盖对照和
+site build 验证。
+
+report-only selector 在 PR #222 正确输出 `run (site-relevant-or-unknown)`，因为该 PR 改动了根
+manifest、lockfile、workflow 与 scripts。它尚未有 core-package-only 的真实 PR corpus，因此保持
+report-only；不得仅据单次根配置 PR 将它改成 enforce。Typecheck 已不再是需要受限 worker scheduler
+才能解决的主要成本，故本阶段保留现有 10 个 workspace fan-out，不引入未测量的 scheduler。
+
 ## Open Questions
 
 - GitHub Actions 的实际 cache hit rate、缓存体积和组织级 runner queue 情况需要在相应候选 run 中
