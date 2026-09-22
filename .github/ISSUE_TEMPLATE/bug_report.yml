@@ -12,8 +12,8 @@ body:
     id: what-happened
     attributes:
       label: What happened?
-      description: A clear description of the unexpected behavior.
-      placeholder: "When I ran `lore query ...`, I expected X but got Y."
+      description: In one or two sentences, describe the task, the actual result, and its impact. Include enough context for someone who did not see your session.
+      placeholder: "While doing <task> with `lore ...`, I got <actual result>. This prevented <outcome>."
     validations:
       required: true
 
@@ -21,7 +21,7 @@ body:
     id: reproduce
     attributes:
       label: Steps to reproduce
-      description: Minimal reproducible steps. The more precise, the faster we can fix it.
+      description: State the relevant starting state (installed Packs, config, host, or permissions), then concrete steps and the observed output. If not reliably reproducible, say how often it occurs and what you did observe.
       placeholder: |
         1. `lore pack install agentic-coding`
         2. `lore query "..."`
@@ -33,7 +33,7 @@ body:
     id: expected
     attributes:
       label: Expected behavior
-      description: What did you expect to happen?
+      description: What should have happened in this situation, including a sensible failure/recovery outcome if the normal path cannot succeed?
     validations:
       required: true
 
@@ -68,7 +68,7 @@ body:
     id: evidence-boundary
     attributes:
       label: Verified and missing evidence
-      description: What did you verify locally? What diagnostic facts, reproduction steps, or environment details are still missing?
+      description: Separate observation from suspected cause. What did you verify locally, what is only a hypothesis, and what relevant evidence is missing? Leave blank if the reproduction above is complete.
       placeholder: "Verified: native process exited before readiness. Missing: a minimal reproduction outside this project."
     validations:
       required: false

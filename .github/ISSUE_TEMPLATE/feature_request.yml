@@ -12,8 +12,8 @@ body:
     id: problem
     attributes:
       label: The problem
-      description: What can't you do today, or what's painful? Who does this affect?
-      placeholder: "As a developer using Lorelum with Cursor, I can't ... because ..."
+      description: Give enough standalone context for someone unfamiliar with your environment. Who is affected, what are they trying to do, what happens today, and why is that a problem?
+      placeholder: "When using Lorelum with <host> to do <task>, I currently have to ... . This causes ... . Existing behavior/workaround: ..."
     validations:
       required: true
 
@@ -21,8 +21,8 @@ body:
     id: proposal
     attributes:
       label: The proposed solution
-      description: What should Lorelum do? Be concrete — describe the behavior or command you'd like.
-      placeholder: "I want `lore ...` to ..."
+      description: Describe the user/Agent-visible outcome and the boundary of this issue. Suggest an approach if useful, but do not turn an unverified implementation guess into a requirement.
+      placeholder: "When <situation>, Lorelum should <observable outcome>. This issue does not include <adjacent feature>."
     validations:
       required: true
 
@@ -38,11 +38,11 @@ body:
     id: acceptance
     attributes:
       label: Acceptance criteria
-      description: When is this "done"? Bullet the testable outcomes.
+      description: When is this done? Cover the normal path, relevant failure/recovery path, and compatibility or migration where applicable. Each item should be observable, not merely "add tests" or "update docs".
       placeholder: |
-        - [ ] `lore ...` does X
-        - [ ] docs updated
-        - [ ] tests cover Y
+        - [ ] Given <starting state>, when <action>, the user/Agent sees <result>.
+        - [ ] When <realistic failure>, <clear result or automatic recovery> occurs without losing work.
+        - [ ] Existing <workflow> continues to work, or the changed behavior and migration are documented.
     validations:
       required: true
 

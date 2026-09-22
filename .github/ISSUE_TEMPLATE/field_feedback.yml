@@ -23,7 +23,7 @@ body:
     id: situation
     attributes:
       label: Situation and observed outcome
-      description: Describe the decision or task moment, what Lorelum provided, and what was missing or confusing.
+      description: Describe the task and decision moment so a reader outside your session can understand what Lorelum provided, what the Agent did next, and what was missing or confusing. A repeatable recipe is helpful but not required for field feedback.
     validations:
       required: true
 

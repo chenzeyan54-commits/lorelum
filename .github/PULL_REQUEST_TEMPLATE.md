@@ -1,10 +1,18 @@
-## Summary
+## Background and outcome
 
-<!-- One or two sentences: what does this PR do? -->
+<!-- What problem exists today, for whom, and what observable result should this PR deliver? A link to the issue is not a substitute for a short explanation here. -->
 
 ## Linked issue
 
-Closes #
+<!-- Closes #123 when this PR completes the issue; otherwise use Refs #123 and name the remaining work. -->
+
+## What changed
+
+<!-- Describe the meaningful before/after behavior and the main components changed. Explain non-obvious decisions or scope exclusions; don't paste a file list or repeat the commit log. A small docs-only change can be brief. -->
+
+## Compatibility and migration
+
+<!-- Say "No user-facing compatibility change" when true. Otherwise name exactly who/what changes (CLI, JSON, config, Pack format, Plugin/Hook, persisted data, install/update, etc.), whether existing users need to act, and how they migrate or recover. A change can affect existing behavior even if no API is renamed. -->
 
 ## Type of change
 
@@ -14,18 +22,26 @@ Closes #
 - [ ] 📚 Docs only
 - [ ] 🔧 Refactor / chore
 
-## How was this tested?
+## Verification and results
 
-<!-- Describe what you tested and how. Paste test output or screenshots if relevant. -->
+<!-- Pair the important acceptance paths with actual observations: success and relevant failure/recovery paths. Give commands/environment and concise results; distinguish unit tests, a compiled binary, a real host, CI, and production. List checks not run, failing checks, and known limits honestly. Results from before later relevant edits do not verify the current PR state. -->
+
+## Performance evidence (only if claiming a performance improvement)
+
+<!-- Give baseline vs changed measurements, metric/unit, workload/data size, environment, repetitions/variance, and the benchmark command or reproducible method. Mention correctness trade-offs. If no representative benchmark exists, say so and frame the claim as a hypothesis rather than measured improvement. Remove this section for non-performance PRs. -->
+
+## Reviewer focus and remaining risks
+
+<!-- Point reviewers to the important design/behavior decisions and any unresolved limitation; "none identified" is fine. Do not hide a missing acceptance path in a generic "tests pass" statement. -->
 
 ## Checklist
 
-- [ ] Linked the issue this closes (`Closes #xxx`)
-- [ ] If this changes product behavior (Practice format, retrieval, CLI surface), the design was discussed in the issue / Discussions first
-- [ ] Added/updated tests for the change
-- [ ] Lint, type-check, and tests all pass locally
-- [ ] Updated relevant documentation
-- [ ] No secrets, credentials, or private info in the diff
+- [ ] Linked the relevant issue (`Closes #xxx` or `Refs #xxx` as appropriate)
+- [ ] If this changes a public contract, default, lifecycle, or integration, the required design alignment is linked
+- [ ] Covered changed behavior with proportionate tests or explained why a check does not apply
+- [ ] Reported checks actually run, their results, and any unrun/failing checks above
+- [ ] Updated affected user/maintainer documentation or explained why none is needed
+- [ ] Reviewed the diff for credentials, secrets, and unintended local artifacts
 
 ## AI assistance and review
 
@@ -33,7 +49,3 @@ Closes #
 - [ ] If AI-assisted: an AI code review covered the changed behavior and edge cases; material findings are resolved or documented below
 
 <!-- Leave the first two items unchecked for a human-only PR. If AI-assisted, link the AI CR or summarize its material findings below. "Reviewed every line" is not an acceptance criterion. -->
-
-## Notes for reviewers
-
-<!-- Anything you want reviewers to focus on, tricky parts, tradeoffs you made. -->

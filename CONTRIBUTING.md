@@ -13,6 +13,7 @@ Thanks for your interest in contributing to Lorelum! This doc explains how we wo
 - [Contributor License Agreement (CLA)](#contributor-license-agreement-cla)
 - [How we work: issue-driven, design-first](#how-we-work-issue-driven-design-first)
 - [Reporting bugs & proposing features](#reporting-bugs--proposing-features)
+- [Writing reviewable issues and PRs](#writing-reviewable-issues-and-prs)
 - [Development workflow](#development-workflow)
 - [Commit conventions](#commit-conventions)
 - [PR titles](#pr-titles)
@@ -97,9 +98,9 @@ PR (linked to issue, CI green, human review)
 merge → close issue
 ```
 
-**What counts as "product surface"?** The Practice/pack format, the retrieval model, the CLI command surface, and the MCP tool interface. Changes to these need design discussion first — not because we love process, but because they become public contracts that packs and users depend on.
+**What counts as "product surface"?** The Practice/Pack format, retrieval semantics, CLI commands and output, configuration/defaults, and host Skill/Plugin/Hook integration. Changes to these need design alignment first because users and Agents depend on the resulting contracts. Current local integrations remain CLI-first; they do not add an MCP tool interface.
 
-Pure bug fixes, refactors, perf improvements, and docs don't need upfront design — just an issue and a PR.
+Focused bug fixes, refactors, performance work, and factual docs corrections can usually proceed within the existing contract. A change to observable behavior, defaults, lifecycle, or cross-module ownership needs an OpenSpec proposal first, even when its motivation is a bug or performance problem. See [AGENTS.md](./AGENTS.md#change-scale-and-openspec) for the boundary.
 
 ## Reporting bugs & proposing features
 
@@ -109,6 +110,21 @@ Pure bug fixes, refactors, perf improvements, and docs don't need upfront design
 - 💬 **Discussion / question** → [Discussions](https://github.com/lorelum/lorelum/discussions)
 
 Before opening a new issue, please search existing ones to avoid duplicates.
+
+## Writing reviewable issues and PRs
+
+An Issue should let someone who was not in your local session understand the problem and take it forward independently. Give the relevant starting state and current behavior, the user or Agent impact, a concrete example or reproduction when available, and an observable result that would count as success. For a bug, distinguish what you saw from a suspected cause; include a realistic failure path, not only the successful path. For a feature, explain its scope and nearby work that is **not** part of it. Do not require a contributor to reconstruct private chat context or guess what "better" means.
+
+An Issue can still be useful before the root cause or exact design is known. Say what evidence is missing instead of asserting an unverified cause. If an observation cannot yet support a product change, use field feedback. Performance requests should name the affected operation, workload, and metric; a proposed target without a measured baseline is a goal, not proof of the current performance.
+
+A PR should be understandable without reading every commit or the whole Issue. Its description should answer:
+
+- Why was this change needed, and what behavior is different before and after?
+- What are the important changes and deliberate exclusions? Which public contracts or existing users are affected, and is migration needed? State explicitly when there is no user-facing compatibility change.
+- What evidence covers the important acceptance paths and realistic failure/recovery cases? Give the actual command or method, result, and environment when it matters. Distinguish local tests, CI, compiled/released binaries, and real-host checks; disclose what was not run or still fails.
+- If claiming a performance improvement, what are the **before and after** measurements for the same representative workload and environment? Include metric, data size, repetition/variation, benchmark method, and any correctness or resource trade-off. Without a comparable benchmark, describe the change as a performance hypothesis, not a proven speedup.
+
+The level of detail follows the change. A small documentation correction may need only a few sentences and a link check. A changed CLI error, persisted format, host integration, or performance claim needs enough evidence for a reviewer to assess the relevant boundary. Do not substitute an inventory of files, a generic "tests pass," or a checked box for the observed result. Keep the [PR template](./.github/PULL_REQUEST_TEMPLATE.md) headings that apply and remove the conditional performance section when it does not.
 
 ### Local feedback drafts and public reporting
 
@@ -137,8 +153,8 @@ Neither a draft nor an Issue automatically authorizes a Pack, Core, Skill, docs,
    git checkout -b feat/cli-decide-command
    ```
 4. **Implement.** Follow [AGENTS.md](./AGENTS.md) for repo conventions. Keep PRs focused — one issue per PR.
-5. **Test locally.** Whatever the test command turns out to be, it must pass. Add tests for new behavior.
-6. **Open a PR.** Fill in the [PR template](./.github/PULL_REQUEST_TEMPLATE.md). Link the issue (`Closes #123`).
+5. **Verify the changed boundary.** Add tests for new behavior and run relevant checks. Record the actual results, including failures or checks you could not run; don't claim an old result covers code changed afterward.
+6. **Open a PR.** Fill in the [PR template](./.github/PULL_REQUEST_TEMPLATE.md). Use `Closes #123` only when the PR completes the Issue; otherwise use `Refs #123` and say what remains.
 7. **Review.** A maintainer will review. Address feedback with new commits (don't force-push mid-review unless asked).
 8. **Merge.** Squash-merge into `main`.
 
