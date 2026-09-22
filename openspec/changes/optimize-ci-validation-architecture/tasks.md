@@ -5,8 +5,8 @@
 
 ## 2. 验证并有条件迁移 TypeScript 7 原生 compiler
 
-- [x] 2.1 在隔离候选 worktree 配置官方支持的 TypeScript 7 native `tsc` 与必要的 JavaScript TypeScript API 兼容依赖，盘点直接及 Vite/site build、design lint、release script 的间接 API 使用；验证不删除仍被工具实际解析的 JavaScript TypeScript package。
-- [x] 2.2 实现显式 typecheck 入口，使 CI 的 9 个 package config、site config 和 release-script config 全部由同一候选 compiler 调用；同时使每个 workspace 的直接 `typecheck` 命令也不依赖 workspace-local `PATH` 选择另一套 compiler。验证 command 列表恰为 11 个 config，`--showConfig`/file-list 对照没有缩小 source include 集，且 `bun run --filter @lorelum/site typecheck -- --version` 输出 native compiler 版本。
+- [x] 2.1 在隔离候选 worktree 配置官方支持的 TypeScript 7 native `tsc`，盘点直接及 Vite/site build、design lint、release script 的间接 API 使用；验证仓库和依赖源码没有直接 import 旧 JavaScript TypeScript API，且 full build 验证没有暴露该 API 的运行时依赖。
+- [x] 2.2 实现显式 typecheck 入口，使 CI 的 9 个 package config、site config 和 release-script config 全部由同一候选 compiler 调用；同时使每个 workspace 的直接 `typecheck` 命令也不依赖 workspace-local `PATH` 选择另一套 compiler。根与 site manifest 均固定 `typescript@7.0.2`，根 override 也固定所有间接 resolution，lockfile 不含 TypeScript 6/compat alias；验证 command 列表恰为 11 个 config，`--showConfig`/file-list 对照没有缩小 source include 集，且 `bun pm why typescript` 只输出 7.0.2。
 - [x] 2.3 为 current 与 candidate compiler 运行逐 config 正向比较及不提交的最小负向 fixture；验证每个 config exit status 一致、负向 fixture 在两者下均为非零，并保存任何 diagnostics 差异以供明确裁决。
 - [x] 2.4 在 candidate lockfile 下运行完整 `verify`，并在同一 GitHub Linux runner 采样至少 3 次；只有 Typecheck 中位数至少改善 30%、其余阶段没有超过 5% 的可重复退化时，才以独立 PR 切换默认 compiler。否则移除候选改动并记录未迁移的证据。
 - [ ] 2.5 仅当 worker matrix 显示相对当前无上限调度至少 10% 的可重复收益且无 memory/flake 退化时，实现受限 workspace scheduler；验证它等待已启动 child、汇总所有失败 diagnostics 并以非零退出。未达到门槛则保留现有调度且不添加 scheduler。

@@ -103,7 +103,7 @@ workflow 未创建，会让 required check 缺失或持续 pending；因此任�
 次快 run 作决定。排队时间、checkout 后的 service jitter 和无关步骤不能被归因给 compiler。
 本地 macOS 结果只用于筛掉明显更慢的候选，不能替代 GitHub 结论。
 
-### 2. 将 TypeScript 7 原生 compiler 作为有明确回退的兼容性与性能 spike
+### 2. 将全仓 TypeScript 解析统一迁移到 TypeScript 7 原生 compiler
 
 TypeScript 7 的原生实现值得优先验证，因为它直接针对当前最大的静态检查成本；但本仓库当前的
 5.7.2 root compiler、site 的 6.0.3 和 source `paths` 不能靠版本号推断兼容性。spike 必须在隔离
@@ -114,13 +114,14 @@ TypeScript 7 的原生实现值得优先验证，因为它直接针对当前最�
 候选必须让每一个 CI typecheck config 都由同一个经过验证的 native `tsc` 可执行文件运行：9 个
 `packages/*/tsconfig.json`、`apps/site/tsconfig.json` 和 `scripts/release/tsconfig.json`。不能继续
 通过 `bun run --filter` 隐式依赖各 workspace 的 `PATH`，因为这样 `apps/site` 可能仍解析自己的
-TypeScript 6 binary。实现时可保留 package-local script 供开发者使用，但 CI 的集中 typecheck
-入口必须显式定位候选 compiler，并把每个 config 路径作为参数传入。
+TypeScript 6 binary。CI 的集中 typecheck 入口必须显式定位候选 compiler，并把每个 config 路径作为
+参数传入；每个 workspace 的 package-local `typecheck` 也必须解析同一版本。
 
-官方 TS 7 migration 指引允许 native `tsc` 与仍依赖 JavaScript TypeScript API 的工具并存。故
-spike 还必须盘点直接依赖和 build-time 间接依赖：仓库代码、Vite/site build、design lint、测试和
-release scripts。CI typecheck 的 compiler 切换不等同于可以删除其他工具实际需要的 JavaScript
-TypeScript package。
+本阶段的目标还包括依赖解析统一：根目录与每个 workspace 的 lockfile resolution 必须只保留
+TypeScript 7，不能留下 `@typescript/typescript6`、`@typescript/old` 或 workspace-local TypeScript 6。
+因此 spike 必须盘点直接依赖和 build-time 间接依赖：仓库代码、Vite/site build、design lint、测试和
+release scripts。若任何工具实际调用旧 JavaScript TypeScript API，这不是保留兼容 alias 的理由，而是
+该工具链尚不能满足“全仓 TS 7”的阻塞证据；必须先升级、替换或另行获得维护者改变范围的决定。
 
 #### 兼容性门槛
 
@@ -285,17 +286,18 @@ candidate Typecheck 中位数为 3.75 秒，较约 21 秒基线减少约 82%，�
 完整 job 中位数为 63 秒。Test 与 site build 未出现可重复退化，三次 `verify` 都成功。GitHub log
 提供毫秒级 command 起止时间，足以区分这个数量级的收益，故本阶段不增加 timing wrapper。
 
-在本地，TS 5.7、TS 6 compatibility 和 TS 7 native 对所有 11 个 CI config 均成功；两次
+迁移前在本地，TS 5.7、TS 6 compatibility 和 TS 7 native 对所有 11 个 CI config 均成功；两次
 source-file-set 对照没有缩小仓库 source include 集，临时负向 fixture 在 TS 6 与 TS 7 下均以
 非零退出。迁移所需的两个明确配置修正是 TypeScript 6/7 不再自动加载 `@types` 后添加
 `types: ["bun"]`，以及移除 TypeScript 7 已删除的 UI `baseUrl`；`paths` 解析仍由覆盖对照和
 site build 验证。
 
-为避免 CI 与开发者入口使用不同 compiler，`@lorelum/site` 的 `typecheck` script 显式调用根目录
-native `tsc`；`bun run --filter @lorelum/site typecheck -- --version` 现输出 `7.0.2`。site 仍声明
-TypeScript 6，是为 Vite/Fumadocs 的 MDX 工具链保留 JavaScript Compiler API 兼容层，而不是供
-typecheck 调用；TypeScript 7.0 尚不提供旧 API，故不得把这个兼容依赖误换成 native package。该
-入口修改后已重新验证 site typecheck、完整 typecheck 与 site build。
+全仓候选将根目录和 `@lorelum/site` 的 `typescript` 都固定为 `7.0.2`，删除
+`@typescript/native` alias、`@typescript/typescript6` 与 `@typescript/old`。`bun pm why typescript`
+只返回 7.0.2，根和 site 的 `tsc --version` 也均为 7.0.2。仓库及已安装依赖的可执行源码搜索没有
+直接 import 旧 JavaScript TypeScript API；根 `overrides` 也将以后新增的间接 `typescript` resolution
+固定为 7.0.2。迁移后已重新验证完整 typecheck、site typecheck、site build 和 release staging。完整
+GitHub `verify` 必须在该 lockfile/head 上重新完成，才可把这项本地证据写为最终交付结论。
 
 report-only selector 在 PR #222 正确输出 `run (site-relevant-or-unknown)`，因为该 PR 改动了根
 manifest、lockfile、workflow 与 scripts。它尚未有 core-package-only 的真实 PR corpus，因此保持
