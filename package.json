@@ -16,7 +16,7 @@
     "fmt:check": "oxfmt --check . '!**/*.md' '!**/*.mdx'",
     "db:generate": "bun scripts/db/generate.ts",
     "design:lint": "designmd lint DESIGN.md",
-    "typecheck": "bun run --filter '*' typecheck && tsc --noEmit -p scripts/release/tsconfig.json",
+    "typecheck": "bun run --filter '*' --parallel typecheck && tsc --noEmit -p scripts/release/tsconfig.json",
     "build:native": "bun scripts/native/build-embedding.ts",
     "build:cli": "bun scripts/release/build-cli.ts",
     "build:release-staging": "bun scripts/release/build.ts",
