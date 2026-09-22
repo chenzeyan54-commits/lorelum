@@ -8,7 +8,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "../../node_modules/.bin/tsc --noEmit",
     "test": "bun test"
   },
   "dependencies": {

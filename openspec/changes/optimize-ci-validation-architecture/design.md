@@ -291,6 +291,12 @@ source-file-set 对照没有缩小仓库 source include 集，临时负向 fixtu
 `types: ["bun"]`，以及移除 TypeScript 7 已删除的 UI `baseUrl`；`paths` 解析仍由覆盖对照和
 site build 验证。
 
+为避免 CI 与开发者入口使用不同 compiler，`@lorelum/site` 的 `typecheck` script 显式调用根目录
+native `tsc`；`bun run --filter @lorelum/site typecheck -- --version` 现输出 `7.0.2`。site 仍声明
+TypeScript 6，是为 Vite/Fumadocs 的 MDX 工具链保留 JavaScript Compiler API 兼容层，而不是供
+typecheck 调用；TypeScript 7.0 尚不提供旧 API，故不得把这个兼容依赖误换成 native package。该
+入口修改后已重新验证 site typecheck、完整 typecheck 与 site build。
+
 report-only selector 在 PR #222 正确输出 `run (site-relevant-or-unknown)`，因为该 PR 改动了根
 manifest、lockfile、workflow 与 scripts。它尚未有 core-package-only 的真实 PR corpus，因此保持
 report-only；不得仅据单次根配置 PR 将它改成 enforce。Typecheck 已不再是需要受限 worker scheduler
