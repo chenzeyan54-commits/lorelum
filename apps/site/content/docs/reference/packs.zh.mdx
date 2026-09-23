@@ -9,13 +9,40 @@ description: 安装、浏览、更新、移除和校验 Pack。
 lore pack install agentic-coding
 ```
 
-全局 `--store-root <path>` 选择 LocalStore，`--log-level <level>` 控制 stderr 日志；`--registry <locator>` 仅用于 install 和 update。
+全局 `--store-root <path>` 选择 LocalStore，`--log-level <level>` 控制 stderr 日志；`--registry <source>` 与 `--path <directory>` 仅用于 install 和 update，并选择互斥的 source route。
 
-指定版本可固定发行内容。省略版本时，使用 Registry 选择的最新版本。其他 Registry 通过 `--registry owner/repository` 指定；私有 Registry 请使用 SSH locator（`git@github.com:owner/repo.git`），见[安装与管理 Pack](../packs)。
+指定版本可固定发行内容。省略版本时，使用选中 Registry 的最新版本。不传 `--registry` 时，Lorelum
+使用保存的 default Registry；没有 default 时使用内置 `official`。`--registry` 可以接已保存 alias，
+也可以接一次性的受支持 Git locator。catalog 命令、transport 和“不回退”行为见[安装与管理 Pack](../packs)。
+
+```sh
+lore pack install team-pack --registry team
+lore pack update team-pack@0.2.0 --registry https://gitlab.com/acme/team-packs.git
+```
+
+如果要从一次性的本地 Pack 目录读取，则不要传 Pack positional，改用 `--path`：
+
+```sh
+lore pack install --path ./packs/team-pack
+lore pack update --path ../team-pack
+```
+
+目录路径相对于命令执行时的 cwd 解析，必须是可读取的 Pack root；它不要求 Git 或
+`.lorelum/registry.yaml`，不会保存、watch，也不会写入 Store provenance。`--path` 不能与 Pack
+specifier 或 `--registry` 混用。
 
 重复安装相同内容是安全的。如果同名 Pack 已安装不同内容，会返回 `pack.update-required`，请改用 `pack update`。
 
 安装也会启动 Pack 所需的 semantic index 工作。结果还会返回可直接读取的公开 `packRoot`，路径为 `packs/p-<pack-name>/current`；`indexSync` 为 `ready`、`pending` 或 `failed`，index 失败不会撤销 Pack 安装。Registry、source、Pack 校验、Store 与 `pack.update-required` 错误退出 `2`，恢复步骤见[故障排查](../troubleshooting)。
+
+Registry source 的结果包含 `registry` 和 `source: { type: "git" | "local-git", ref, commit }`；
+目录 source 的结果包含 `source: { type: "directory" }`，不包含 Registry、Git ref/commit 或输入
+路径。`pack install --path` 与其他 install 一样有 `indexSync`；`pack update --path` 保持现有
+update 结果，不会启动 index synchronization。
+
+本地目录无法打开时返回 `source.unavailable`；目录可打开但 Pack 解码或校验失败时返回
+`pack.invalid`。这些错误不会泄露 source path，也不会替换已安装 Pack。选中的 Registry 不可用时
+同样会直接失败，不会尝试其他保存 source，也不会静默切回 `official`。
 
 ## 浏览
 

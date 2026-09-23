@@ -31,26 +31,94 @@ lore pack list --details
 lore pack list agentic-coding
 ```
 
-The first command shows Pack metadata; the second lists Practices in one Pack. Neither is a catalog of every available Pack. The [official Pack repository](https://github.com/lorelum/lorelum-packs) contains source and release history. See [Pack commands](./reference/packs) for update, remove, registry, and Store options.
+The first command shows Pack metadata; the second lists Practices in one Pack. Neither is a catalog of every available Pack. The [official Pack repository](https://github.com/lorelum/lorelum-packs) contains source and release history. See [Pack commands](./reference/packs) for update, remove, Registry, local-directory, and Store options.
+
+## Choose a Registry source
+
+Lorelum has a built-in `official` Registry backed by the official Pack repository. You can also save
+named Registry sources for a team or community, then use the alias without repeating its locator:
+
+```sh
+lore registry add team https://git.example.com/acme/team-packs.git
+lore registry add local-team --path ../team-packs
+lore registry list
+lore registry set-default team
+
+lore pack install team-pack
+lore pack update team-pack@0.2.0
+```
+
+The default is explicit: without `--registry`, Pack install and update use the saved default; if no
+default is configured, they use `official`. `--registry team` selects a saved alias for one command,
+and `--registry <git-locator>` selects a one-time remote source. A one-time locator is never saved.
+Use `lore registry set-default official` to return to the built-in source, or `lore registry remove
+team` to remove a saved source. Removing the default also returns the default to `official`. Lorelum
+never searches other sources or silently falls back when the selected source is unavailable.
+
+`lore registry add` validates the Registry descriptor before saving it. `lore registry list` reads only
+the local catalog and does not access remotes. The catalog is user-level state in
+`~/.lorelum/registries.yaml`; it is separate from the selected Store and is not copied by
+`--store-root`. Credentials are never stored. Local Registry worktree paths are private catalog data
+and are not included in public command results.
+
+### Remote Git locators
+
+The default host is GitHub, but a Registry can be any reachable Git repository exposed through a
+supported HTTPS or SSH endpoint:
+
+```sh
+# GitHub shorthand and canonical HTTPS keep the public official behavior.
+lore pack install team-pack --registry acme/team-packs
+lore pack install team-pack --registry https://github.com/acme/team-packs.git
+
+# Other Git hosts use Git transport.
+lore pack install team-pack --registry https://gitlab.com/acme/team-packs.git
+lore pack install team-pack --registry ssh://git@git.example.com:2222/platform/team-packs.git
+lore pack install team-pack --registry git@gitea.example:team/packs.git
+```
+
+The value must identify a Git repository, not a web page or a raw descriptor file. Lorelum accepts
+`https://`, `ssh://`, and SCP-style SSH (`user@host:path`) locators. It rejects `http://`, `file:`,
+`git://`, remote helpers, URL credentials, query/fragment suffixes, and direct
+`.lorelum/registry.yaml` URLs. A GitHub shorthand or canonical GitHub HTTPS locator uses the public
+raw descriptor path for compatibility; every other accepted remote reads the descriptor through a
+non-interactive, constrained Git operation. Lorelum does not guess a second transport when the first
+one fails.
+
+For a private repository, configure Git/SSH access outside Lorelum (for example, an SSH key,
+`ssh-agent`, or host-specific SSH configuration). Lorelum does not ask for, print, or store credentials;
+do not put a token or password in the locator. Public HTTPS repositories work without credentials. If
+the command returns `registry.unavailable`, verify that the selected repository is reachable by the
+same non-interactive Git/SSH identity and that it contains a valid `.lorelum/registry.yaml`, then retry.
+A missing repository and missing access may intentionally produce the same public error.
+
+### Local Git Registry and local Pack directory
+
+These are different source types:
+
+- `lore registry add <alias> --path <worktree>` registers a local Git worktree whose `HEAD` contains
+  `.lorelum/registry.yaml`. It can then be selected with `--registry <alias>` or made the default.
+- `lore pack install --path <directory>` and `lore pack update --path <directory>` read one Pack
+  directory directly. The directory does not need Git or a Registry descriptor.
+
+The `--path` Pack form is transient: it does not save the path, watch the directory, or update an
+already-installed Pack when files change. The path is resolved relative to the command's current
+working directory. `pack install --path` keeps the normal install/index behavior; `pack update --path`
+keeps the normal update behavior. Do not combine `--path` with a Pack specifier or `--registry`.
+
+If the directory cannot be opened, fix the path and retry (`source.unavailable`). If it opens but is
+not a valid Pack, fix `pack.yaml` or the Pack contents and retry (`pack.invalid`). Neither result
+includes the local source path, and an invalid local source does not alter an installed Pack.
+
+If `lore registry` returns `registry.catalog-invalid`, make a private backup of
+`~/.lorelum/registries.yaml`, repair or move the malformed catalog, and run `lore registry list` again.
+Existing installed Packs are unaffected. A temporary `registry.catalog-busy` result is safe to retry.
 
 ## Update or remove a Pack
 
 Use `lore pack update <pack-name>@<version>` to move an installed Pack to a selected release. Installation and update manage Pack content separately from derived index work; inspect `data.indexSync` before treating new content as searchable.
 
 Use `lore pack remove <pack-name>` to remove a Pack from the selected Store. Other installed Packs remain available. See [Pack commands](./reference/packs) for response fields and error handling.
-
-## Private Registry repositories
-
-To install from a private GitHub repository, pass an SSH locator instead of a slug. Lorelum reads the Registry with your own Git SSH identity; no tokens go on the command line and Lorelum never stores or manages credentials:
-
-```sh
-lore pack install agentic-coding --registry git@github.com:acme/team-packs.git
-lore pack install agentic-coding --registry ssh://git@github.com/acme/team-packs.git
-```
-
-Both forms are equivalent and github.com-only. Every install and update reads the Registry descriptor directly from the repository's default branch: there is no CDN cache window and nothing is cached locally. The transport is non-interactive by design — Lorelum uses your existing SSH setup (default key files, `~/.ssh/config`, or `ssh-agent`) and runs with prompts disabled.
-
-One-time preparation: run `ssh -T git@github.com` and trust the reported GitHub host key fingerprint. If install or update returns `registry.unavailable` with the hint to verify SSH access, confirm your key is loaded (`ssh-add -l`), that `ssh -T git@github.com` succeeds, and that your account can read the repository, then retry — the CLI deliberately does not distinguish a missing repository from missing access. The full locator semantics are in [Pack commands](./reference/packs).
 
 ## Community Packs
 

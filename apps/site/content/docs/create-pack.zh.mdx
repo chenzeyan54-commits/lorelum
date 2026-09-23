@@ -76,7 +76,7 @@ lore validate ./team-engineering
 
 ## 4. 测试发行产物
 
-按 [Pack 仓库的编写与发布说明](https://github.com/lorelum/lorelum-packs)发布可安装产物和 registry 条目。CLI 安装的是 registry release，本地源文件目录不能直接作为 `pack install` 参数。
+按 [Pack 仓库的编写与发布说明](https://github.com/lorelum/lorelum-packs)发布可安装产物和 registry 条目。发布前如果只想在本地 Store 验证，可以直接运行 `lore pack install --path <directory>`；它是一次性的本地 source，不会替代 Registry release 流程。
 
 发布后，将示例 registry 和版本替换为自己的信息：
 

@@ -108,7 +108,8 @@ export async function removeDescriptorRepository(
  */
 export function gitRunnerMappingLocators(
   locators: Readonly<Record<string, string>>,
-  base: MaterializeGitRunner = runGit,
+  base: MaterializeGitRunner = (arguments_, options) =>
+    runGit(["-c", "protocol.file.allow=always", ...arguments_], options),
 ): MaterializeGitRunner {
   return (arguments_, options) =>
     base(

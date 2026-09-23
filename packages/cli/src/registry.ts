@@ -35,6 +35,7 @@ import { loadQuerySettings } from "./query/settings.js";
 import { createCacheCommands } from "./cache/commands.js";
 import { createFeedbackCommand } from "./feedback/index.js";
 import { createLogCommands } from "./log/command.js";
+import { createRegistryCommands } from "./registry-sources/commands.js";
 
 export interface CommandOption {
   readonly longFlag: string;
@@ -355,6 +356,7 @@ export const commandRegistry = snapshotCommandDefinitions([
   discoveryCommandDefinition,
   createInstallCommand(sharedInstallServices),
   createUpdateCommand(sharedInstallServices),
+  ...createRegistryCommands(),
   createRemoveCommand({ store: sharedStore, storageRoot: sharedStorageRoot }),
   createGetCommand({
     store: sharedStore,

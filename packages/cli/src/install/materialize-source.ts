@@ -14,6 +14,14 @@ import { CliError, cliErrorCodes } from "../runtime/errors.js";
 const GIT_TIMEOUT_MS = 60_000;
 const MAX_SOURCE_TREE_ENTRIES = 2_048;
 const MAX_SOURCE_TREE_LISTING_BYTES = 1024 * 1024;
+const REMOTE_GIT_PROTOCOL_CONFIG = [
+  "-c",
+  "protocol.allow=never",
+  "-c",
+  "protocol.https.allow=always",
+  "-c",
+  "protocol.ssh.allow=always",
+] as const;
 
 /**
  * Sandboxed child environment for every Git spawn (descriptor reads and
@@ -42,10 +50,29 @@ export function gitEnvironment(): Record<string, string | undefined> {
   };
 }
 
+/**
+ * Local Registry worktrees are source files, not remotes. In particular a
+ * partial-clone promisor must not silently turn a local install into network
+ * I/O when `show` or `cat-file` touches a missing object.
+ */
+export function localGitEnvironment(): Record<string, string | undefined> {
+  return {
+    ...gitEnvironment(),
+    GIT_NO_LAZY_FETCH: "1",
+    GIT_OPTIONAL_LOCKS: "0",
+  };
+}
+
 interface SourceBlob {
   readonly objectId: string;
   readonly relativePath: string;
 }
+
+type BlobReader = (
+  repositoryRoot: string,
+  blobs: readonly SourceBlob[],
+  git: MaterializeGitRunner,
+) => Promise<Uint8Array[]>;
 
 interface GitCommandOptions {
   readonly input?: Uint8Array;
@@ -72,15 +99,16 @@ export interface MaterializedPackSource {
   cleanup(): Promise<void>;
 }
 
-export async function runGit(
+async function runGitWithEnvironment(
   arguments_: readonly string[],
   options: GitCommandOptions = {},
+  environment: Record<string, string | undefined>,
 ): Promise<Uint8Array> {
   const { input, outputLimit } = options;
   let subprocess: ReturnType<typeof Bun.spawn>;
   try {
     subprocess = Bun.spawn(["git", ...arguments_], {
-      env: gitEnvironment(),
+      env: environment,
       ...(input === undefined ? {} : { stdin: input }),
       stderr: "ignore",
       stdout: outputLimit === undefined ? "ignore" : "pipe",
@@ -130,6 +158,35 @@ export async function runGit(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function runGit(
+  arguments_: readonly string[],
+  options: GitCommandOptions = {},
+): Promise<Uint8Array> {
+  return runGitWithEnvironment(
+    [...REMOTE_GIT_PROTOCOL_CONFIG, ...arguments_],
+    options,
+    gitEnvironment(),
+  );
+}
+
+/** Run read-only local Git commands without allowing protocol fallback/fetch. */
+export async function runLocalGit(
+  arguments_: readonly string[],
+  options: GitCommandOptions = {},
+): Promise<Uint8Array> {
+  return runGitWithEnvironment(
+    [
+      "-c",
+      "protocol.allow=never",
+      "-c",
+      "protocol.file.allow=never",
+      ...arguments_,
+    ],
+    options,
+    localGitEnvironment(),
+  );
 }
 
 async function cloneRelease(
@@ -230,6 +287,7 @@ async function inspectSourceTree(
   repositoryRoot: string,
   sourcePath: string,
   git: MaterializeGitRunner,
+  revision = "HEAD",
 ): Promise<SourceBlob[]> {
   const output = await git(
     [
@@ -238,7 +296,7 @@ async function inspectSourceTree(
       "ls-tree",
       "-r",
       "-z",
-      "HEAD",
+      revision,
       "--",
       `${sourcePath}/pack.yaml`,
       `${sourcePath}/decisions.yaml`,
@@ -256,7 +314,11 @@ function encodeObjectIds(objectIds: readonly string[]): Uint8Array {
   return new TextEncoder().encode(`${objectIds.join("\n")}\n`);
 }
 
-function parseBlobBatch(output: Uint8Array, blobs: readonly SourceBlob[]): Uint8Array[] {
+function parseBlobBatch(
+  output: Uint8Array,
+  blobs: readonly SourceBlob[],
+  missingObjectIsUnavailable = false,
+): Uint8Array[] {
   const contents: Uint8Array[] = [];
   let offset = 0;
   let totalBytes = 0;
@@ -264,6 +326,11 @@ function parseBlobBatch(output: Uint8Array, blobs: readonly SourceBlob[]): Uint8
     const headerEnd = output.indexOf(0x0a, offset);
     if (headerEnd < 0) throw sourceInvalid();
     const header = new TextDecoder().decode(output.subarray(offset, headerEnd));
+    const missing = /^([0-9a-f]{40,64}) missing$/.exec(header);
+    if (missing !== null) {
+      if (missing[1] === blob.objectId && missingObjectIsUnavailable) throw sourceUnavailable();
+      throw sourceInvalid();
+    }
     const match = /^([0-9a-f]{40,64}) blob ([0-9]+)$/.exec(header);
     if (match === null || match[1] !== blob.objectId) throw sourceInvalid();
     const byteLength = Number(match[2]);
@@ -323,9 +390,10 @@ async function materializeBlobs(
   blobs: readonly SourceBlob[],
   targetDirectory: string,
   git: MaterializeGitRunner,
+  read: BlobReader = readBlobs,
 ): Promise<void> {
   await mkdir(join(targetDirectory, "practices"), { recursive: true });
-  const contents = await readBlobs(repositoryRoot, blobs, git);
+  const contents = await read(repositoryRoot, blobs, git);
   for (const [index, blob] of blobs.entries()) {
     const target = join(targetDirectory, ...blob.relativePath.split("/"));
     // eslint-disable-next-line no-await-in-loop -- each validated blob has one deterministic target
@@ -333,6 +401,22 @@ async function materializeBlobs(
     // eslint-disable-next-line no-await-in-loop -- writes remain serial with the shared byte budget
     await writeFile(target, contents[index]!, { flag: "wx", mode: 0o600 });
   }
+}
+
+async function readLocalBlobs(
+  repositoryRoot: string,
+  blobs: readonly SourceBlob[],
+  git: MaterializeGitRunner,
+): Promise<Uint8Array[]> {
+  const batchObjectIds = blobs.map((blob) => blob.objectId);
+  const output = await git(
+    ["-C", repositoryRoot, "cat-file", "--batch=%(objectname) %(objecttype) %(objectsize)"],
+    {
+      input: encodeObjectIds(batchObjectIds),
+      outputLimit: defaultPackDirectoryLimits.maxTotalBytes + blobs.length * 128,
+    },
+  );
+  return parseBlobBatch(output, blobs, true);
 }
 
 /** Materialize only validated Pack blobs; no checkout or Git content filters run. */
@@ -359,5 +443,34 @@ export async function materializeRegistryRelease(
     await rm(temporaryRoot, { force: true, recursive: true }).catch(() => undefined);
     if (error instanceof CliError) throw error;
     throw sourceInvalid();
+  }
+}
+
+/** Materialize one local-Registry release without cloning, fetching, or checkout. */
+export async function materializeLocalRegistryRelease(
+  release: RegistryRelease,
+  worktree: string,
+  git: MaterializeGitRunner = runLocalGit,
+): Promise<MaterializedPackSource> {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), "lorelum-install-"));
+  const packDirectory = join(temporaryRoot, "pack");
+  try {
+    const commitOutput = await git(["-C", worktree, "rev-parse", "--verify", `${release.ref}^{commit}`], {
+      outputLimit: 256,
+    });
+    const resolvedCommit = new TextDecoder().decode(commitOutput).trim();
+    if (!/^[0-9a-f]{40,64}$/.test(resolvedCommit)) throw sourceUnavailable();
+    const blobs = await inspectSourceTree(worktree, release.path, git, resolvedCommit);
+    await materializeBlobs(worktree, blobs, packDirectory, git, readLocalBlobs);
+    return {
+      directory: packDirectory,
+      resolvedRef: release.ref,
+      resolvedCommit,
+      cleanup: () => rm(temporaryRoot, { force: true, recursive: true }),
+    };
+  } catch (error) {
+    await rm(temporaryRoot, { force: true, recursive: true }).catch(() => undefined);
+    if (error instanceof CliError) throw error;
+    throw sourceUnavailable();
   }
 }

@@ -14,6 +14,20 @@ export {
   type LoggingSettings,
 } from "./logging";
 export {
+  addRegistryCatalogSource,
+  readRegistryCatalog,
+  removeRegistryCatalogSource,
+  setRegistryCatalogDefault,
+  RegistryCatalogBusyError,
+  RegistryCatalogConflictError,
+  RegistryCatalogError,
+  RegistryCatalogNotFoundError,
+  type AddRegistryCatalogSourceResult,
+  type RegistryCatalog,
+  type RegistryCatalogOptions,
+  type RegistryCatalogSource,
+} from "./registry-catalog";
+export {
   initializeProjectConfig,
   loadProjectConfig,
   parseProjectConfig,

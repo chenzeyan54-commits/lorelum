@@ -46,6 +46,7 @@ test("resolves one frozen path snapshot without filesystem access", async () => 
     expect(paths).toEqual({
       rootDirectory: join(home, ".lorelum"),
       configFile: join(home, ".lorelum", "config.yaml"),
+      registryCatalogFile: join(home, ".lorelum", "registries.yaml"),
     });
     expect(Object.isFrozen(paths)).toBe(true);
     expect(await readdir(home)).toEqual([]);

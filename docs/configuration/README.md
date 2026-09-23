@@ -4,6 +4,13 @@
 
 Lorelum 使用共享的 `~/.lorelum/config.yaml`。每个模块只读取自己负责的顶层 section；backend 在启动控制端只读取一次并把结果作为不可变快照传入 daemon。修改配置后重启 backend 才生效。
 
+Registry source catalog 是 CLI 的另一条用户级状态边界：`~/.lorelum/registries.yaml` 由
+`@lorelum/config` 的 Registry catalog store 所有，供 `lore registry` 与 Pack install/update
+选择 named/default Registry。它不是 `config.yaml` 的 section，也不是 project `.lorelum/config.yaml`
+或 LocalStore 数据；`--store-root` 不会改变它。catalog 只保存已校验的 remote Git locator 或
+canonical local-Git worktree root，不保存 credentials。local worktree path 属于私有配置，CLI
+的公开 result 不回显它。
+
 配置优先级是：默认值 → YAML section → 允许的环境变量 → 内部测试注入。无效 section、未知字段、超出范围或违反大小限制都会返回 `backend.config-invalid`，不会静默回退。
 
 - [Embedding 配置实现](embedding.md)：模型路径、缓存、下载和 CPU 参数的运行时边界。
@@ -31,12 +38,19 @@ query:
 ```text
 ~/.lorelum/
 ├── config.yaml         # 共享用户配置，首次 start 创建
+├── registries.yaml      # CLI-owned named/default Registry catalog（按需创建）
 ├── cache/               # 可删除、可重建的 query artifact 与共享向量
 ├── run/backend/        # 私有运行记录，由服务生命周期创建和清理
 └── models/<sha256>/    # 模型缓存，首次使用时创建；停止服务后保留
 ```
 
 配置文件创建为 0600，新目录为 0700。`help`、`describe`、`backend status/stop` 和 `model status` 不会为了读取默认值创建配置。基础包的根路径解析也供默认 LocalStore root 使用；显式 `--store-root` 仍只影响 Store。
+
+Registry catalog 同样使用私有文件边界、严格 schema、bounded lock 和 atomic replacement。读取损坏
+catalog 不等价于“没有 catalog”，因此 CLI 不会静默切回 `official`；CLI 将其映射为
+`registry.catalog-invalid`。并发 mutation 在有限等待后以 `registry.catalog-busy` 失败，调用方可
+重试。`registry list` 只读取 catalog，不为了展示 source 访问远端；用户操作与恢复见站点
+[安装与管理 Pack](https://lorelum.com/zh/docs/packs)。
 
 ## 派生 query cache
 
@@ -60,7 +74,9 @@ artifact ID 只来自 index 版本、Profile（semantic）和当前 active `(pra
 
 ## 包边界与直接读取
 
-`@lorelum/config` 不依赖 backend、CLI 或 Engine。它只处理全局路径、YAML 文档读取与幂等初始化，不验证具体 section。CLI、LocalStore 和 backend 都可以直接依赖它，读文件不需要 HTTP，也不需要 backend 正在运行。
+`@lorelum/config` 不依赖 backend、CLI 或 Engine。它处理全局路径、YAML 文档读取、幂等初始化以及
+Registry catalog 的严格读写边界；catalog API 不访问 HTTP，也不需要 backend 正在运行。CLI、
+LocalStore 和 backend 都可以直接依赖它，但只有 CLI 拥有 Registry source 选择和命令协议。
 
 ```ts
 import { loadConfig, resolveLorelumPaths } from "@lorelum/config";

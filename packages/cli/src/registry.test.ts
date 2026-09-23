@@ -56,14 +56,15 @@ test("discovers the supported Pack lifecycle and catalog commands", () => {
     errorCodes: readonly string[];
   };
   expect(update.name).toBe("pack.update");
-  expect(update.usage).toBe("pack update <pack[@version]>");
+  expect(update.usage).toBe("pack update [pack[@version]]");
   expect(update.options.map((option) => option.name)).toEqual([
     "-h, --help",
     "--json",
     "--debug",
     "--log-level <level>",
     "--store-root <path>",
-    "--registry <repository>",
+    "--registry <source>",
+    "--path <directory>",
   ]);
   expect(update.errorCodes).toContain("pack.not-installed");
 
@@ -306,6 +307,10 @@ test("describes registered commands from a single registry", () => {
               "describe",
               "pack.install",
               "pack.update",
+              "registry.add",
+              "registry.list",
+              "registry.remove",
+              "registry.set-default",
               "pack.remove",
               "get",
               "init",
@@ -338,9 +343,22 @@ test("describes registered commands from a single registry", () => {
       },
       {
         name: "pack.install",
-        positionals: [{ name: "pack[@version]", required: true }],
+        positionals: [{ name: "pack[@version]", required: false }],
       },
-      { name: "pack.update", positionals: [{ name: "pack[@version]", required: true }] },
+      { name: "pack.update", positionals: [{ name: "pack[@version]", required: false }] },
+      {
+        name: "registry.add",
+        positionals: [
+          { name: "alias", required: true },
+          { name: "locator", required: false },
+        ],
+      },
+      { name: "registry.list", positionals: [] },
+      { name: "registry.remove", positionals: [{ name: "alias", required: true }] },
+      {
+        name: "registry.set-default",
+        positionals: [{ name: "alias|official", required: true }],
+      },
       { name: "pack.remove", positionals: [{ name: "pack", required: true }] },
       { name: "get", positionals: [{ name: "practice-id", required: true }] },
       { name: "init", positionals: [] },
@@ -383,14 +401,15 @@ test("describes registered commands from a single registry", () => {
     options: readonly { name: string }[];
     usage: string;
   };
-  expect(install.usage).toBe("pack install <pack[@version]>");
+  expect(install.usage).toBe("pack install [pack[@version]]");
   expect(install.options.map((option) => option.name)).toEqual([
     "-h, --help",
     "--json",
     "--debug",
     "--log-level <level>",
     "--store-root <path>",
-    "--registry <repository>",
+    "--registry <source>",
+    "--path <directory>",
   ]);
 });
 
@@ -424,6 +443,10 @@ test("derives parser options and describe metadata from registered commands", as
           "describe",
           "pack.install",
           "pack.update",
+          "registry.add",
+          "registry.list",
+          "registry.remove",
+          "registry.set-default",
           "pack.remove",
           "get",
           "init",

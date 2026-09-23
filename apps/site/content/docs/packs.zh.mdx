@@ -31,26 +31,88 @@ lore pack list --details
 lore pack list agentic-coding
 ```
 
-第一条命令列出 Pack 元数据，第二条列出某个 Pack 中的 Practice；两者都不是整个生态的可用 Pack 目录。[官方 Pack 仓库](https://github.com/lorelum/lorelum-packs)包含源码和发布记录。更新、卸载、registry 与 Store 选项见 [Pack 命令](./reference/packs)。
+第一条命令列出 Pack 元数据，第二条列出某个 Pack 中的 Practice；两者都不是整个生态的可用 Pack 目录。[官方 Pack 仓库](https://github.com/lorelum/lorelum-packs)包含源码和发布记录。更新、卸载、Registry、本地目录与 Store 选项见 [Pack 命令](./reference/packs)。
+
+## 选择 Registry 来源
+
+Lorelum 内置 `official` Registry，指向官方 Pack 仓库。你也可以为团队或社区保存命名的
+Registry，之后只使用 alias，不必每次重复输入 locator：
+
+```sh
+lore registry add team https://git.example.com/acme/team-packs.git
+lore registry add local-team --path ../team-packs
+lore registry list
+lore registry set-default team
+
+lore pack install team-pack
+lore pack update team-pack@0.2.0
+```
+
+默认来源是显式的：不传 `--registry` 时，install/update 使用保存的 default；未设置时使用
+`official`。`--registry team` 只为本次命令选择已保存 alias，`--registry <git-locator>` 只为
+本次命令选择远程 source，不会自动保存。使用 `lore registry set-default official` 回到内置
+来源，或用 `lore registry remove team` 删除保存的 source。删除当前 default 后也会恢复为
+`official`。Lorelum 不会搜索其他 source，也不会在选中的 source 不可用时静默回退。
+
+`lore registry add` 会先读取并校验 Registry descriptor，成功后才保存 alias。`lore registry list`
+只读取本地 catalog，不访问远端。catalog 是用户级状态，保存在 `~/.lorelum/registries.yaml`；
+它与选中的 Store 分离，不会随 `--store-root` 复制。Lorelum 不保存凭据。local Registry 的
+worktree 路径属于私有 catalog 数据，不会出现在公开命令结果中。
+
+### 远程 Git locator
+
+默认平台是 GitHub，但 Registry 可以来自任何能通过安全 HTTPS 或 SSH endpoint 访问的 Git 仓库：
+
+```sh
+# GitHub shorthand 和规范 HTTPS 保留官方来源的历史行为。
+lore pack install team-pack --registry acme/team-packs
+lore pack install team-pack --registry https://github.com/acme/team-packs.git
+
+# 其他 Git 平台使用 Git transport。
+lore pack install team-pack --registry https://gitlab.com/acme/team-packs.git
+lore pack install team-pack --registry ssh://git@git.example.com:2222/platform/team-packs.git
+lore pack install team-pack --registry git@gitea.example:team/packs.git
+```
+
+参数必须指向 Git 仓库，而不是网页或 raw descriptor 文件。Lorelum 接受 `https://`、`ssh://`
+和 SCP 风格 SSH（`user@host:path`）locator；拒绝 `http://`、`file:`、`git://`、remote helper、
+带 URL 凭据的地址、query/fragment，以及直接指向 `.lorelum/registry.yaml` 的 URL。GitHub shorthand
+或规范 GitHub HTTPS locator 为兼容性继续使用公开 raw descriptor；其他合法 remote 通过非交互、
+受限的 Git 操作读取 descriptor。第一种 transport 失败后不会猜测第二种 transport。
+
+私有仓库的 Git/SSH 访问由你在 Lorelum 外配置，例如 SSH key、`ssh-agent` 或宿主的 SSH 配置。
+Lorelum 不会索取、打印或保存凭据；不要把 token 或密码写进 locator。公开 HTTPS 仓库无需凭据
+即可使用。如果返回 `registry.unavailable`，请用同一个非交互 Git/SSH 身份确认选中的仓库可访问，
+并确认其中有有效的 `.lorelum/registry.yaml`，然后重试。仓库不存在和没有权限可能有意返回同一个
+公开错误。
+
+### Local Git Registry 与本地 Pack 目录
+
+两者是不同的 source 类型：
+
+- `lore registry add <alias> --path <worktree>` 注册一个 local Git worktree，要求其 `HEAD`
+  中包含 `.lorelum/registry.yaml`；之后可用 `--registry <alias>` 选择，或将它设为 default。
+- `lore pack install --path <directory>` 与 `lore pack update --path <directory>` 直接读取一个
+  Pack 目录；它不要求 Git，也不要求 Registry descriptor。
+
+Pack 的 `--path` 形式是一次性的：不会保存路径、watch 目录，也不会在文件变化后自动更新已安装
+Pack。路径相对于命令执行时的 cwd 解析。`pack install --path` 保留正常的 install/index 行为，
+`pack update --path` 保留正常的 update 行为。不能把 `--path` 与 Pack specifier 或 `--registry`
+混用。
+
+目录无法打开时，修正路径后重试（`source.unavailable`）；目录可打开但不是有效 Pack 时，修正
+`pack.yaml` 或 Pack 内容后重试（`pack.invalid`）。两种结果都不会包含本地 source 路径，且无效
+本地 source 不会改动已经安装的 Pack。
+
+如果 `lore registry` 返回 `registry.catalog-invalid`，请先私下备份
+`~/.lorelum/registries.yaml`，修复或移开损坏的 catalog，再重新运行 `lore registry list`。已经
+安装的 Pack 不受影响。临时的 `registry.catalog-busy` 可以直接重试。
 
 ## 更新或移除 Pack
 
 使用 `lore pack update <pack-name>@<version>` 将已安装 Pack 更新到指定版本。Pack 内容保存与派生索引工作分别处理；确认新内容可检索前，检查 `data.indexSync`。
 
 使用 `lore pack remove <pack-name>` 从所选 Store 中移除 Pack，其他已安装 Pack 仍然可用。响应字段和错误处理见 [Pack 命令](./reference/packs)。
-
-## 私有 Registry 仓库
-
-从私有 GitHub 仓库安装时，请改用 SSH locator 而不是 slug。Lorelum 会用你自己的 Git SSH 身份读取 Registry：命令行不传 token，Lorelum 也不存储、不管理任何凭据：
-
-```sh
-lore pack install agentic-coding --registry git@github.com:acme/team-packs.git
-lore pack install agentic-coding --registry ssh://git@github.com/acme/team-packs.git
-```
-
-两种写法等价，且仅支持 github.com。每次 install 和 update 都直接从仓库默认分支读取 Registry 描述文件：没有 CDN 缓存窗口，本地也不做缓存。传输天然非交互——Lorelum 复用你现有的 SSH 配置（默认密钥文件、`~/.ssh/config` 或 `ssh-agent`），并禁用一切交互提示。
-
-一次性准备：运行 `ssh -T git@github.com`，并按 GitHub 官方指纹信任 host key。若 install 或 update 返回 `registry.unavailable` 并提示验证 SSH 访问：确认密钥已加载（`ssh-add -l`）、`ssh -T git@github.com` 能通过、账号对该仓库有读取权限后重试——CLI 刻意不区分"仓库不存在"与"无权限"。完整 locator 语义见 [Pack 命令](./reference/packs)。
 
 ## 社区 Pack
 

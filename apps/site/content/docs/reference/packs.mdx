@@ -9,13 +9,39 @@ description: Install, browse, update, remove, and validate Packs.
 lore pack install agentic-coding
 ```
 
-Global `--store-root <path>` selects the LocalStore and `--log-level <level>` controls stderr logs. `--registry <locator>` is specific to install and update.
+Global `--store-root <path>` selects the LocalStore and `--log-level <level>` controls stderr logs. `--registry <source>` and `--path <directory>` are specific to install and update; they select mutually exclusive source routes.
 
-A version pins the release. Omitting it selects the Registry's latest release. For a different Registry, pass `--registry owner/repository`; for a private Registry, pass an SSH locator (`git@github.com:owner/repo.git`) — see [Install and manage Packs](../packs).
+A version pins the release. Omitting it selects the selected Registry's latest release. Without `--registry`, Lorelum uses the saved default Registry or the built-in `official` source. Pass a saved alias or a one-time supported Git locator with `--registry`; see [Install and manage Packs](../packs) for catalog commands, accepted transports, and no-fallback behavior.
+
+```sh
+lore pack install team-pack --registry team
+lore pack update team-pack@0.2.0 --registry https://gitlab.com/acme/team-packs.git
+```
+
+For a transient local Pack directory, omit the Pack positional and use `--path`:
+
+```sh
+lore pack install --path ./packs/team-pack
+lore pack update --path ../team-pack
+```
+
+The directory path is resolved relative to the command's current working directory. It must be a
+readable Pack root; it does not need Git or `.lorelum/registry.yaml`, and it is not saved, watched, or
+written into Store provenance. `--path` cannot be combined with a Pack specifier or `--registry`.
 
 Installing the same artifact again is safe. If the installed name has different content, Lorelum returns `pack.update-required`; use `pack update`.
 
 Installation also starts the semantic index work needed for the Pack. The result includes its readable public `packRoot` at `packs/p-<pack-name>/current`; `indexSync` reports `ready`, `pending`, or `failed`, and an index failure leaves the Pack installed. Registry, source, Pack validation, Store, and `pack.update-required` errors exit `2`; see [Troubleshooting](../troubleshooting).
+
+Registry-backed results include `registry` and `source: { type: "git" | "local-git", ref, commit }`.
+Directory-backed results include `source: { type: "directory" }` and omit Registry, Git ref/commit,
+and the input path. `pack install --path` has the same `indexSync` field as other installs;
+`pack update --path` keeps the existing update result and does not start index synchronization.
+
+If a local directory cannot be opened, the command returns `source.unavailable`; if it opens but fails
+Pack decoding or validation, it returns `pack.invalid`. These errors do not expose the source path and
+do not replace an already installed Pack. A selected Registry source that is unavailable also fails
+without trying another saved source or silently switching back to `official`.
 
 ## Browse
 

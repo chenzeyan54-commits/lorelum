@@ -25,6 +25,9 @@ const RAW_UNAVAILABLE_MESSAGE = "The Pack Registry is unavailable.";
 const GIT_UNAVAILABLE_MESSAGE =
   "The Pack Registry is unavailable. Verify your SSH access to the repository " +
   "(e.g. `ssh -T git@github.com`), then retry.";
+const GENERIC_GIT_UNAVAILABLE_MESSAGE =
+  "The Pack Registry is unavailable. Verify non-interactive Git access to the selected " +
+  "repository, then retry.";
 const SSH_LOCATOR = "git@github.com:acme/team-packs.git";
 const SSH_URL_LOCATOR = "ssh://git@github.com/acme/team-packs.git";
 
@@ -49,6 +52,7 @@ test("uses the built-in official Registry repository", () => {
     descriptorUrl:
       "https://raw.githubusercontent.com/lorelum/lorelum-packs/HEAD/.lorelum/registry.yaml",
     transport: "raw",
+    legacyGithub: true,
   });
 });
 
@@ -63,14 +67,30 @@ test("normalizes an explicit GitHub Registry repository", async () => {
   expect(loaded.registry.packs[0]?.name).toBe("agentic-coding");
 });
 
-test("rejects arbitrary Registry locators", () => {
-  expect(() => resolveRegistryRepository("file:///tmp/packs")).toThrow("GitHub owner/repository");
-  expect(() => resolveRegistryRepository("https://example.com/acme/packs")).toThrow(
-    "valid GitHub repository",
-  );
-  expect(() => resolveRegistryRepository("https://github.com:444/acme/packs")).toThrow(
-    "valid GitHub repository",
-  );
+test("accepts platform-neutral HTTPS and SSH Git endpoints", () => {
+  expect(resolveRegistryRepository("https://gitlab.example.com/team/packs.git")).toMatchObject({
+    slug: "https://gitlab.example.com/team/packs.git",
+    gitUrl: "https://gitlab.example.com/team/packs.git",
+    transport: "git",
+    legacyGithub: false,
+  });
+  expect(
+    resolveRegistryRepository("ssh://deploy@git.example.com:2222/group/subgroup/packs.git"),
+  ).toMatchObject({
+    slug: "ssh://deploy@git.example.com:2222/group/subgroup/packs.git",
+    transport: "git",
+    legacyGithub: false,
+  });
+  expect(resolveRegistryRepository("git@git.example.com:team-packs.git")).toMatchObject({
+    slug: "git@git.example.com:team-packs.git",
+    transport: "git",
+    legacyGithub: false,
+  });
+  expect(resolveRegistryRepository("https://github.com:8443/acme/packs.git")).toMatchObject({
+    slug: "https://github.com:8443/acme/packs.git",
+    transport: "git",
+    legacyGithub: false,
+  });
 });
 
 test("resolves SSH locators to the user-authenticated git transport", () => {
@@ -90,26 +110,27 @@ test("resolves SSH locators to the user-authenticated git transport", () => {
 });
 
 test.each([
-  { name: "a non-github ssh host", locator: "git@gitlab.com:acme/packs.git" },
-  { name: "a non-github ssh URL host", locator: "ssh://git@gitlab.com/acme/packs.git" },
-  { name: "a non-git ssh username", locator: "ssh://user@github.com/acme/packs.git" },
-  { name: "an explicit ssh port", locator: "ssh://git@github.com:22/acme/packs.git" },
-  { name: "an ssh locator without a repository", locator: "git@github.com:acme" },
-  { name: "an ssh locator with extra path segments", locator: "git@github.com:acme/packs/extra" },
-  { name: "an ssh URL with extra path segments", locator: "ssh://git@github.com/acme/packs/extra" },
-  { name: "a repository-less ssh URL", locator: "ssh://git@github.com/acme" },
-])("rejects $name", ({ locator }) => {
-  expect(() => resolveRegistryRepository(locator)).toThrow(
-    /valid GitHub repository|owner\/repository/,
-  );
+  "file:///tmp/packs",
+  "http://git.example.com/team/packs.git",
+  "git://git.example.com/team/packs.git",
+  "ext::echo unsafe",
+  "https://git.example.com/.lorelum/registry.yaml",
+  "https://git.example.com/.lorelum%2Fregistry.yaml",
+  "https://git.example.com/team/../packs.git",
+  "ssh://git@git.example.com/team/../packs.git",
+  "git@git.example.com:team/../packs.git",
+  "https://git.example.com/team/packs.git?token=secret",
+  "https://git.example.com/team/packs.git#fragment",
+])("rejects unsupported or unsafe generic locator %s before git transport", (locator) => {
+  expect(() => resolveRegistryRepository(locator)).toThrow("valid Git repository");
 });
 
 test("rejects credentialed locator forms outright", () => {
   expect(() => resolveRegistryRepository("https://git:token@github.com/acme/packs.git")).toThrow(
-    "valid GitHub repository",
+    "valid Git repository",
   );
   expect(() => resolveRegistryRepository("ssh://git:pass@github.com/acme/packs.git")).toThrow(
-    "valid GitHub repository",
+    "valid Git repository",
   );
 });
 
@@ -123,11 +144,10 @@ test("never retries legacy locators over git transport when raw fails", async ()
   ).rejects.toMatchObject({ code: "registry.unavailable", message: RAW_UNAVAILABLE_MESSAGE });
 });
 
-test("normalizes ssh:// dot segments consistently between slug and git URL", () => {
-  const resolved = resolveRegistryRepository("ssh://git@github.com/acme/../evil/repo.git");
-  expect(resolved.slug).toBe("evil/repo");
-  expect(resolved.gitUrl).toBe("ssh://git@github.com/evil/repo.git");
-  expect(resolved.transport).toBe("git");
+test("rejects dot segments rather than normalizing them into another repository", () => {
+  expect(() => resolveRegistryRepository("ssh://git@github.com/acme/../evil/repo.git")).toThrow(
+    "valid Git repository",
+  );
 });
 
 test("accepts case-insensitive github.com hosts in scp-style locators", () => {
@@ -184,6 +204,39 @@ test("reads ssh:// locators through the same git transport", async () => {
     );
     expect(loaded.repository.slug).toBe("acme/team-packs");
     expect(loaded.registry.packs[0]?.name).toBe("agentic-coding");
+  } finally {
+    await removeDescriptorRepository(fixture);
+  }
+});
+
+test("reads non-GitHub HTTPS descriptors through the Git transport", async () => {
+  const locator = "https://gitlab.example.com/platform/team-packs.git";
+  const fixture = await createDescriptorRepository(validRegistry);
+  try {
+    const loaded = await loadRegistry(
+      locator,
+      fetchMustNotRun(),
+      gitRunnerMappingLocators({ [locator]: fixture.fileUrl }),
+    );
+    expect(loaded.repository).toMatchObject({ slug: locator, transport: "git" });
+    expect(loaded.registry.packs[0]?.name).toBe("agentic-coding");
+  } finally {
+    await removeDescriptorRepository(fixture);
+  }
+});
+
+test("reads a generic descriptor when its Git server ignores the partial-clone filter", async () => {
+  const locator = "https://gitlab.example.com/platform/team-packs.git";
+  const fixture = await createDescriptorRepository(validRegistry);
+  try {
+    await runFixtureGit(fixture.path, ["config", "uploadpack.allowFilter", "false"]);
+    const loaded = await loadRegistry(
+      locator,
+      fetchMustNotRun(),
+      gitRunnerMappingLocators({ [locator]: fixture.fileUrl }),
+    );
+    expect(loaded.repository).toMatchObject({ slug: locator, transport: "git" });
+    expect(loaded.registry.name).toBe("lorelum-official");
   } finally {
     await removeDescriptorRepository(fixture);
   }
@@ -252,6 +305,20 @@ test("maps an unreachable repository to the same unavailable classification", as
       }),
     ),
   ).rejects.toMatchObject({ code: "registry.unavailable", message: GIT_UNAVAILABLE_MESSAGE });
+});
+
+test("keeps generic Git transport remediation separate from legacy GitHub SSH", async () => {
+  const locator = "https://gitlab.example.com/platform/team-packs.git";
+  await expect(
+    loadRegistry(
+      locator,
+      fetchMustNotRun(),
+      gitRunnerMappingLocators({ [locator]: join(tmpdir(), "lorelum-nonexistent-repository") }),
+    ),
+  ).rejects.toMatchObject({
+    code: "registry.unavailable",
+    message: GENERIC_GIT_UNAVAILABLE_MESSAGE,
+  });
 });
 
 test("maps an oversized descriptor over git transport to registry.invalid", async () => {

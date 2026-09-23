@@ -10,7 +10,10 @@ import { CliError, cliErrorCodes } from "../runtime/errors.js";
 import { runFixtureGit } from "./git-test-support.js";
 import {
   gitEnvironment,
+  localGitEnvironment,
+  materializeLocalRegistryRelease,
   materializeRegistryRelease,
+  runGit,
   type MaterializeGitRunner,
 } from "./materialize-source.js";
 
@@ -196,6 +199,28 @@ test("sandboxed git environment stays non-interactive and passes SSH identity on
   }
 });
 
+test("local Registry environment disables lazy fetch and optional repository locks", () => {
+  const environment = localGitEnvironment();
+  expect(environment.GIT_NO_LAZY_FETCH).toBe("1");
+  expect(environment.GIT_OPTIONAL_LOCKS).toBe("0");
+  expect(environment.GIT_TERMINAL_PROMPT).toBe("0");
+  expect(environment.GIT_CONFIG_NOSYSTEM).toBe("1");
+});
+
+test("remote Git runner denies the file protocol even for a cloneable local repository", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "lorelum-remote-git-policy-"));
+  const localRepository = join(directory, "repository");
+  try {
+    await mkdir(localRepository);
+    await runFixtureGit(localRepository, ["init", "-b", "main"]);
+    await expect(runGit(["ls-remote", "--", pathToFileURL(localRepository).href])).rejects.toMatchObject({
+      code: "source.unavailable",
+    });
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
 test("materializes many Pack blobs with one exact acquisition and one local batch read", async () => {
   const git = new FakeGit(packEntries());
   const source = await materializeRegistryRelease(release, repository, git.run);
@@ -250,6 +275,38 @@ test("materializes many Pack blobs with one exact acquisition and one local batc
   }
 });
 
+test("materializes a local Registry release without clone or fetch", async () => {
+  const git = new FakeGit(packEntries());
+  const source = await materializeLocalRegistryRelease(release, "/private/registry", git.run);
+  try {
+    expect(source.resolvedCommit).toBe(resolvedCommit);
+    expect(await Bun.file(join(source.directory, "pack.yaml")).text()).toContain(
+      "name: agentic-coding",
+    );
+    expect(git.callsFor("clone")).toHaveLength(0);
+    expect(git.callsFor("fetch")).toHaveLength(0);
+    expect(git.callsFor("rev-parse")).toHaveLength(1);
+    expect(git.callsFor("ls-tree")).toHaveLength(1);
+    expect(git.callsFor("cat-file")).toHaveLength(1);
+  } finally {
+    await source.cleanup();
+  }
+});
+
+test("returns source.unavailable for a local Registry missing object without network fallback", async () => {
+  const git = new FakeGit(packEntries());
+  git.batchOutput = (objectIds) => bytes(`${objectIds[0]} missing\n`);
+
+  await expect(materializeLocalRegistryRelease(release, "/private/registry", git.run)).rejects.toMatchObject({
+    code: "source.unavailable",
+  });
+  expect(git.callsFor("clone")).toHaveLength(0);
+  expect(git.callsFor("fetch")).toHaveLength(0);
+  expect(git.callsFor("rev-parse")).toHaveLength(1);
+  expect(git.callsFor("ls-tree")).toHaveLength(1);
+  expect(git.callsFor("cat-file")).toHaveLength(1);
+});
+
 test("production runner materializes a filtered local Git remote through batch stdin", async () => {
   const parent = await mkdtemp(join(tmpdir(), "lorelum-materialize-git-test-"));
   const sourceRepository = join(parent, "source");
@@ -297,7 +354,11 @@ test("production runner materializes a filtered local Git remote through batch s
 
   let source: Awaited<ReturnType<typeof materializeRegistryRelease>> | undefined;
   try {
-    source = await materializeRegistryRelease(release, pathToFileURL(remoteRepository).href);
+    source = await materializeRegistryRelease(
+      release,
+      pathToFileURL(remoteRepository).href,
+      (arguments_, options) => runGit(["-c", "protocol.file.allow=always", ...arguments_], options),
+    );
     expect(source.resolvedCommit).toBe(expectedCommit);
     expect(
       await runFixtureGit(parent, [
