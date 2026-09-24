@@ -26,26 +26,37 @@ function facts(overrides: Partial<ManagedTargetFacts> = {}): ManagedTargetFacts 
 
 describe("evaluateManagedTarget", () => {
   test("safe when private and owner bits suffice", () => {
-    expect(evaluateManagedTarget(facts(), "directory", { currentUid: 1000 })).toEqual({
+    expect(
+      evaluateManagedTarget(facts(), "directory", { currentUid: 1000, platform: "linux" }),
+    ).toEqual({
       verdict: "safe",
     });
   });
 
   test("repairable for a user-owned directory with widened group/other bits", () => {
     expect(
-      evaluateManagedTarget(facts({ mode: 0o0755 }), "directory", { currentUid: 1000 }),
+      evaluateManagedTarget(facts({ mode: 0o0755 }), "directory", {
+        currentUid: 1000,
+        platform: "linux",
+      }),
     ).toEqual({ verdict: "repairable", mode: 0o700 });
   });
 
   test("tightening preserves special bits and never sets a fixed target mode", () => {
     expect(
-      evaluateManagedTarget(facts({ mode: 0o2755 }), "directory", { currentUid: 1000 }),
+      evaluateManagedTarget(facts({ mode: 0o2755 }), "directory", {
+        currentUid: 1000,
+        platform: "linux",
+      }),
     ).toEqual({ verdict: "repairable", mode: 0o2700 });
   });
 
   test("never repairable when owner bits would have to be added", () => {
     expect(
-      evaluateManagedTarget(facts({ mode: 0o0505 }), "directory", { currentUid: 1000 }),
+      evaluateManagedTarget(facts({ mode: 0o0505 }), "directory", {
+        currentUid: 1000,
+        platform: "linux",
+      }),
     ).toEqual({
       verdict: "unsafe",
       reason: "owner-bits-insufficient",
@@ -53,6 +64,7 @@ describe("evaluateManagedTarget", () => {
     expect(
       evaluateManagedTarget(facts({ isDirectory: false, isFile: true, mode: 0o0044 }), "file", {
         currentUid: 1000,
+        platform: "linux",
       }),
     ).toEqual({ verdict: "unsafe", reason: "owner-bits-insufficient" });
   });
@@ -74,16 +86,27 @@ describe("evaluateManagedTarget", () => {
         "file",
         {
           currentUid: 1000,
+          platform: "linux",
         },
       ),
     ).toEqual({ verdict: "unsafe", reason: "multiple-links" });
     expect(
-      evaluateManagedTarget(facts({ mode: 0o0755 }), "directory", { currentUid: 1000 }),
+      evaluateManagedTarget(facts({ mode: 0o0755 }), "directory", {
+        currentUid: 1000,
+        platform: "linux",
+      }),
     ).toEqual({ verdict: "repairable", mode: 0o700 });
     expect(
-      evaluateManagedTarget(facts({ mode: 0o0755, uid: 0 }), "directory", { currentUid: 1000 }),
+      evaluateManagedTarget(facts({ mode: 0o0755, uid: 0 }), "directory", {
+        currentUid: 1000,
+        platform: "linux",
+      }),
     ).toEqual({ verdict: "unsafe", reason: "foreign-owner" });
-    expect(evaluateManagedTarget(facts({ mode: 0o0755, uid: undefined }), "directory")).toEqual({
+    expect(
+      evaluateManagedTarget(facts({ mode: 0o0755, uid: undefined }), "directory", {
+        platform: "linux",
+      }),
+    ).toEqual({
       verdict: "unsafe",
       reason: "foreign-owner",
     });
