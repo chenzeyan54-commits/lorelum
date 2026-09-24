@@ -5,7 +5,11 @@ import { dirname, join } from "node:path";
 import { readdir } from "node:fs/promises";
 
 import { BackendError } from "../protocol/errors";
-import { createPrivateJsonlSink, type PrivateJsonlSink } from "./private-jsonl-sink";
+import {
+  createPrivateJsonlSink,
+  managedRotationSuffix,
+  type PrivateJsonlSink,
+} from "./private-jsonl-sink";
 
 const CURRENT_FILE = "current.jsonl";
 
@@ -33,7 +37,14 @@ function failureCategory(error: unknown): string {
 async function healDaemonSinkFiles(directory: string): Promise<void> {
   const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
   for (const entry of entries) {
-    if (!/^current\.jsonl(?:\.\d+)?$/.test(entry.name)) continue;
+    // One name grammar with the sink preflight: the current file plus its
+    // numeric rotations.
+    if (
+      entry.name !== CURRENT_FILE &&
+      managedRotationSuffix(entry.name, CURRENT_FILE) === undefined
+    ) {
+      continue;
+    }
     await inspectAndTightenExistingFile(join(directory, entry.name)).catch(() => undefined);
   }
 }
