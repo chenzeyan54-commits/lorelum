@@ -117,6 +117,8 @@ An Issue should let someone who was not in your local session understand the pro
 
 An Issue can still be useful before the root cause or exact design is known. Say what evidence is missing instead of asserting an unverified cause. If an observation cannot yet support a product change, use field feedback. Performance requests should name the affected operation, workload, and metric; a proposed target without a measured baseline is a goal, not proof of the current performance.
 
+Maintainers triage Issues after submission; reporters do not need to guess difficulty or mark their own work newcomer-friendly. An actionable bug or feature receives one `difficulty: beginner`, `difficulty: intermediate`, or `difficulty: advanced` label based on the work needed, not the length of the write-up; field feedback need not be graded until it becomes a task. `design`, `evaluation`, and `research` signal the kind of decision or evidence still needed. `help wanted` means an outside contributor can act on the public Issue without private context or access; `good first issue` is reserved for a bounded beginner task with an existing contract, not a broad design proposal. These labels invite participation but do not approve an implementation before the design-first gate above.
+
 A PR should be understandable without reading every commit or the whole Issue. Its description should answer:
 
 - Why was this change needed, and what behavior is different before and after?

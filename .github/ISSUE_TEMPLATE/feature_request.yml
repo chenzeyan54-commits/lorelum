@@ -6,14 +6,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for proposing a feature! Tell us the problem first, then the solution.
+        Thanks for proposing a feature! Describe the current situation and its impact so someone outside this conversation can evaluate the proposal. Maintainers will triage difficulty, design/evaluation needs, and contributor invitation labels after submission.
 
   - type: textarea
     id: problem
     attributes:
       label: The problem
-      description: Give enough standalone context for someone unfamiliar with your environment. Who is affected, what are they trying to do, what happens today, and why is that a problem?
-      placeholder: "When using Lorelum with <host> to do <task>, I currently have to ... . This causes ... . Existing behavior/workaround: ..."
+      description: Give the observed starting state, an example or reproduction, and user/Agent impact. Link the current behavior or contract when known; say when a claim is only a hypothesis. The reader should not need your private chat to understand the gap.
+      placeholder: "With <host/version> and <starting state>, doing <task> currently produces <observed result>. This affects <user/Agent> because ... . Existing workaround: ..."
     validations:
       required: true
 
@@ -21,8 +21,8 @@ body:
     id: proposal
     attributes:
       label: The proposed solution
-      description: Describe the user/Agent-visible outcome and the boundary of this issue. Suggest an approach if useful, but do not turn an unverified implementation guess into a requirement.
-      placeholder: "When <situation>, Lorelum should <observable outcome>. This issue does not include <adjacent feature>."
+      description: Describe the user/Agent-visible outcome, the scope and a realistic failure path. Explain the decision or evidence gate before implementation when the mechanism is not verified; do not turn a suggested approach into an accepted contract.
+      placeholder: "When <situation>, Lorelum should <observable outcome>; if <failure>, it should <safe recovery>. This issue excludes <adjacent work>. The proposed mechanism still needs <evidence/design decision>."
     validations:
       required: true
 
@@ -33,6 +33,15 @@ body:
       description: What other ways could this be solved? Why is yours better?
     validations:
       required: false
+
+  - type: textarea
+    id: evidence-boundary
+    attributes:
+      label: Verified evidence and open questions
+      description: Separate what you observed or checked from what still needs a real-host test, measurement, or design decision. For an early idea with no reproduction, say so plainly rather than inventing evidence.
+      placeholder: "Verified: <behavior, source, test or concrete scenario>. Not yet verified: <assumption or missing host behavior>. Decision needed before implementation: <only if material>."
+    validations:
+      required: true
 
   - type: textarea
     id: acceptance
