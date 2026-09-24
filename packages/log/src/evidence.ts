@@ -1,4 +1,5 @@
 import type { LogContext, TraceId } from "./context.js";
+import type { ManagedLogLocationFailure } from "./sinks/safety.js";
 import type { LogEventInput, LogRecord } from "./record.js";
 import type { ManagedLogRoot } from "./reader.js";
 import type { TraceLogCollection } from "./trace.js";
@@ -6,13 +7,12 @@ import type { TraceLogCollection } from "./trace.js";
 /** Message identifying the per-invocation persistence outcome record. */
 export const PERSISTENCE_MESSAGE = "log.persistence";
 
-/** Why a designed log location could not be used, as persisted with a trace. */
-export interface PersistenceFailureFact {
-  readonly kind: "location-unavailable" | "location-error" | "write-failed";
-  readonly path: string;
-  readonly reason?: string;
-  readonly error?: string;
-}
+/**
+ * Why a designed log location could not be used, as persisted with a trace.
+ * The sink-side union is the single vocabulary; the outcome record and the
+ * protocol envelope carry it unchanged.
+ */
+export type PersistenceFailureFact = ManagedLogLocationFailure;
 
 /** A permission tightening that happened before evidence was written. */
 export interface PersistenceRepairFact {

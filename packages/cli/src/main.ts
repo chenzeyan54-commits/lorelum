@@ -359,11 +359,18 @@ function emitPersistenceNotice(
   const outcome = runtime.persistenceOutcome();
   if (outcome === undefined) return;
   const repairs = outcome.repairs?.length ?? 0;
+  const failure = outcome.failure;
+  const failureCause =
+    failure === undefined
+      ? "unavailable location"
+      : failure.kind === "location-unavailable"
+        ? failure.reason
+        : failure.kind;
   const detail = outcome.persisted
     ? outcome.fallbackUsed
       ? `diverted to the diagnostics fallback (${outcome.usedPath})`
       : `log location self-healed (${repairs} permission repair${repairs === 1 ? "" : "s"})`
-    : `not persisted this invocation (${outcome.failure?.reason ?? outcome.failure?.kind ?? "unavailable location"})`;
+    : `not persisted this invocation (${failureCause})`;
   stderr.write(`lore diagnostics: ${detail}.\n`);
 }
 

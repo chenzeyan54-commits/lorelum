@@ -15,7 +15,6 @@ import {
   SinkLogEmitter,
   type Logger as LocalLogger,
   type LogEmitter,
-  type ManagedLogLocationFailure,
   type PersistenceFailureFact,
   type PersistenceOutcomeFact,
   type PersistenceRepairFact,
@@ -77,16 +76,6 @@ function failureFrom(error: unknown, path: string): PersistenceFailureFact {
     return { kind: "location-unavailable", reason: error.reason, path };
   }
   return { kind: "location-error", path, error: String(error) };
-}
-
-function failureFactOf(
-  failure: ManagedLogLocationFailure | undefined,
-): PersistenceFailureFact | undefined {
-  if (failure === undefined) return undefined;
-  if (failure.kind === "location-unavailable") {
-    return { kind: failure.kind, reason: failure.reason, path: failure.path };
-  }
-  return { kind: failure.kind, path: failure.path, error: failure.error };
 }
 
 function mergeRepairs(
@@ -241,16 +230,15 @@ export async function createProcessLogRuntime(
       outcome.status === "unavailable" ||
       outcome.status === "write-failed";
     if (!deviated) return undefined;
-    const failure =
-      primaryFailureFact !== undefined ? primaryFailureFact : failureFactOf(outcome.failure);
+    // A primary failure explains fallback usage; otherwise a later sink
+    // failure (if any) is the explaining fact.
+    const failure = primaryFailureFact !== undefined ? primaryFailureFact : outcome.failure;
     return {
       persisted: outcome.status === "ready",
       fallbackUsed,
       attemptedPath,
       usedPath: sink.path,
       ...(fallbackAttemptPath === undefined ? {} : { fallbackAttemptPath }),
-      // A primary failure explains fallback usage; otherwise a later sink
-      // failure (if any) is the explaining fact.
       ...(failure === undefined ? {} : { failure }),
       ...(repairs.length === 0 ? {} : { repairs }),
     };

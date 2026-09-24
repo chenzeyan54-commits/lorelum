@@ -126,8 +126,7 @@ test.skipIf(process.platform === "win32")(
       const outcome = runtime.persistenceOutcome();
       expect(outcome?.persisted).toBe(true);
       expect(outcome?.fallbackUsed).toBe(true);
-      expect(outcome?.failure?.kind).toBe("location-unavailable");
-      expect(outcome?.failure?.reason).toBe("symlink");
+      expect(outcome?.failure).toMatchObject({ kind: "location-unavailable", reason: "symlink" });
       const text = await readSegment(fallback, traceId);
       expect(text).toContain("command.started");
       expect(text).toContain("log.persistence");
@@ -191,7 +190,10 @@ test.skipIf(process.platform === "win32")(
 
       const outcome = runtime.persistenceOutcome();
       expect(outcome?.persisted).toBe(false);
-      expect(outcome?.failure?.reason).toBe("multiple-links");
+      expect(outcome?.failure).toMatchObject({
+        kind: "location-unavailable",
+        reason: "multiple-links",
+      });
       // No root switching: the fallback root stays empty.
       expect(await managedFiles(fallback)).toEqual([]);
       const text = await Bun.file(segment).text();
