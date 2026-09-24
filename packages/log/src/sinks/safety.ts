@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { lstat, open } from "node:fs/promises";
+import { chmod, lstat, mkdir, open } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 
@@ -167,50 +167,102 @@ export async function inspectAndTightenHandle(
 const DIRECTORY_FLAGS = constants.O_RDONLY | constants.O_DIRECTORY | (constants.O_NOFOLLOW ?? 0);
 const FILE_FLAGS = constants.O_WRONLY | (constants.O_NOFOLLOW ?? 0);
 
-async function tightenExistingSegment(path: string, repairs: ManagedRepairFact[]): Promise<void> {
-  const inspected = await inspectAndTightenDirectory(path);
-  // Missing segments are left to the owning sink to create; every existing
-  // segment must be safe or repairable.
-  if (inspected === undefined) return;
-  if (inspected.verdict.verdict === "unsafe") {
-    throw new ManagedLogLocationError(inspected.verdict.reason, path);
-  }
-  if (inspected.repair) repairs.push(inspected.repair);
+export function hasCode(error: unknown, code: string): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
-/**
- * Tightens every existing segment from the trusted directory down to the
- * target so a caller with its own creation/preflight logic (for example the
- * Backend daemon sink) can self-heal a widened managed chain. Rejects with a
- * typed error on the first unrepairable segment.
- */
-export async function healManagedSegments(
-  trustedDirectory: string,
-  targetDirectory: string,
-): Promise<readonly ManagedRepairFact[]> {
-  const trusted = resolve(trustedDirectory);
-  const target = resolve(targetDirectory);
+function isMissing(error: unknown): boolean {
+  return hasCode(error, "ENOENT");
+}
+
+/** How the single managed-location walk treats a missing segment. */
+export interface WalkManagedLocationOptions {
+  /**
+   * Create missing segments with the intended private mode (sink startup).
+   * When false the walk only tightens what already exists and never creates —
+   * creation then stays with the owning consumer (for example the Backend
+   * daemon's strict directory checks).
+   */
+  readonly createMissing: boolean;
+}
+
+function segmentsBetween(trusted: string, target: string): readonly string[] {
   const suffix = relative(trusted, target);
   if (suffix === ".." || suffix.startsWith(`..${sep}`)) {
     throw new Error("Managed log directory escaped its root.");
   }
-  const segments = suffix === "" ? [] : suffix.split(sep).filter(Boolean);
-  const repairs: ManagedRepairFact[] = [];
-  await tightenExistingSegment(trusted, repairs);
+  return suffix === "" ? [] : suffix.split(sep).filter(Boolean);
+}
+
+async function walkSegment(
+  directory: string,
+  repairs: ManagedRepairFact[],
+  createMissing: boolean,
+): Promise<void> {
+  const existing = await inspectAndTightenDirectory(directory);
+  if (existing === undefined) {
+    if (!createMissing) return;
+    let created = false;
+    await mkdir(directory, { mode: 0o700 }).then(
+      () => {
+        created = true;
+      },
+      (error: unknown) => {
+        if (!hasCode(error, "EEXIST")) throw error;
+      },
+    );
+    // Only a directory this process created is forced back to the intended
+    // mode; umask may have stripped owner bits at creation time. A directory
+    // that appeared meanwhile (EEXIST above) takes the existing-segment path.
+    if (created) await chmod(directory, 0o700);
+    const fresh = await inspectAndTightenDirectory(directory);
+    if (fresh === undefined) throw new ManagedLogLocationError("wrong-type", directory);
+    if (fresh.verdict.verdict === "unsafe") {
+      throw new ManagedLogLocationError(fresh.verdict.reason, directory);
+    }
+    if (fresh.repair) repairs.push(fresh.repair);
+    return;
+  }
+  if (existing.verdict.verdict === "unsafe") {
+    throw new ManagedLogLocationError(existing.verdict.reason, directory);
+  }
+  if (existing.repair) repairs.push(existing.repair);
+}
+
+/**
+ * The one walk over a managed location: from the trusted directory down to
+ * the target it verifies and tightens every existing segment, throwing a
+ * typed error on the first unrepairable one. With `createMissing` it also
+ * establishes missing segments with the intended private mode (the sink's
+ * startup path); without it nothing is ever created. Repairs are pushed into
+ * `repairs` as the walk proceeds, so a failure partway through still reports
+ * the tightenings that happened before it.
+ */
+export async function walkManagedLocation(
+  trustedDirectory: string,
+  targetDirectory: string,
+  options: WalkManagedLocationOptions,
+  repairs: ManagedRepairFact[] = [],
+): Promise<readonly ManagedRepairFact[]> {
+  const trusted = resolve(trustedDirectory);
+  const target = resolve(targetDirectory);
+  const segments = segmentsBetween(trusted, target);
+  if (options.createMissing) {
+    // A trusted path that exists in an odd shape (for example a symlink) must
+    // reach the typed inspection below, not surface as a raw mkdir failure.
+    await mkdir(trusted, { recursive: true, mode: 0o700 }).catch((error: unknown) => {
+      if (!hasCode(error, "EEXIST") && !hasCode(error, "ENOTDIR") && !hasCode(error, "ELOOP")) {
+        throw error;
+      }
+    });
+  }
+  await walkSegment(trusted, repairs, options.createMissing);
   let current = trusted;
   for (const segment of segments) {
     current = join(current, segment);
-    await tightenExistingSegment(current, repairs);
+    await walkSegment(current, repairs, options.createMissing);
   }
   return repairs;
-}
-
-function isMissing(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
-}
-
-function hasCode(error: unknown, code: string): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
 /**

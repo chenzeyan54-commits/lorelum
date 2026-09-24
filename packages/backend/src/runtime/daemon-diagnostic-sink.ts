@@ -1,6 +1,6 @@
 /* eslint-disable no-await-in-loop -- Candidates are tried strictly in order: primary first, then the designed fallback. */
 import { defaultDiagnosticsFallbackDirectory, defaultLogDirectory } from "@lorelum/config";
-import { healManagedSegments, inspectAndTightenExistingFile } from "@lorelum/log";
+import { inspectAndTightenExistingFile, walkManagedLocation } from "@lorelum/log";
 import { dirname, join } from "node:path";
 import { readdir } from "node:fs/promises";
 
@@ -76,10 +76,12 @@ export async function selectDaemonDiagnosticSink(
   let primaryFailure: string | undefined;
   for (const candidate of candidates) {
     // Best-effort self-heal of the managed chain and the managed segment
-    // files; the sink preflight below stays the authority on usability.
-    await healManagedSegments(dirname(dirname(candidate.directory)), candidate.directory).catch(
-      () => undefined,
-    );
+    // files; the sink preflight below stays the authority on usability. The
+    // walk never creates: missing directories stay with checkDirectory's
+    // strict startup authority.
+    await walkManagedLocation(dirname(dirname(candidate.directory)), candidate.directory, {
+      createMissing: false,
+    }).catch(() => undefined);
     await healDaemonSinkFiles(candidate.directory);
     const sink = await createPrivateJsonlSink({
       directory: candidate.directory,

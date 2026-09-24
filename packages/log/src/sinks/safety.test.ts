@@ -9,6 +9,8 @@ import {
   inspectAndTightenExistingFile,
   inspectAndTightenHandle,
   ManagedLogLocationError,
+  walkManagedLocation,
+  type ManagedRepairFact,
   type ManagedTargetFacts,
 } from "./safety.js";
 
@@ -198,6 +200,53 @@ describe.skipIf(process.platform === "win32")("inspect and tighten", () => {
       expect((result?.repair?.afterMode ?? 0) & 0o777).toBe(0o600);
       expect((await lstat(file)).mode & 0o077).toBe(0);
       await unlink(file);
+    }));
+});
+
+describe.skipIf(process.platform === "win32")("walkManagedLocation", () => {
+  test("createMissing false never creates, not even the trusted directory", async () =>
+    fixture(async (root) => {
+      const trusted = join(root, "lorelum");
+      const target = join(trusted, "logs", "backend");
+      const repairs: ManagedRepairFact[] = [];
+      await expect(
+        walkManagedLocation(trusted, target, { createMissing: false }, repairs),
+      ).resolves.toEqual([]);
+      expect(repairs).toEqual([]);
+      await expect(lstat(trusted)).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(lstat(target)).rejects.toMatchObject({ code: "ENOENT" });
+    }));
+
+  test("createMissing false tightens an existing widened chain without creating anything", async () =>
+    fixture(async (root) => {
+      const trusted = join(root, "lorelum");
+      const target = join(trusted, "logs", "backend");
+      await mkdirMode(trusted, 0o755);
+      await mkdirMode(join(trusted, "logs"), 0o755);
+      const repairs = await walkManagedLocation(trusted, target, { createMissing: false });
+      expect(repairs.map((repair) => repair.path)).toEqual([trusted, join(trusted, "logs")]);
+      expect((await lstat(trusted)).mode & 0o077).toBe(0);
+      // The missing final segment stays missing.
+      await expect(lstat(target)).rejects.toMatchObject({ code: "ENOENT" });
+    }));
+
+  test("rejects a target that escapes its trusted root", async () =>
+    fixture(async (root) => {
+      const trusted = join(root, "lorelum");
+      await expect(
+        walkManagedLocation(trusted, join(root, "elsewhere"), { createMissing: false }),
+      ).rejects.toThrow("escaped its root");
+    }));
+
+  test("createMissing true establishes the chain with the private mode and stays idempotent", async () =>
+    fixture(async (root) => {
+      const trusted = join(root, "lorelum");
+      const target = join(trusted, "logs", "cli");
+      await walkManagedLocation(trusted, target, { createMissing: true });
+      expect((await lstat(trusted)).mode & 0o777).toBe(0o700);
+      expect((await lstat(target)).mode & 0o777).toBe(0o700);
+      const second = await walkManagedLocation(trusted, target, { createMissing: true });
+      expect(second).toEqual([]);
     }));
 });
 

@@ -37,11 +37,12 @@ export {
 export { JsonlFileSink, type JsonlFileSinkOutcome } from "./sinks/jsonl.js";
 export {
   evaluateManagedTarget,
-  healManagedSegments,
+  hasCode,
   inspectAndTightenDirectory,
   inspectAndTightenExistingFile,
   inspectAndTightenHandle,
   ManagedLogLocationError,
+  walkManagedLocation,
   type EvaluateManagedTargetOptions,
   type InspectResult,
   type ManagedLogLocationFailure,
@@ -50,6 +51,7 @@ export {
   type ManagedTargetKind,
   type ManagedTargetVerdict,
   type UnsafeTargetReason,
+  type WalkManagedLocationOptions,
 } from "./sinks/safety.js";
 export {
   pruneManagedLogs,

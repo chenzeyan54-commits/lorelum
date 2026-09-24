@@ -4,6 +4,7 @@ import { join, relative } from "node:path";
 
 import { isLogLevel, isTraceId, type LogLevel, type TraceId } from "./context.js";
 import type { LogRecord } from "./record.js";
+import { hasCode } from "./sinks/safety.js";
 
 const MAX_FILE_BYTES = 1_048_576;
 const DEFAULT_MAX_RECORDS = 100;
@@ -80,10 +81,6 @@ interface ScanFilters {
   readonly source?: string;
   readonly traceId?: TraceId;
   readonly level?: LogLevel;
-}
-
-function hasCode(error: unknown, code: string): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
 function record(value: unknown): value is LogRecord {
